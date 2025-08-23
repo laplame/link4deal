@@ -139,10 +139,12 @@ const CheckoutSuccess: React.FC = () => {
             <header className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">L</span>
-                            </div>
+                        <div className="flex items-center space-x-3">
+                            <img 
+                                src="/logo.png" 
+                                alt="DameCódigo" 
+                                className="w-8 h-8 object-contain"
+                            />
                             <span className="font-bold text-gray-900">Link4Deal</span>
                         </div>
 
