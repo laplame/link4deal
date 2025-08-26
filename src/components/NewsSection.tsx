@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ExternalLink, Calendar, User, TrendingUp, Share2, Heart, MessageCircle } from 'lucide-react';
+import { SITE_CONFIG } from '../config/site';
 
 interface NewsPost {
   id: string;
@@ -349,7 +350,7 @@ const NewsSection: React.FC = () => {
               sobre el futuro del marketing digital y blockchain.
             </p>
             <button
-              onClick={() => window.open('https://www.linkedin.com/company/link4deal', '_blank')}
+              onClick={() => window.open(SITE_CONFIG.linkedinUrl, '_blank')}
               className="bg-white text-blue-600 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center gap-3 mx-auto"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

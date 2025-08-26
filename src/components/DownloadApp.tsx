@@ -1,13 +1,14 @@
 import React from 'react';
 import { Download, Smartphone, QrCode, Star, Users, Shield } from 'lucide-react';
+import { SITE_CONFIG } from '../config/site';
 
 const DownloadApp: React.FC = () => {
   const handleDownload = (platform: 'ios' | 'android') => {
     // Placeholder for actual download logic
     if (platform === 'ios') {
-      window.open('https://apps.apple.com/app/link4deal', '_blank');
+      window.open(SITE_CONFIG.appStoreUrl, '_blank');
     } else {
-      window.open('https://play.google.com/store/apps/details?id=com.link4deal.app', '_blank');
+      window.open(SITE_CONFIG.playStoreUrl, '_blank');
     }
   };
 
@@ -26,7 +27,7 @@ const DownloadApp: React.FC = () => {
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
             Accede a ofertas exclusivas, cupones digitales y promociones especiales 
-            directamente desde tu smartphone. ¡La experiencia completa de Link4Deal!
+            directamente desde tu smartphone. ¡La experiencia completa de {SITE_CONFIG.name}!
           </p>
         </div>
 
@@ -44,7 +45,7 @@ const DownloadApp: React.FC = () => {
                       <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <span className="text-2xl font-bold">L</span>
                       </div>
-                      <p className="text-sm font-medium">Link4Deal</p>
+                      <p className="text-sm font-medium">{SITE_CONFIG.name}</p>
                       <p className="text-xs opacity-80">Ofertas Exclusivas</p>
                     </div>
                   </div>
