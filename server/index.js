@@ -7,7 +7,7 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 // Import database connection
-const connectDB = require('./config/database');
+const database = require('./config/database');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,10 +18,10 @@ const promotionRoutes = require('./routes/promotions');
 // const brandRoutes = require('./routes/brands');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Connect to MongoDB
-connectDB();
+database.connect();
 
 // Security middleware
 app.use(helmet());

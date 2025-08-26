@@ -12,15 +12,15 @@ class Database {
         try {
             console.log('🔄 Configurando conexión a MongoDB...');
             
-            // Por ahora, solo configurar para Atlas
-            if (process.env.MONGODB_URI_ATLAS) {
-                console.log('🔄 Intentando conectar a MongoDB Atlas...');
-                await this.connectToAtlas();
-            } else {
-                console.log('⚠️ MONGODB_URI_ATLAS no configurado - usando modo simulado');
-                this.isConnected = true; // Simular conexión exitosa
-                console.log('✅ Modo simulado activado - MongoDB Atlas configurado posteriormente');
-            }
+                    // Por ahora, solo configurar para Atlas
+        if (process.env.URI_mongo) {
+            console.log('🔄 Intentando conectar a MongoDB Atlas...');
+            await this.connectToAtlas();
+        } else {
+            console.log('⚠️ URI_mongo no configurado - usando modo simulado');
+            this.isConnected = true; // Simular conexión exitosa
+            console.log('✅ Modo simulado activado - MongoDB Atlas configurado posteriormente');
+        }
             
         } catch (error) {
             console.error('❌ Error conectando a MongoDB Atlas:', error.message);
@@ -37,26 +37,21 @@ class Database {
     }
 
     async connectToAtlas() {
-        const atlasUri = process.env.MONGODB_URI_ATLAS;
+        const atlasUri = process.env.URI_mongo;
         
         if (!atlasUri) {
-            throw new Error('MONGODB_URI_ATLAS no está configurado en las variables de entorno');
+            throw new Error('URI_mongo no está configurado en las variables de entorno');
         }
 
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 45000,
-            bufferMaxEntries: 0,
             bufferCommands: false,
             maxPoolSize: 10,
             minPoolSize: 1,
             maxIdleTimeMS: 30000,
             retryWrites: true,
-            w: 'majority',
-            ssl: true,
-            sslValidate: true
+            w: 'majority'
         };
 
         await mongoose.connect(atlasUri, options);
