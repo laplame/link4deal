@@ -10,6 +10,7 @@ import NewsSection from '../components/NewsSection';
 import LocationSelector from '../components/LocationSelector';
 import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
+import { SITE_CONFIG } from '../config/site';
 
 const products = [
     {
@@ -427,7 +428,7 @@ export default function LandingPage() {
                                 alt="DameCódigo" 
                                 className="w-8 h-8 object-contain"
                             />
-                            <span className="text-xl font-bold text-gray-900">Link4Deal</span>
+                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
                         </Link>
 
                         {/* Desktop Navigation */}
@@ -486,7 +487,7 @@ export default function LandingPage() {
                                 Para Negocios
                             </Link>
                             <button
-                                onClick={() => window.open('https://play.google.com/store/apps/details?id=com.link4deal.app', '_blank')}
+                                onClick={() => window.open(SITE_CONFIG.playStoreUrl, '_blank')}
                                 className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
                             >
                                 <Download className="w-4 h-4" />
@@ -616,7 +617,7 @@ export default function LandingPage() {
                     {/* Content */}
                     <div className="relative z-10 max-w-7xl mx-auto px-4 text-center">
                         <h2 className="text-6xl font-extrabold text-white mb-8 leading-tight drop-shadow-lg text-stroke-white text-shadow-hero">
-                        ¡Descubre las mejores ofertas!
+                        ¡Descubre las mejores ofertas en {SITE_CONFIG.name}!
                     </h2>
                         <p className="text-xl text-gray-900 mb-12 max-w-3xl mx-auto leading-relaxed font-bold text-shadow-white">
                             Conectamos marcas con influencers a través de tecnología blockchain, 
@@ -659,7 +660,7 @@ export default function LandingPage() {
                             <div className="text-center mb-12">
                                 <div className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-full text-lg font-semibold mb-6">
                                     <span className="text-2xl">🤝</span>
-                                    ¿Qué es un "Deal" en Link4Deal?
+                                    ¿Qué es un "Deal" en {SITE_CONFIG.name}?
                                 </div>
                                 <p className="text-xl text-gray-700 leading-relaxed max-w-4xl mx-auto">
                                     Un <strong className="text-blue-600 font-bold">"Deal"</strong> es una promoción especial creada por marcas 
@@ -833,7 +834,7 @@ export default function LandingPage() {
                                 alt="DameCódigo" 
                                 className="w-12 h-12 object-contain"
                             />
-                            <span className="text-3xl font-bold">Link4Deal</span>
+                            <span className="text-3xl font-bold">{SITE_CONFIG.name}</span>
                         </div>
                         <p className="text-blue-100 text-lg max-w-2xl mx-auto leading-relaxed">
                             Conectamos marcas con influencers a través de tecnología blockchain, 
@@ -847,7 +848,7 @@ export default function LandingPage() {
                     {/* Bottom Section */}
                     <div className="flex flex-col md:flex-row justify-between items-center">
                         <div className="text-gray-400 text-sm mb-4 md:mb-0">
-                © 2024 Link4Deal. Todos los derechos reservados.
+                {SITE_CONFIG.copyright}
                         </div>
                         <div className="flex space-x-6 text-sm">
                             <span className="text-gray-400">Tecnología Blockchain</span>
@@ -860,7 +861,7 @@ export default function LandingPage() {
             {/* Floating Download App Button */}
             <div className="fixed bottom-6 left-6 z-50">
                 <button
-                    onClick={() => window.open('https://play.google.com/store/apps/details?id=com.link4deal.app', '_blank')}
+                    onClick={() => window.open(SITE_CONFIG.playStoreUrl, '_blank')}
                     className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-full shadow-2xl hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-110 flex items-center space-x-2 group"
                 >
                     <Download className="w-6 h-6" />

@@ -18,7 +18,7 @@ const promotionRoutes = require('./routes/promotions');
 // const brandRoutes = require('./routes/brands');
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
 database.connect();

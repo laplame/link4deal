@@ -4,6 +4,7 @@ import { CartProvider } from './context/CartContext';
 import { GeolocationProvider } from './context/GeolocationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { routerConfig } from './config/router';
+import CookieBanner from './components/CookieBanner';
 import LandingPage from './pages/landing';
 import AboutPage from './pages/AboutPage';
 import UserTypeSelector from './pages/UserTypeSelector';
@@ -73,6 +74,9 @@ function App() {
               <Route path="/signup" element={<SignUpPage />} />
               <Route path="/cart" element={<CartPage />} />
             </Routes>
+            
+            {/* Banner de Cookies - Aparece en todas las páginas */}
+            <CookieBanner />
           </Router>
         </CartProvider>
       </GeolocationProvider>
