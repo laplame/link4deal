@@ -13,19 +13,34 @@ class Database {
             console.log('🔄 Configurando conexión a MongoDB...');
             
                     // Por ahora, solo configurar para Atlas
-        if (process.env.URI_mongo) {
+            if (process.env.MONGODB_URI_ATLAS) {
             console.log('🔄 Intentando conectar a MongoDB Atlas...');
             await this.connectToAtlas();
         } else {
-            console.log('⚠️ URI_mongo no configurado - usando modo simulado');
-            this.isConnected = true; // Simular conexión exitosa
+                console.log('⚠️ MONGODB_URI_ATLAS no configurado - usando modo simulado');
+                this.isConnected = false; // No simular conexión exitosa
             console.log('✅ Modo simulado activado - MongoDB Atlas configurado posteriormente');
         }
             
         } catch (error) {
             console.error('❌ Error conectando a MongoDB Atlas:', error.message);
+            console.error('📋 Detalles del error:', {
+                name: error.name,
+                code: error.code,
+                message: error.message
+            });
+            
+            // Si es error de autenticación, dar instrucciones específicas
+            if (error.message.includes('authentication failed') || error.message.includes('bad auth')) {
+                console.error('\n🔐 ERROR DE AUTENTICACIÓN:');
+                console.error('   - Verifica que el usuario y contraseña sean correctos');
+                console.error('   - Si la contraseña tiene caracteres especiales, asegúrate de codificarlos correctamente');
+                console.error('   - Verifica que el usuario tenga permisos en MongoDB Atlas');
+                console.error('   - Revisa la configuración de Network Access en MongoDB Atlas');
+            }
+            
             console.log('⚠️ Usando modo simulado por defecto');
-            this.isConnected = true; // Simular conexión exitosa
+            this.isConnected = false; // No marcar como conectado si falló
         }
     }
 
@@ -37,11 +52,53 @@ class Database {
     }
 
     async connectToAtlas() {
-        const atlasUri = process.env.URI_mongo;
+        let atlasUri = process.env.MONGODB_URI_ATLAS;
         
         if (!atlasUri) {
-            throw new Error('URI_mongo no está configurado en las variables de entorno');
+            throw new Error('MONGODB_URI_ATLAS no está configurado en las variables de entorno');
         }
+
+        // Limpiar la URI
+        atlasUri = atlasUri.trim();
+        
+        // Codificar la contraseña si tiene caracteres especiales (ej: < >)
+        // Extraer usuario y contraseña para codificarlos correctamente
+        const uriMatch = atlasUri.match(/^(mongodb\+srv:\/\/)([^:]+):([^@]+)@(.+)$/);
+        if (uriMatch) {
+            const protocol = uriMatch[1];
+            const user = uriMatch[2];
+            let password = uriMatch[3];
+            let rest = uriMatch[4];
+            
+            // Si la contraseña tiene caracteres especiales, codificarla
+            // Pero solo si no está ya codificada (no empieza con %)
+            if (password && !password.startsWith('%')) {
+                // Codificar caracteres especiales comunes
+                password = encodeURIComponent(password);
+            }
+            
+            // Reconstruir URI
+            atlasUri = `${protocol}${user}:${password}@${rest}`;
+        }
+        
+        // Corregir formato si tiene parámetros incorrectos como ?link4deal=Cluster0
+        if (atlasUri.includes('?link4deal=') || atlasUri.match(/\?[^=]*=Cluster0/)) {
+            // Extraer la parte base (antes del ?)
+            const baseUri = atlasUri.split('?')[0];
+            // Remover cualquier doble slash y agregar nombre de base de datos
+            const cleanBase = baseUri.replace(/\/+$/, '');
+            atlasUri = `${cleanBase}/link4deal?retryWrites=true&w=majority`;
+            console.log('🔧 URI corregida automáticamente (formato y codificación)');
+        } else {
+            // Asegurar que tenga el nombre de la base de datos si no lo tiene
+            if (!atlasUri.match(/\/[^\/\?]+(\?|$)/)) {
+                const separator = atlasUri.includes('?') ? '' : '/';
+                atlasUri = atlasUri.replace(/(\?|$)/, `${separator}link4deal$1`);
+            }
+        }
+        
+        // Remover dobles slashes (pero no el doble slash después de ://)
+        atlasUri = atlasUri.replace(/([^:]\/)\/+/g, '$1');
 
         const options = {
             serverSelectionTimeoutMS: 10000,
@@ -54,13 +111,41 @@ class Database {
             w: 'majority'
         };
 
-        await mongoose.connect(atlasUri, options);
+        console.log('🔗 Conectando a:', atlasUri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')); // Ocultar credenciales en log
         
+        try {
+            await mongoose.connect(atlasUri, options);
+            
+            // Verificar que realmente esté conectado
+            if (mongoose.connection.readyState === 1) {
         this.isConnected = true;
         console.log('✅ Conectado a MongoDB Atlas');
+                console.log(`📊 Base de datos: ${mongoose.connection.name}`);
+                console.log(`🌐 Host: ${mongoose.connection.host}`);
         
         // Configurar eventos de conexión
         this.setupConnectionEvents();
+            } else {
+                throw new Error('Conexión establecida pero estado no es "connected"');
+            }
+        } catch (error) {
+            // Si es error de autenticación, dar más detalles
+            if (error.message.includes('authentication failed') || error.message.includes('bad auth')) {
+                console.error('\n🔐 ERROR DE AUTENTICACIÓN DETECTADO:');
+                console.error('   La URI se corrigió correctamente, pero las credenciales fallaron.');
+                console.error('   Posibles causas:');
+                console.error('   1. Usuario o contraseña incorrectos');
+                console.error('   2. Contraseña con caracteres especiales no codificados (ej: < > deben ser %3C %3E)');
+                console.error('   3. Usuario no tiene permisos en el cluster');
+                console.error('   4. IP no está en la whitelist de MongoDB Atlas');
+                console.error('\n💡 Soluciones:');
+                console.error('   - Verifica las credenciales en MongoDB Atlas');
+                console.error('   - Si la contraseña tiene < o >, reemplázalos por %3C y %3E');
+                console.error('   - Agrega tu IP a Network Access en MongoDB Atlas');
+                console.error('   - O usa "Allow Access from Anywhere" temporalmente para pruebas');
+            }
+            throw error; // Re-lanzar el error para que se maneje en connect()
+        }
     }
 
     setupConnectionEvents() {

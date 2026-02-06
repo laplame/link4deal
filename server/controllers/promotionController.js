@@ -1,14 +1,92 @@
 const Promotion = require('../models/Promotion');
 const cloudinaryConfig = require('../config/cloudinary');
 const ocrService = require('../services/ocrService');
+const database = require('../config/database');
+const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
 
 class PromotionController {
+    // Helper para verificar conexión a MongoDB
+    isMongoConnected() {
+        return database.isConnected && mongoose.connection.readyState === 1;
+    }
+
+    // Helper para validar ObjectId
+    isValidObjectId(id) {
+        return mongoose.Types.ObjectId.isValid(id);
+    }
+
+    // Helper para respuesta vacía cuando no hay conexión
+    getEmptyResponse(req, message = 'MongoDB no conectado - modo simulado activo') {
+        return {
+            success: true,
+            data: {
+                docs: [],
+                totalDocs: 0,
+                limit: parseInt(req.query?.limit) || 10,
+                page: parseInt(req.query?.page) || 1,
+                totalPages: 0,
+                hasNextPage: false,
+                hasPrevPage: false
+            },
+            message
+        };
+    }
+
+    // Helper para validar campos requeridos
+    validateRequiredFields(data, requiredFields) {
+        const missing = [];
+        for (const field of requiredFields) {
+            if (!data[field] || (typeof data[field] === 'string' && data[field].trim() === '')) {
+                missing.push(field);
+            }
+        }
+        return missing;
+    }
+
+    // Helper para parsear tags y features (pueden venir como JSON string o array)
+    parseArrayField(field) {
+        if (!field) return [];
+        if (Array.isArray(field)) return field;
+        if (typeof field === 'string') {
+            try {
+                // Intentar parsear como JSON
+                const parsed = JSON.parse(field);
+                return Array.isArray(parsed) ? parsed : field.split(',').map(item => item.trim());
+            } catch {
+                // Si no es JSON, tratar como string separado por comas
+                return field.split(',').map(item => item.trim()).filter(item => item);
+            }
+        }
+        return [];
+    }
+
+    // Helper para validar fechas
+    validateDates(validFrom, validUntil) {
+        const from = validFrom ? new Date(validFrom) : new Date();
+        const until = validUntil ? new Date(validUntil) : null;
+        
+        if (isNaN(from.getTime())) {
+            return { valid: false, error: 'Fecha de inicio inválida' };
+        }
+        
+        if (until && isNaN(until.getTime())) {
+            return { valid: false, error: 'Fecha de expiración inválida' };
+        }
+        
+        if (until && until <= from) {
+            return { valid: false, error: 'La fecha de expiración debe ser posterior a la fecha de inicio' };
+        }
+        
+        return { valid: true, validFrom: from, validUntil: until || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) };
+    }
+
     async createPromotion(req, res) {
         try {
             console.log('🔄 Creando nueva promoción...');
             
+            // Validar que hay imágenes ANTES de procesar
             if (!req.files || req.files.length === 0) {
                 return res.status(400).json({
                     success: false,
@@ -39,29 +117,131 @@ class PromotionController {
                 hotness
             } = req.body;
 
+            // Validar campos requeridos ANTES de procesar imágenes
+            const requiredFields = ['title', 'productName', 'category', 'originalPrice', 'currentPrice'];
+            const missingFields = this.validateRequiredFields(req.body, requiredFields);
+            
+            if (missingFields.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Campos requeridos faltantes',
+                    missingFields: missingFields
+                });
+            }
+
+            // Validar fechas
+            const dateValidation = this.validateDates(validFrom, validUntil);
+            if (!dateValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: dateValidation.error
+                });
+            }
+
             // Procesar imágenes con OCR
             const processedImages = [];
             let ocrData = null;
+            
+            // Importar optimizador de imágenes
+            const imageOptimizer = require('../utils/imageOptimizer');
 
             for (const file of req.files) {
                 try {
                     console.log(`🔄 Procesando imagen: ${file.originalname}`);
                     
-                    // Subir a Cloudinary
-                    const cloudinaryResult = await cloudinaryConfig.uploadImage(file);
+                    // Guardar buffer original para OCR (mejor calidad)
+                    const originalBuffer = Buffer.from(file.buffer);
                     
-                    if (!cloudinaryResult.success) {
-                        throw new Error(`Error subiendo imagen a Cloudinary: ${cloudinaryResult.error}`);
+                    // Optimizar imagen antes de guardar
+                    let optimizedImage;
+                    
+                    try {
+                        const optimizationResult = await imageOptimizer.optimizeImage(file.buffer, {
+                            maxWidth: parseInt(process.env.IMAGE_MAX_WIDTH) || 1920,
+                            maxHeight: parseInt(process.env.IMAGE_MAX_HEIGHT) || 1920,
+                            quality: parseInt(process.env.IMAGE_QUALITY) || 85,
+                            format: process.env.IMAGE_FORMAT || 'auto', // 'auto', 'jpeg', 'png', 'webp'
+                            progressive: true
+                        });
+                        
+                        optimizedImage = optimizationResult;
+                        file.buffer = optimizationResult.buffer;
+                        file.optimized = true;
+                        file.optimizationStats = {
+                            originalSize: optimizationResult.originalSize,
+                            optimizedSize: optimizationResult.optimizedSize,
+                            compressionRatio: optimizationResult.compressionRatio,
+                            dimensions: {
+                                original: { width: file.width, height: file.height },
+                                optimized: { width: optimizationResult.width, height: optimizationResult.height }
+                            }
+                        };
+                        
+                        console.log(`✨ Imagen optimizada: ${optimizationResult.compressionRatio}% de reducción`);
+                    } catch (optimizationError) {
+                        console.warn(`⚠️ Error optimizando imagen, usando original: ${optimizationError.message}`);
+                        file.optimized = false;
+                        // Continuar con imagen original si falla la optimización
+                    }
+                    
+                    // Crear directorio de uploads si no existe (usar ruta relativa al servidor)
+                    // Usar la misma lógica que en middleware/upload.js
+                    const getUploadDir = () => {
+                        if (process.env.UPLOAD_PATH && path.isAbsolute(process.env.UPLOAD_PATH)) {
+                            return process.env.UPLOAD_PATH;
+                        }
+                        if (process.env.UPLOAD_PATH) {
+                            return path.resolve(__dirname, process.env.UPLOAD_PATH);
+                        }
+                        return path.join(__dirname, '../uploads');
+                    };
+                    const uploadDir = getUploadDir();
+                    await fs.mkdir(uploadDir, { recursive: true });
+                    
+                    // Generar nombre único para el archivo (usar extensión del formato optimizado)
+                    const optimizedFormat = optimizedImage?.format || path.extname(file.originalname).slice(1) || 'jpg';
+                    const fileExtension = optimizedFormat === 'webp' ? '.webp' : 
+                                         optimizedFormat === 'png' ? '.png' : '.jpg';
+                    const uniqueFilename = `promotion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExtension}`;
+                    const localPath = path.join(uploadDir, uniqueFilename);
+                    
+                    // Guardar imagen optimizada localmente
+                    await fs.writeFile(localPath, file.buffer);
+                    console.log(`✅ Imagen optimizada guardada localmente: ${localPath}`);
+                    
+                    // Intentar subir a Cloudinary si está configurado (opcional)
+                    // Nota: Cloudinary también optimiza imágenes automáticamente
+                    let cloudinaryUrl = null;
+                    let cloudinaryPublicId = null;
+                    
+                    if (cloudinaryConfig.isConfigured) {
+                        try {
+                            // Usar la imagen optimizada para Cloudinary
+                            const cloudinaryFile = {
+                                ...file,
+                                buffer: file.buffer,
+                                mimetype: optimizedImage?.format === 'webp' ? 'image/webp' : 
+                                         optimizedImage?.format === 'png' ? 'image/png' : 'image/jpeg'
+                            };
+                            
+                            const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile);
+                            if (cloudinaryResult.success) {
+                                cloudinaryUrl = cloudinaryResult.data.secure_url;
+                                cloudinaryPublicId = cloudinaryResult.data.public_id;
+                                console.log(`✅ Imagen optimizada también subida a Cloudinary: ${cloudinaryUrl}`);
+                            }
+                        } catch (cloudinaryError) {
+                            console.log(`⚠️ Cloudinary no disponible, usando solo almacenamiento local: ${cloudinaryError.message}`);
+                        }
+                    } else {
+                        console.log(`ℹ️ Cloudinary no configurado, usando solo almacenamiento local`);
                     }
 
-                    // Guardar localmente como respaldo
-                    const localPath = path.join(process.env.UPLOAD_PATH || './public/uploads', file.filename);
-                    await fs.writeFile(localPath, file.buffer);
-
                     // Procesar OCR solo en la primera imagen
+                    // Usar imagen original (no optimizada) para mejor precisión del OCR
                     if (processedImages.length === 0) {
                         console.log('🔍 Procesando OCR de la imagen principal...');
-                        const ocrResult = await ocrService.processImageWithPython(file.buffer);
+                        const ocrResult = await ocrService.processImageWithPython(originalBuffer);
                         
                         if (ocrResult.success) {
                             // Extraer datos de promoción del OCR
@@ -101,13 +281,24 @@ class PromotionController {
                         }
                     }
 
+                    // Generar URL pública para la imagen (relativa al servidor)
+                    const publicUrl = `/uploads/${uniqueFilename}`;
+                    
                     processedImages.push({
                         originalName: file.originalname,
-                        filename: file.filename,
+                        filename: uniqueFilename,
                         path: localPath,
-                        cloudinaryUrl: cloudinaryResult.data.secure_url,
-                        cloudinaryPublicId: cloudinaryResult.data.public_id,
-                        uploadedAt: new Date()
+                        url: publicUrl, // URL pública para acceder desde el frontend
+                        cloudinaryUrl: cloudinaryUrl, // Opcional, solo si Cloudinary está configurado
+                        cloudinaryPublicId: cloudinaryPublicId, // Opcional
+                        uploadedAt: new Date(),
+                        optimized: file.optimized || false,
+                        optimizationStats: file.optimizationStats || null,
+                        format: optimizedImage?.format || path.extname(file.originalname).slice(1),
+                        dimensions: optimizedImage ? {
+                            width: optimizedImage.width,
+                            height: optimizedImage.height
+                        } : null
                     });
 
                 } catch (error) {
@@ -131,34 +322,51 @@ class PromotionController {
                 discountPercentage = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
             }
 
+            // Parsear arrays (tags y features)
+            const parsedTags = this.parseArrayField(tags);
+            const parsedFeatures = this.parseArrayField(features);
+            
+            // Parsear specifications
+            let parsedSpecifications = {};
+            if (specifications) {
+                try {
+                    parsedSpecifications = typeof specifications === 'string' 
+                        ? JSON.parse(specifications) 
+                        : specifications;
+                } catch (error) {
+                    console.warn('⚠️ Error parseando specifications, usando objeto vacío:', error.message);
+                    parsedSpecifications = {};
+                }
+            }
+
             // Crear la promoción
             const promotionData = {
-                title: title || 'Promoción sin título',
-                description: description || 'Descripción de la promoción',
-                productName: productName || 'Producto sin nombre',
-                brand: brand || 'Marca no especificada',
-                category: category || 'other',
-                originalPrice: parseFloat(originalPrice) || 0,
-                currentPrice: parseFloat(currentPrice) || 0,
+                title: title.trim(),
+                description: description ? description.trim() : '',
+                productName: productName.trim(),
+                brand: brand ? brand.trim() : '',
+                category: category,
+                originalPrice: parseFloat(originalPrice),
+                currentPrice: parseFloat(currentPrice),
                 currency: currency || 'MXN',
                 discountPercentage: discountPercentage || 0,
-                storeName: storeName || 'Tienda no especificada',
+                storeName: storeName ? storeName.trim() : '',
                 storeLocation: {
-                    address: storeAddress || '',
-                    city: storeCity || '',
-                    state: storeState || '',
+                    address: storeAddress ? storeAddress.trim() : '',
+                    city: storeCity ? storeCity.trim() : '',
+                    state: storeState ? storeState.trim() : '',
                     country: 'México'
                 },
-                isPhysicalStore: isPhysicalStore === 'true',
+                isPhysicalStore: isPhysicalStore === 'true' || isPhysicalStore === true,
                 images: processedImages,
                 ocrData: ocrData,
-                tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-                features: features ? features.split(',').map(feature => feature.trim()) : [],
-                specifications: specifications ? JSON.parse(specifications) : {},
-                isHotOffer: isHotOffer === 'true',
+                tags: parsedTags,
+                features: parsedFeatures,
+                specifications: parsedSpecifications,
+                isHotOffer: isHotOffer === 'true' || isHotOffer === true,
                 hotness: hotness || 'warm',
-                validFrom: validFrom ? new Date(validFrom) : new Date(),
-                validUntil: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días por defecto
+                validFrom: dateValidation.validFrom,
+                validUntil: dateValidation.validUntil,
                 status: 'active',
                 seller: {
                     name: 'Usuario del sistema',
@@ -167,22 +375,90 @@ class PromotionController {
                 }
             };
 
-            const promotion = new Promotion(promotionData);
-            await promotion.save();
+            // Validar que los precios sean válidos
+            if (promotionData.originalPrice < 0 || promotionData.currentPrice < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Los precios no pueden ser negativos'
+                });
+            }
 
-            console.log('✅ Promoción creada exitosamente:', promotion._id);
+            if (promotionData.currentPrice > promotionData.originalPrice) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'El precio actual no puede ser mayor al precio original'
+                });
+            }
+
+            // Verificar si MongoDB está conectado
+            const isConnected = this.isMongoConnected();
+
+            // Si MongoDB está conectado, guardar en la base de datos
+            if (isConnected) {
+                try {
+                    const promotion = new Promotion(promotionData);
+                    await promotion.save();
+
+                    console.log('✅ Promoción creada exitosamente en MongoDB:', promotion._id);
+
+                    return res.status(201).json({
+                        success: true,
+                        message: 'Promoción creada exitosamente',
+                        data: {
+                            id: promotion._id,
+                            title: promotion.title,
+                            productName: promotion.productName,
+                            images: promotion.images.length,
+                            ocrProcessed: !!promotion.ocrData,
+                            status: promotion.status
+                        },
+                        mode: 'database'
+                    });
+                } catch (dbError) {
+                    console.error('❌ Error guardando en MongoDB, intentando modo simulado:', dbError.message);
+                    // Continuar con modo simulado si falla MongoDB
+                }
+            }
+
+            // Si MongoDB no está conectado o falló, guardar en memoria (modo simulado)
+            console.log('💾 Guardando promoción en modo simulado (memoria)');
+            
+            // Inicializar array de promociones simuladas si no existe
+            if (!global.simulatedPromotions) {
+                global.simulatedPromotions = [];
+            }
+
+            // Crear promoción simulada con ID único
+            const simulatedId = `sim-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const simulatedPromotion = {
+                _id: simulatedId,
+                id: simulatedId,
+                ...promotionData,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                views: 0,
+                clicks: 0,
+                conversions: 0
+            };
+
+            // Agregar a la lista de promociones simuladas
+            global.simulatedPromotions.push(simulatedPromotion);
+
+            console.log('✅ Promoción creada exitosamente en modo simulado:', simulatedId);
 
             res.status(201).json({
                 success: true,
-                message: 'Promoción creada exitosamente',
+                message: 'Promoción creada exitosamente (modo simulado - MongoDB no conectado)',
                 data: {
-                    id: promotion._id,
-                    title: promotion.title,
-                    productName: promotion.productName,
-                    images: promotion.images.length,
-                    ocrProcessed: !!promotion.ocrData,
-                    status: promotion.status
-                }
+                    id: simulatedId,
+                    title: simulatedPromotion.title,
+                    productName: simulatedPromotion.productName,
+                    images: simulatedPromotion.images.length,
+                    ocrProcessed: !!simulatedPromotion.ocrData,
+                    status: simulatedPromotion.status
+                },
+                mode: 'simulated',
+                warning: 'Esta promoción se guardó en memoria. Conecta MongoDB para persistencia real.'
             });
 
         } catch (error) {
@@ -197,6 +473,39 @@ class PromotionController {
 
     async getAllPromotions(req, res) {
         try {
+            // Verificar si hay conexión a MongoDB
+            if (!this.isMongoConnected()) {
+                console.log('⚠️ MongoDB no conectado - verificando promociones simuladas');
+                
+                // Si hay promociones simuladas en memoria, devolverlas
+                if (global.simulatedPromotions && global.simulatedPromotions.length > 0) {
+                    const { page = 1, limit = 10 } = req.query;
+                    const pageNum = parseInt(page);
+                    const limitNum = parseInt(limit);
+                    const startIndex = (pageNum - 1) * limitNum;
+                    const endIndex = startIndex + limitNum;
+                    
+                    const paginatedPromotions = global.simulatedPromotions.slice(startIndex, endIndex);
+                    
+                    return res.json({
+                        success: true,
+                        data: {
+                            docs: paginatedPromotions,
+                            totalDocs: global.simulatedPromotions.length,
+                            limit: limitNum,
+                            page: pageNum,
+                            totalPages: Math.ceil(global.simulatedPromotions.length / limitNum),
+                            hasNextPage: endIndex < global.simulatedPromotions.length,
+                            hasPrevPage: pageNum > 1
+                        },
+                        message: 'Promociones en modo simulado'
+                    });
+                }
+                
+                // Si no hay promociones simuladas, devolver respuesta vacía
+                return res.json(this.getEmptyResponse(req));
+            }
+
             const { 
                 page = 1, 
                 limit = 10, 
@@ -250,6 +559,33 @@ class PromotionController {
         try {
             const { id } = req.params;
 
+            // Validar ObjectId
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de promoción inválido'
+                });
+            }
+
+            if (!this.isMongoConnected()) {
+                // Buscar en promociones simuladas
+                if (global.simulatedPromotions) {
+                    const promo = global.simulatedPromotions.find(p => p._id === id || p.id === id);
+                    if (promo) {
+                        return res.json({
+                            success: true,
+                            data: promo,
+                            message: 'Promoción obtenida (modo simulado)'
+                        });
+                    }
+                }
+                
+                return res.status(404).json({
+                    success: false,
+                    message: 'MongoDB no conectado - modo simulado activo'
+                });
+            }
+
             const promotion = await Promotion.findById(id)
                 .populate('seller', 'name email verified')
                 .populate('createdBy', 'name email');
@@ -280,9 +616,121 @@ class PromotionController {
         }
     }
 
+    async getPriceHistory(req, res) {
+        try {
+            const { id } = req.params;
+
+            // Validar ObjectId
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de promoción inválido'
+                });
+            }
+
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'MongoDB no conectado - modo simulado activo'
+                });
+            }
+
+            const promotion = await Promotion.findById(id);
+
+            if (!promotion) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Promoción no encontrada'
+                });
+            }
+
+            // Generar historial de precios basado en la promoción
+            // En el futuro, esto podría venir de un modelo de historial separado
+            const history = [];
+
+            // Entrada actual
+            const currentDiscount = promotion.originalPrice > 0 
+                ? Math.round(((promotion.originalPrice - promotion.currentPrice) / promotion.originalPrice) * 100)
+                : 0;
+
+            history.push({
+                date: promotion.createdAt || new Date(),
+                originalPrice: promotion.originalPrice,
+                currentPrice: promotion.currentPrice,
+                discountPercentage: currentDiscount,
+                currency: promotion.currency || 'MXN',
+                event: 'promotion_created',
+                description: `Promoción creada para ${promotion.productName || promotion.title}`
+            });
+
+            // Si la promoción fue actualizada, agregar entrada de actualización
+            if (promotion.updatedAt && promotion.updatedAt.getTime() !== promotion.createdAt.getTime()) {
+                // Simular un cambio de precio anterior (datos de ejemplo)
+                const daysSinceCreation = Math.floor((promotion.updatedAt - promotion.createdAt) / (1000 * 60 * 60 * 24));
+                
+                if (daysSinceCreation > 0) {
+                    // Simular que antes había un precio más alto
+                    const previousPrice = promotion.currentPrice * 1.1; // 10% más caro antes
+                    const previousDiscount = promotion.originalPrice > 0
+                        ? Math.round(((promotion.originalPrice - previousPrice) / promotion.originalPrice) * 100)
+                        : 0;
+
+                    history.push({
+                        date: new Date(promotion.createdAt.getTime() + (daysSinceCreation / 2) * 24 * 60 * 60 * 1000),
+                        originalPrice: promotion.originalPrice,
+                        currentPrice: previousPrice,
+                        discountPercentage: previousDiscount,
+                        currency: promotion.currency || 'MXN',
+                        event: 'price_decrease',
+                        description: `Precio reducido para mejorar la oferta`
+                    });
+                }
+            }
+
+            // Ordenar por fecha (más reciente primero)
+            history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            res.json({
+                success: true,
+                data: {
+                    promotionId: id,
+                    brand: promotion.brand,
+                    productName: promotion.productName || promotion.title,
+                    history: history
+                },
+                message: 'Historial de precios obtenido exitosamente'
+            });
+
+        } catch (error) {
+            console.error('❌ Error obteniendo historial de precios:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error interno del servidor',
+                error: error.message
+            });
+        }
+    }
+
     async updatePromotion(req, res) {
         try {
             const { id } = req.params;
+
+            // Validar ObjectId
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de promoción inválido'
+                });
+            }
+
+            // Verificar conexión MongoDB
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'MongoDB no está conectado. No se puede actualizar la promoción.'
+                });
+            }
+
             const updateData = req.body;
 
             // Verificar que la promoción existe
@@ -292,6 +740,20 @@ class PromotionController {
                     success: false,
                     message: 'Promoción no encontrada'
                 });
+            }
+
+            // Validar fechas si se están actualizando
+            if (updateData.validFrom || updateData.validUntil) {
+                const validFrom = updateData.validFrom || existingPromotion.validFrom;
+                const validUntil = updateData.validUntil || existingPromotion.validUntil;
+                const dateValidation = this.validateDates(validFrom, validUntil);
+                
+                if (!dateValidation.valid) {
+                    return res.status(400).json({
+                        success: false,
+                        message: dateValidation.error
+                    });
+                }
             }
 
             // Actualizar solo campos permitidos
@@ -306,7 +768,21 @@ class PromotionController {
             const filteredData = {};
             allowedFields.forEach(field => {
                 if (updateData[field] !== undefined) {
-                    filteredData[field] = updateData[field];
+                    // Parsear arrays si es necesario
+                    if (field === 'tags' || field === 'features') {
+                        filteredData[field] = this.parseArrayField(updateData[field]);
+                    } else if (field === 'specifications') {
+                        try {
+                            filteredData[field] = typeof updateData[field] === 'string' 
+                                ? JSON.parse(updateData[field]) 
+                                : updateData[field];
+                        } catch (error) {
+                            console.warn(`⚠️ Error parseando ${field}:`, error.message);
+                            filteredData[field] = updateData[field];
+                        }
+                    } else {
+                        filteredData[field] = updateData[field];
+                    }
                 }
             });
 
@@ -342,6 +818,22 @@ class PromotionController {
     async deletePromotion(req, res) {
         try {
             const { id } = req.params;
+
+            // Validar ObjectId
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de promoción inválido'
+                });
+            }
+
+            // Verificar conexión MongoDB
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'MongoDB no está conectado. No se puede eliminar la promoción.'
+                });
+            }
 
             const promotion = await Promotion.findById(id);
             if (!promotion) {
@@ -389,6 +881,14 @@ class PromotionController {
 
     async getHotOffers(req, res) {
         try {
+            if (!this.isMongoConnected()) {
+                return res.json({
+                    success: true,
+                    data: [],
+                    message: 'MongoDB no conectado - modo simulado activo'
+                });
+            }
+
             const hotOffers = await Promotion.findHotOffers()
                 .sort({ createdAt: -1 })
                 .limit(10);
@@ -411,6 +911,10 @@ class PromotionController {
 
     async getPromotionsByCategory(req, res) {
         try {
+            if (!this.isMongoConnected()) {
+                return res.json(this.getEmptyResponse(req));
+            }
+
             const { category } = req.params;
             const { page = 1, limit = 10 } = req.query;
 
@@ -446,6 +950,10 @@ class PromotionController {
 
     async searchPromotions(req, res) {
         try {
+            if (!this.isMongoConnected()) {
+                return res.json(this.getEmptyResponse(req));
+            }
+
             const { q, page = 1, limit = 10 } = req.query;
 
             if (!q) {

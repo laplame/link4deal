@@ -5,24 +5,39 @@ const fs = require('fs').promises;
 // Configuración de almacenamiento en memoria para procesamiento OCR
 const memoryStorage = multer.memoryStorage();
 
+// Obtener ruta de uploads (relativa al servidor)
+const getUploadDir = () => {
+    // Si UPLOAD_PATH está definido y es absoluto, usarlo
+    if (process.env.UPLOAD_PATH && path.isAbsolute(process.env.UPLOAD_PATH)) {
+        return process.env.UPLOAD_PATH;
+    }
+    // Si es relativo, hacerlo relativo al directorio del servidor
+    if (process.env.UPLOAD_PATH) {
+        return path.resolve(__dirname, process.env.UPLOAD_PATH);
+    }
+    // Por defecto, usar server/uploads
+    return path.join(__dirname, '../uploads');
+};
+
 // Configuración de almacenamiento en disco para respaldo local
 const diskStorage = multer.diskStorage({
     destination: async (req, file, cb) => {
         try {
-            const uploadDir = process.env.UPLOAD_PATH || './public/uploads';
+            const uploadDir = getUploadDir();
             
             // Crear directorio si no existe
             await fs.mkdir(uploadDir, { recursive: true });
             
             cb(null, uploadDir);
         } catch (error) {
+            console.error('❌ Error creando directorio de uploads:', error);
             cb(error);
         }
     },
     filename: (req, file, cb) => {
         // Generar nombre único para el archivo
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = path.extname(file.originalname);
+        const extension = path.extname(file.originalname) || '.jpg';
         const filename = `promotion-${uniqueSuffix}${extension}`;
         
         cb(null, filename);
@@ -30,6 +45,8 @@ const diskStorage = multer.diskStorage({
 });
 
 // Función para validar tipos de archivo
+// NOTA: No se puede verificar file.size aquí porque el archivo aún no se ha leído completamente
+// El tamaño se valida automáticamente en los limits de multer
 const fileFilter = (req, file, cb) => {
     // Tipos de imagen permitidos
     const allowedMimeTypes = [
@@ -42,7 +59,7 @@ const fileFilter = (req, file, cb) => {
 
     // Verificar tipo MIME
     if (!allowedMimeTypes.includes(file.mimetype)) {
-        const error = new Error('Tipo de archivo no permitido');
+        const error = new Error('Tipo de archivo no permitido. Solo se permiten imágenes (JPEG, PNG, WEBP, GIF)');
         error.code = 'INVALID_FILE_TYPE';
         return cb(error, false);
     }
@@ -52,21 +69,12 @@ const fileFilter = (req, file, cb) => {
     const fileExtension = path.extname(file.originalname).toLowerCase();
     
     if (!allowedExtensions.includes(fileExtension)) {
-        const error = new Error('Extensión de archivo no permitida');
+        const error = new Error('Extensión de archivo no permitida. Solo se permiten: .jpg, .jpeg, .png, .webp, .gif');
         error.code = 'INVALID_FILE_EXTENSION';
         return cb(error, false);
     }
 
-    // Verificar tamaño del archivo
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024; // 10MB por defecto
-    
-    if (file.size > maxSize) {
-        const error = new Error(`El archivo excede el tamaño máximo de ${maxSize / (1024 * 1024)}MB`);
-        error.code = 'FILE_TOO_LARGE';
-        return cb(error, false);
-    }
-
-    // Archivo válido
+    // Archivo válido (el tamaño se valida automáticamente en limits)
     cb(null, true);
 };
 
@@ -75,8 +83,9 @@ const memoryUpload = multer({
     storage: memoryStorage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
-        files: 5 // máximo 5 archivos
+        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB por defecto
+        files: 5, // máximo 5 archivos
+        fieldSize: 10 * 1024 * 1024 // Tamaño máximo de campos (10MB)
     }
 });
 
@@ -85,8 +94,9 @@ const diskUpload = multer({
     storage: diskStorage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
-        files: 5 // máximo 5 archivos
+        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB por defecto
+        files: 5, // máximo 5 archivos
+        fieldSize: 10 * 1024 * 1024 // Tamaño máximo de campos (10MB)
     }
 });
 
@@ -103,19 +113,17 @@ const upload = (req, res, next) => {
             if (req.files && req.files.length > 0) {
                 for (const file of req.files) {
                     // Crear una copia del archivo para almacenamiento en disco
-                    const diskFile = {
-                        ...file,
-                        path: path.join(
-                            process.env.UPLOAD_PATH || './public/uploads',
-                            `backup-${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`
-                        )
-                    };
+                    const uploadDir = getUploadDir();
+                    const diskFilePath = path.join(
+                        uploadDir,
+                        `backup-${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname) || '.jpg'}`
+                    );
 
                     // Guardar en disco
-                    await fs.writeFile(diskFile.path, file.buffer);
+                    await fs.writeFile(diskFilePath, file.buffer);
                     
                     // Agregar información del archivo en disco
-                    file.localBackupPath = diskFile.path;
+                    file.localBackupPath = diskFilePath;
                 }
             }
 
@@ -230,21 +238,22 @@ const cleanupTempFiles = async (req, res, next) => {
 };
 
 // Middleware para optimizar imágenes antes del OCR
+// NOTA: La optimización real se hace en el controlador después del OCR
+// para que el OCR tenga la mejor calidad posible
 const optimizeImages = async (req, res, next) => {
     try {
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
-                // Aquí se podría implementar optimización de imagen
-                // Por ejemplo, redimensionar, comprimir, etc.
+                // Guardar referencia al buffer original para OCR
+                file.originalBuffer = Buffer.from(file.buffer);
                 
-                // Por ahora, solo agregar metadatos de optimización
-                file.optimized = true;
+                // La optimización real se hace en el controlador después del OCR
                 file.optimizationDate = new Date();
             }
         }
         next();
     } catch (error) {
-        console.error('❌ Error optimizando imágenes:', error);
+        console.error('❌ Error preparando imágenes para optimización:', error);
         next();
     }
 };

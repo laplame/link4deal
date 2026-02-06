@@ -32,19 +32,19 @@ const searchLimiter = rateLimit({
 // ===== RUTAS PÚBLICAS =====
 
 // GET /api/promotions - Obtener todas las promociones (con paginación y filtros)
-router.get('/', searchLimiter, promotionController.getAllPromotions);
+router.get('/', searchLimiter, (req, res) => promotionController.getAllPromotions(req, res));
 
 // GET /api/promotions/hot - Obtener ofertas calientes
-router.get('/hot', promotionController.getHotOffers);
+router.get('/hot', (req, res) => promotionController.getHotOffers(req, res));
 
 // GET /api/promotions/category/:category - Obtener promociones por categoría
-router.get('/category/:category', promotionController.getPromotionsByCategory);
+router.get('/category/:category', (req, res) => promotionController.getPromotionsByCategory(req, res));
 
 // GET /api/promotions/search - Buscar promociones
-router.get('/search', searchLimiter, promotionController.searchPromotions);
+router.get('/search', searchLimiter, (req, res) => promotionController.searchPromotions(req, res));
 
 // GET /api/promotions/stats/overview - Obtener estadísticas generales
-router.get('/stats/overview', promotionController.getPromotionStats);
+router.get('/stats/overview', (req, res) => promotionController.getPromotionStats(req, res));
 
 // GET /api/promotions/status - Verificar salud del servicio
 router.get('/status', async (req, res) => {
@@ -75,8 +75,11 @@ router.get('/status', async (req, res) => {
     }
 });
 
+// GET /api/promotions/:id/history - Obtener historial de precios de una promoción
+router.get('/:id/history', (req, res) => promotionController.getPriceHistory(req, res));
+
 // GET /api/promotions/:id - Obtener promoción por ID (DEBE IR AL FINAL)
-router.get('/:id', promotionController.getPromotionById);
+router.get('/:id', (req, res) => promotionController.getPromotionById(req, res));
 
 // ===== RUTAS PROTEGIDAS =====
 
@@ -84,30 +87,30 @@ router.get('/:id', promotionController.getPromotionById);
 router.post('/', 
     createPromotionLimiter,
     memoryUpload.array('images', 5), // máximo 5 imágenes
-    promotionController.createPromotion
+    (req, res) => promotionController.createPromotion(req, res)
 );
 
 // PUT /api/promotions/:id - Actualizar promoción
 router.put('/:id', 
     memoryUpload.array('images', 5),
-    promotionController.updatePromotion
+    (req, res) => promotionController.updatePromotion(req, res)
 );
 
 // DELETE /api/promotions/:id - Eliminar promoción
 router.delete('/:id', 
-    promotionController.deletePromotion
+    (req, res) => promotionController.deletePromotion(req, res)
 );
 
 // ===== RUTAS DE ADMINISTRACIÓN =====
 
 // GET /api/promotions/admin/all - Obtener todas las promociones (admin)
 router.get('/admin/all', 
-    promotionController.getAllPromotions
+    (req, res) => promotionController.getAllPromotions(req, res)
 );
 
 // GET /api/promotions/admin/stats - Obtener estadísticas detalladas (admin)
 router.get('/admin/stats', 
-    promotionController.getPromotionStats
+    (req, res) => promotionController.getPromotionStats(req, res)
 );
 
 // ===== RUTAS DE WEBHOOKS =====

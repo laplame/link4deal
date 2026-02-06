@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const mongoosePaginate = require('mongoose-paginate-v2');
 
 const promotionSchema = new mongoose.Schema({
     // Información básica de la promoción
@@ -246,5 +247,8 @@ promotionSchema.methods.incrementClicks = function() {
     this.clicks += 1;
     return this.save();
 };
+
+// Agregar plugin de paginación
+promotionSchema.plugin(mongoosePaginate);
 
 module.exports = mongoose.model('Promotion', promotionSchema);

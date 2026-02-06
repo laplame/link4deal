@@ -101,6 +101,9 @@ const steps = [
 export default function CreatePromotionWizard() {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
     const [promotionData, setPromotionData] = useState<PromotionData>({
         basicInfo: {
             title: '',
@@ -574,16 +577,71 @@ export default function CreatePromotionWizard() {
         </div>
     );
 
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const fileArray = Array.from(files);
+            const newFiles = [...imageFiles, ...fileArray].slice(0, 5); // Máximo 5 imágenes
+            setImageFiles(newFiles);
+            
+            // Crear URLs para preview
+            const imageUrls = newFiles.map(file => URL.createObjectURL(file));
+            updatePromotionData('media', { images: imageUrls });
+        }
+    };
+
+    const removeImage = (index: number) => {
+        const newFiles = imageFiles.filter((_, i) => i !== index);
+        setImageFiles(newFiles);
+        
+        const newImages = promotionData.media.images.filter((_, i) => i !== index);
+        // Revocar URL para liberar memoria
+        URL.revokeObjectURL(promotionData.media.images[index]);
+        updatePromotionData('media', { images: newImages });
+    };
+
     const renderMediaStep = () => (
         <div className="space-y-6">
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Imágenes de la Promoción
+                    Imágenes de la Promoción * (mínimo 1)
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">Arrastra y suelta imágenes aquí o haz clic para seleccionar</p>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
+                    <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="image-upload"
+                    />
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                        <p className="mt-2 text-sm text-gray-600">Arrastra y suelta imágenes aquí o haz clic para seleccionar</p>
+                        <p className="mt-1 text-xs text-gray-500">Máximo 5 imágenes</p>
+                    </label>
                 </div>
+                {promotionData.media.images.length > 0 && (
+                    <div className="mt-4 grid grid-cols-3 gap-4">
+                        {promotionData.media.images.map((image, index) => (
+                            <div key={index} className="relative group">
+                                <img 
+                                    src={image} 
+                                    alt={`Preview ${index + 1}`}
+                                    className="w-full h-32 object-cover rounded-lg"
+                                />
+                                <button
+                                    onClick={() => removeImage(index)}
+                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div>
@@ -655,10 +713,102 @@ export default function CreatePromotionWizard() {
         }
     };
 
-    const handleSubmit = () => {
-        // Aquí se enviaría la promoción al backend
-        console.log('Promoción creada:', promotionData);
-        navigate('/referral-system');
+    const handleSubmit = async () => {
+        // Validar datos requeridos
+        if (!promotionData.basicInfo.title || !promotionData.basicInfo.category || !promotionData.basicInfo.brand) {
+            setSubmitError('Por favor completa la información básica');
+            setCurrentStep(0);
+            return;
+        }
+
+        if (!promotionData.pricing.originalPrice || !promotionData.pricing.offerPrice) {
+            setSubmitError('Por favor completa la información de precios');
+            setCurrentStep(1);
+            return;
+        }
+
+        if (promotionData.media.images.length === 0) {
+            setSubmitError('Por favor sube al menos una imagen');
+            setCurrentStep(6);
+            return;
+        }
+
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        try {
+            // Preparar FormData para enviar imágenes
+            const formData = new FormData();
+
+            // Información básica
+            formData.append('title', promotionData.basicInfo.title);
+            formData.append('description', promotionData.basicInfo.description);
+            formData.append('productName', promotionData.basicInfo.title);
+            formData.append('brand', promotionData.basicInfo.brand);
+            formData.append('category', promotionData.basicInfo.category);
+            formData.append('subcategory', promotionData.basicInfo.subcategory);
+
+            // Precios
+            formData.append('originalPrice', promotionData.pricing.originalPrice.toString());
+            formData.append('currentPrice', promotionData.pricing.offerPrice.toString());
+            formData.append('currency', promotionData.pricing.currency);
+            
+            // Calcular descuento
+            const discount = promotionData.pricing.originalPrice > 0
+                ? Math.round(((promotionData.pricing.originalPrice - promotionData.pricing.offerPrice) / promotionData.pricing.originalPrice) * 100)
+                : 0;
+            formData.append('discountPercentage', discount.toString());
+
+            // Inventario
+            formData.append('stock', promotionData.inventory.stock.toString());
+            formData.append('totalQuantity', promotionData.inventory.totalQuantity.toString());
+
+            // Fechas
+            formData.append('validFrom', promotionData.timing.startDate);
+            formData.append('validUntil', promotionData.timing.endDate || promotionData.timing.validUntil);
+
+            // Ubicación
+            if (promotionData.targeting.location.length > 0) {
+                formData.append('storeCity', promotionData.targeting.location[0]);
+                formData.append('storeState', promotionData.targeting.location[0]);
+            }
+
+            // Tags
+            if (promotionData.targeting.interests.length > 0) {
+                formData.append('tags', JSON.stringify(promotionData.targeting.interests));
+            }
+
+            // Imágenes (usar los archivos directamente)
+            if (imageFiles.length === 0) {
+                throw new Error('Por favor sube al menos una imagen');
+            }
+            
+            imageFiles.forEach((file, index) => {
+                formData.append('images', file);
+            });
+
+            // Enviar a la API
+            const response = await fetch('/api/promotions', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setSubmitSuccess(true);
+                setTimeout(() => {
+                    navigate('/promotions-marketplace');
+                }, 2000);
+            } else {
+                throw new Error(data.message || 'Error al crear la promoción');
+            }
+        } catch (error: any) {
+            console.error('Error creando promoción:', error);
+            setSubmitError(error.message || 'Error al crear la promoción. Por favor, intenta de nuevo.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -692,6 +842,33 @@ export default function CreatePromotionWizard() {
             </div>
 
             <div className="max-w-4xl mx-auto px-4 py-8">
+                {/* Mensajes de éxito/error */}
+                {submitSuccess && (
+                    <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h3 className="text-sm font-medium text-green-800 mb-1">¡Promoción creada exitosamente!</h3>
+                            <p className="text-sm text-green-600">Redirigiendo al marketplace...</p>
+                        </div>
+                    </div>
+                )}
+
+                {submitError && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                        <div className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5">⚠️</div>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-medium text-red-800 mb-1">Error al crear la promoción</h3>
+                            <p className="text-sm text-red-600">{submitError}</p>
+                        </div>
+                        <button
+                            onClick={() => setSubmitError(null)}
+                            className="text-red-600 hover:text-red-800"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+
                 {/* Progress Bar */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between mb-4">
@@ -782,10 +959,29 @@ export default function CreatePromotionWizard() {
                         ) : (
                             <button
                                 onClick={handleSubmit}
-                                    className="flex items-center gap-2 px-8 py-3 bg-green-600/90 text-white rounded-lg hover:bg-green-700/90 transition-colors backdrop-blur-sm border border-green-500/50"
+                                disabled={isSubmitting || submitSuccess}
+                                className={`flex items-center gap-2 px-8 py-3 rounded-lg transition-colors backdrop-blur-sm border ${
+                                    isSubmitting || submitSuccess
+                                        ? 'bg-green-600/70 text-white cursor-not-allowed border-green-500/30'
+                                        : 'bg-green-600/90 text-white hover:bg-green-700/90 border-green-500/50'
+                                }`}
                             >
-                                <CheckCircle className="h-5 w-5" />
-                                Crear Promoción
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        Creando...
+                                    </>
+                                ) : submitSuccess ? (
+                                    <>
+                                        <CheckCircle className="h-5 w-5" />
+                                        ¡Creada!
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="h-5 w-5" />
+                                        Crear Promoción
+                                    </>
+                                )}
                             </button>
                         )}
                         </div>

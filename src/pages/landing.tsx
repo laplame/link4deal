@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users } from 'lucide-react';
+import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import AdminAccessModal from '../components/AdminAccessModal';
 import CartIcon from '../components/CartIcon';
@@ -12,7 +12,8 @@ import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
 import { SITE_CONFIG } from '../config/site';
 
-const products = [
+// Productos de ejemplo (fallback si no hay datos de la API)
+const fallbackProducts = [
     {
         id: "1",
         name: "Smartphone Samsung Galaxy S23 Ultra",
@@ -368,14 +369,176 @@ const categories = [
     }
 ];
 
+// Tipo para producto transformado
+interface Product {
+    id: string;
+    name: string;
+    price: number;
+    originalPrice?: number;
+    currency: string;
+    image: string;
+    offer: string;
+    category: string;
+    brand: string;
+    rating: number;
+    reviewCount: number;
+    stock: number;
+    location: string;
+    shipping: string;
+    warranty: string;
+    tags: string[];
+    description: string;
+    features: string[];
+    seller: {
+        name: string;
+        rating: number;
+        verified: boolean;
+    };
+    specifications: Record<string, string | undefined>;
+    smartContract: {
+        address: string;
+        network: string;
+        tokenStandard: string;
+        blockchainExplorer: string;
+    };
+    isHotOffer?: boolean;
+    hotness?: 'fire' | 'hot' | 'warm';
+    expiresIn?: number;
+    storeLocation?: {
+        latitude: number;
+        longitude: number;
+        address: string;
+        storeName: string;
+    };
+    distance?: number;
+}
+
 export default function LandingPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [adminModalOpen, setAdminModalOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
     const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+    const [productsError, setProductsError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { addItem } = useCart();
+
+    // Cargar promociones desde la API
+    useEffect(() => {
+        const fetchPromotions = async () => {
+            setIsLoadingProducts(true);
+            setProductsError(null);
+            
+            try {
+                const response = await fetch('/api/promotions?limit=12&page=1&status=active');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                if (data.success && data.data.docs && data.data.docs.length > 0) {
+                    // Transformar promociones de la API al formato de ProductCard
+                    const transformedProducts: Product[] = data.data.docs.map((promo: any) => {
+                        // Calcular descuento
+                        const originalPrice = promo.originalPrice || 0;
+                        const currentPrice = promo.currentPrice || 0;
+                        const discountPercentage = promo.discountPercentage || 
+                            (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+                        
+                        // Calcular días/horas restantes
+                        const validUntil = new Date(promo.validUntil || Date.now() + 7 * 24 * 60 * 60 * 1000);
+                        const now = new Date();
+                        const diffTime = validUntil.getTime() - now.getTime();
+                        const expiresIn = Math.ceil(diffTime / (1000 * 60 * 60)); // en horas
+                        
+                        // Mapeo de categorías
+                        const categoryMap: { [key: string]: string } = {
+                            'electronics': 'electronicos',
+                            'fashion': 'moda',
+                            'sports': 'deportes',
+                            'beauty': 'belleza',
+                            'home': 'hogar',
+                            'books': 'libros',
+                            'food': 'comida',
+                            'other': 'otros'
+                        };
+
+                        return {
+                            id: promo._id || promo.id,
+                            name: promo.title || promo.productName || 'Sin título',
+                            price: currentPrice,
+                            originalPrice: originalPrice > 0 ? originalPrice : undefined,
+                            currency: promo.currency || 'MXN',
+                            image: promo.images && promo.images.length > 0 
+                                ? (promo.images[0].cloudinaryUrl || promo.images[0].path || 'https://via.placeholder.com/400x300')
+                                : 'https://via.placeholder.com/400x300',
+                            offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
+                            category: categoryMap[promo.category] || promo.category || 'otros',
+                            brand: promo.brand || 'Sin marca',
+                            rating: 4.5, // Valor por defecto
+                            reviewCount: promo.views || 0,
+                            stock: promo.stock || promo.totalQuantity || 0,
+                            location: promo.storeLocation?.city || promo.storeLocation?.address || 'CDMX',
+                            shipping: 'Envío disponible',
+                            warranty: 'Garantía incluida',
+                            tags: promo.tags?.slice(0, 4) || ['Oferta', 'Promoción'],
+                            description: promo.description || 'Promoción especial disponible',
+                            features: promo.tags?.slice(0, 5) || [],
+                            seller: {
+                                name: promo.storeName || promo.brand || 'Tienda',
+                                rating: 4.5,
+                                verified: true
+                            },
+                            specifications: {
+                                'Categoría': promo.category,
+                                'Marca': promo.brand,
+                                'Descuento': `${discountPercentage}%`
+                            },
+                            smartContract: {
+                                address: '0x0000000000000000000000000000000000000000',
+                                network: 'Ethereum',
+                                tokenStandard: 'ERC-777',
+                                blockchainExplorer: 'https://etherscan.io'
+                            },
+                            isHotOffer: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot',
+                            hotness: promo.hotness || (promo.isHotOffer ? 'hot' : undefined),
+                            expiresIn: expiresIn > 0 ? expiresIn : undefined,
+                            storeLocation: promo.storeLocation?.coordinates ? {
+                                latitude: promo.storeLocation.coordinates.latitude,
+                                longitude: promo.storeLocation.coordinates.longitude,
+                                address: promo.storeLocation.address || '',
+                                storeName: promo.storeName || ''
+                            } : undefined,
+                            distance: undefined
+                        };
+                    });
+                    
+                    setProducts(transformedProducts);
+                } else {
+                    // Si no hay promociones, mostrar array vacío (no usar fallback)
+                    console.log('No se encontraron promociones en la API');
+                    setProducts([]);
+                }
+            } catch (error: any) {
+                console.error('Error cargando promociones:', error);
+                // Solo usar fallback si hay un error real de conexión/red
+                if (error.name === 'TypeError' || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    setProductsError('No se pudo conectar al servidor. Verifica tu conexión a internet.');
+                    setProducts(fallbackProducts);
+                } else {
+                    setProductsError('No se pudieron cargar las promociones.');
+                    setProducts([]);
+                }
+            } finally {
+                setIsLoadingProducts(false);
+            }
+        };
+
+        fetchPromotions();
+    }, []);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -801,17 +964,47 @@ export default function LandingPage() {
                     </div>
                 </section>
                 
-                <section id="ofertas" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {products.map((product) => (
-                        <ProductCard
-                            key={product.id}
-                            product={product}
-                            onAddToCart={handleAddToCart}
-                            onAddToWishlist={handleAddToWishlist}
-                            onViewDetails={handleViewDetails}
-                        />
-                    ))}
-                </section>
+                {/* Mensaje de error si existe */}
+                {productsError && (
+                    <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-sm text-yellow-800">{productsError}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Estado de carga */}
+                {isLoadingProducts ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="w-12 h-12 text-purple-600 animate-spin mb-4" />
+                        <p className="text-gray-600">Cargando promociones...</p>
+                    </div>
+                ) : (
+                    <section id="ofertas" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {products.length > 0 ? (
+                            products.map((product) => (
+                                <ProductCard
+                                    key={product.id}
+                                    product={product}
+                                    onAddToCart={handleAddToCart}
+                                    onAddToWishlist={handleAddToWishlist}
+                                    onViewDetails={handleViewDetails}
+                                />
+                            ))
+                        ) : (
+                            <div className="col-span-full text-center py-12">
+                                <p className="text-gray-600 mb-4">No hay promociones disponibles en este momento.</p>
+                                <Link 
+                                    to="/create-promotion" 
+                                    className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                >
+                                    Crear Primera Promoción
+                                </Link>
+                            </div>
+                        )}
+                    </section>
+                )}
 
                 {/* Hot Offers Map */}
                 <OffersMap />

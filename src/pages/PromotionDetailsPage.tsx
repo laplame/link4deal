@@ -25,6 +25,7 @@ import {
     Info
 } from 'lucide-react';
 import CouponRequestForm from '../components/CouponRequestForm';
+import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
 
 interface SmartContract {
     address: string;
@@ -83,95 +84,165 @@ interface ProductDetails {
 export default function PromotionDetailsPage() {
     const { id } = useParams<{ id: string }>();
     const [product, setProduct] = useState<ProductDetails | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [copiedAddress, setCopiedAddress] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [showCouponForm, setShowCouponForm] = useState(false);
     const [showAddedToCart, setShowAddedToCart] = useState(false);
+    const [priceHistory, setPriceHistory] = useState<any[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const { addItem, state } = useCart();
 
-    // Mock data - en una aplicación real esto vendría de una API
+    // Cargar promoción desde la API
     useEffect(() => {
-        // Simular carga de datos
-        const mockProduct: ProductDetails = {
-            id: "1",
-            name: "Smartphone Samsung Galaxy S23 Ultra",
-            price: 24999,
-            originalPrice: 29999,
-            currency: "MXN",
-            image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
-            offer: "17% de descuento",
-            category: "Electrónicos",
-            brand: "Samsung",
-            rating: 4.8,
-            reviewCount: 1247,
-            stock: 45,
-            location: "CDMX, México",
-            shipping: "Envío gratis",
-            warranty: "2 años",
-            tags: ["5G", "256GB", "Cámara 200MP", "S Pen"],
-            description: "El smartphone más avanzado de Samsung con cámara de 200MP, S Pen integrado y procesador Snapdragon 8 Gen 2. Diseño premium con pantalla Dynamic AMOLED 2X y rendimiento excepcional para trabajo y entretenimiento.",
-            features: ["Pantalla Dynamic AMOLED 2X de 6.8 pulgadas", "Cámara principal de 200MP", "S Pen integrado", "Procesador Snapdragon 8 Gen 2", "Batería de 5000mAh", "Conectividad 5G"],
-            seller: {
-                name: "Samsung Store",
-                rating: 4.9,
-                verified: true,
-                address: "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-                totalSales: 15420,
-                memberSince: "2020-03-15"
-            },
-            specifications: {
-                "Pantalla": "6.8\" Dynamic AMOLED 2X",
-                "Procesador": "Snapdragon 8 Gen 2",
-                "RAM": "12GB",
-                "Almacenamiento": "256GB",
-                "Cámara": "200MP + 12MP + 10MP + 10MP",
-                "Batería": "5000mAh",
-                "Conectividad": "5G, Wi-Fi 6E, Bluetooth 5.3",
-                "Sistema Operativo": "Android 13 con One UI 5.1"
-            },
-            smartContract: {
-                address: "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-                network: "Ethereum Mainnet",
-                tokenStandard: "ERC-777",
-                blockchainExplorer: "https://etherscan.io/address/0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-                totalSupply: "1,000,000 L4D",
-                circulatingSupply: "750,000 L4D",
-                holders: 15420,
-                transactions: 45678,
-                lastUpdated: "2024-01-15T10:30:00Z",
-                contractVerified: true,
-                sourceCode: "https://github.com/link4deal/smart-contracts"
-            },
-            promotionDetails: {
-                startDate: "2024-01-01",
-                endDate: "2024-01-31",
-                maxQuantity: 1000,
-                soldQuantity: 750,
-                terms: [
-                    "Oferta válida hasta agotar existencias",
-                    "Precio especial solo para usuarios registrados",
-                    "Envío gratuito a toda España",
-                    "Garantía de 2 años incluida",
-                    "Devolución gratuita en 30 días"
-                ],
-                benefits: [
-                    "Descuento del 20% sobre precio original",
-                    "Envío express gratuito",
-                    "Acceso a soporte premium",
-                    "Membresía VIP por 6 meses",
-                    "Acceso anticipado a futuras ofertas"
-                ],
-                restrictions: [
-                    "Máximo 2 unidades por cliente",
-                    "No válido para revendedores",
-                    "Oferta no combinable con otros descuentos",
-                    "Válido solo para envíos a España"
-                ]
+        const fetchPromotion = async () => {
+            if (!id) {
+                setError('ID de promoción no proporcionado');
+                setIsLoading(false);
+                return;
+            }
+
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                const response = await fetch(`/api/promotions/${id}`);
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Error al cargar la promoción');
+                }
+
+                const promo = data.data;
+
+                // Calcular descuento
+                const originalPrice = promo.originalPrice || 0;
+                const currentPrice = promo.currentPrice || 0;
+                const discountPercentage = promo.discountPercentage || 
+                    (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+
+                // Mapeo de categorías
+                const categoryMap: { [key: string]: string } = {
+                    'electronics': 'Electrónicos',
+                    'fashion': 'Moda',
+                    'sports': 'Deportes',
+                    'beauty': 'Belleza',
+                    'home': 'Hogar',
+                    'books': 'Libros',
+                    'food': 'Comida',
+                    'other': 'Otros'
+                };
+
+                // Transformar datos de la API al formato esperado
+                const transformedProduct: ProductDetails = {
+                    id: promo._id || promo.id,
+                    name: promo.title || promo.productName || 'Sin título',
+                    price: currentPrice,
+                    originalPrice: originalPrice > 0 ? originalPrice : undefined,
+                    currency: promo.currency || 'MXN',
+                    image: promo.images && promo.images.length > 0 
+                        ? (promo.images[0].cloudinaryUrl || promo.images[0].url || promo.images[0].path || 'https://via.placeholder.com/800x600')
+                        : 'https://via.placeholder.com/800x600',
+                    offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
+                    category: categoryMap[promo.category] || promo.category || 'Otros',
+                    brand: promo.brand || 'Sin marca',
+                    rating: 4.5, // Valor por defecto
+                    reviewCount: promo.views || 0,
+                    stock: promo.stock || promo.totalQuantity || 0,
+                    location: promo.storeLocation?.city 
+                        ? `${promo.storeLocation.city}, ${promo.storeLocation.country || 'México'}`
+                        : promo.storeLocation?.address || 'CDMX, México',
+                    shipping: 'Envío disponible',
+                    warranty: 'Garantía incluida',
+                    tags: promo.tags || [],
+                    description: promo.description || 'Promoción especial disponible',
+                    features: promo.features || promo.tags?.slice(0, 5) || [],
+                    seller: {
+                        name: promo.storeName || promo.seller?.name || promo.brand || 'Tienda',
+                        rating: 4.5,
+                        verified: promo.seller?.verified || false,
+                        address: promo.seller?.address || '0x0000000000000000000000000000000000000000',
+                        totalSales: promo.conversions || 0,
+                        memberSince: promo.createdAt ? new Date(promo.createdAt).toISOString().split('T')[0] : '2024-01-01'
+                    },
+                    specifications: promo.specifications || {
+                        'Categoría': categoryMap[promo.category] || promo.category,
+                        'Marca': promo.brand,
+                        'Descuento': `${discountPercentage}%`
+                    },
+                    smartContract: {
+                        address: promo.smartContract?.address || '0x0000000000000000000000000000000000000000',
+                        network: promo.smartContract?.network || 'Ethereum Mainnet',
+                        tokenStandard: promo.smartContract?.tokenStandard || 'ERC-777',
+                        blockchainExplorer: promo.smartContract?.blockchainExplorer || 'https://etherscan.io',
+                        totalSupply: promo.smartContract?.totalSupply || '1,000,000 L4D',
+                        circulatingSupply: promo.smartContract?.circulatingSupply || '750,000 L4D',
+                        holders: promo.smartContract?.holders || 0,
+                        transactions: promo.smartContract?.transactions || 0,
+                        lastUpdated: promo.updatedAt || new Date().toISOString(),
+                        contractVerified: promo.smartContract?.contractVerified || false,
+                        sourceCode: promo.smartContract?.sourceCode || 'https://github.com/link4deal/smart-contracts'
+                    },
+                    promotionDetails: {
+                        startDate: promo.validFrom ? new Date(promo.validFrom).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                        endDate: promo.validUntil ? new Date(promo.validUntil).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        maxQuantity: promo.maxQuantity || promo.totalQuantity || 1000,
+                        soldQuantity: promo.soldQuantity || promo.conversions || 0,
+                        terms: promo.terms || [
+                            'Oferta válida hasta agotar existencias',
+                            'Precio especial solo para usuarios registrados',
+                            'Envío disponible'
+                        ],
+                        benefits: promo.benefits || [
+                            `Descuento del ${discountPercentage}% sobre precio original`,
+                            'Envío disponible',
+                            'Garantía incluida'
+                        ],
+                        restrictions: promo.restrictions || [
+                            'Oferta válida mientras duren existencias',
+                            'No combinable con otros descuentos'
+                        ]
+                    }
+                };
+
+                setProduct(transformedProduct);
+            } catch (err: any) {
+                console.error('Error cargando promoción:', err);
+                setError(err.message || 'No se pudo cargar la promoción');
+            } finally {
+                setIsLoading(false);
             }
         };
-        setProduct(mockProduct);
+
+        fetchPromotion();
     }, [id]);
+
+    // Cargar historial de precios
+    useEffect(() => {
+        const fetchPriceHistory = async () => {
+            if (!id) return;
+
+            setIsLoadingHistory(true);
+            try {
+                const response = await fetch(`/api/promotions/${id}/history`);
+                const data = await response.json();
+
+                if (data.success && data.data.history) {
+                    setPriceHistory(data.data.history);
+                }
+            } catch (error) {
+                console.error('Error cargando historial de precios:', error);
+            } finally {
+                setIsLoadingHistory(false);
+            }
+        };
+
+        if (product) {
+            fetchPriceHistory();
+        }
+    }, [id, product]);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -185,12 +256,31 @@ export default function PromotionDetailsPage() {
 
 
 
-    if (!product) {
+    if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-4 text-gray-600">Cargando promoción...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !product) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+                <div className="text-center max-w-md">
+                    <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Error al cargar la promoción</h1>
+                    <p className="text-gray-600 mb-6">{error || 'La promoción no se pudo cargar'}</p>
+                    <Link
+                        to="/"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Volver al inicio
+                    </Link>
                 </div>
             </div>
         );
@@ -385,6 +475,7 @@ export default function PromotionDetailsPage() {
                                         { id: 'overview', label: 'Descripción General', icon: TrendingUp },
                                         { id: 'smart-contract', label: 'Smart Contract', icon: FileText },
                                         { id: 'promotion', label: 'Detalles Promoción', icon: Zap },
+                                        { id: 'history', label: 'Historial de Precios', icon: Clock },
                                         { id: 'seller', label: 'Información Vendedor', icon: Users },
                                         { id: 'specifications', label: 'Especificaciones', icon: Lock }
                                     ].map((tab) => (
@@ -546,6 +637,27 @@ export default function PromotionDetailsPage() {
                                                 </a>
                                             </div>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* History Tab */}
+                                {activeTab === 'history' && (
+                                    <div>
+                                        {isLoadingHistory ? (
+                                            <div className="flex items-center justify-center py-12">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                                <span className="ml-3 text-gray-600">Cargando historial...</span>
+                                            </div>
+                                        ) : (
+                                            <DiscountHistoryTimeline
+                                                promotionId={id || ''}
+                                                brand={product.brand}
+                                                currentPrice={product.price}
+                                                originalPrice={product.originalPrice}
+                                                currency={product.currency}
+                                                history={priceHistory}
+                                            />
+                                        )}
                                     </div>
                                 )}
 

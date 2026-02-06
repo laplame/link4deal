@@ -21,7 +21,8 @@ import {
   Zap,
   Award,
   TrendingDown,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  AlertCircle
 } from 'lucide-react';
 import { NavigationHeader } from '../components/navigation/NavigationHeader';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
@@ -77,118 +78,122 @@ export default function PromotionsMarketplace() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [apiMessage, setApiMessage] = useState<string | null>(null);
 
-  // Mock data - en producción esto vendría de una API
+  // Cargar promociones desde la API
   useEffect(() => {
-    const mockPromotions: Promotion[] = [
-      {
-        id: '1',
-        title: 'Lanzamiento Nueva Colección Primavera 2024',
-        brand: 'Zara',
-        category: 'Moda',
-        subcategory: 'Ropa Femenina',
-        description: 'Promoción exclusiva para influencers de moda y lifestyle. Contenido creativo para redes sociales.',
-        originalPrice: 299.99,
-        currentPrice: 199.99,
-        currency: 'MXN',
-        discountPercentage: 33,
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop',
-        location: 'Ciudad de México',
-        validUntil: '2024-04-15',
-        totalApplications: 45,
-        maxApplications: 100,
-        status: 'active',
-        auctionType: 'dutch',
-        timeLeft: '2d 14h 32m',
-        influencerRequirements: ['Moda', 'Lifestyle', 'Min. 10K seguidores'],
-        commission: 15,
-        engagement: 4.8,
-        views: 12500,
-        hot: true,
-        featured: true
-      },
-      {
-        id: '2',
-        title: 'Review Producto Tecnológico Galaxy S24',
-        brand: 'Samsung',
-        category: 'Tecnología',
-        subcategory: 'Smartphones',
-        description: 'Review honesto del nuevo Galaxy S24. Contenido para YouTube, Instagram y TikTok.',
-        originalPrice: 15999.99,
-        currentPrice: 12999.99,
-        currency: 'MXN',
-        discountPercentage: 19,
-        image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=300&fit=crop',
-        location: 'Monterrey',
-        validUntil: '2024-04-20',
-        totalApplications: 78,
-        maxApplications: 50,
-        status: 'ending',
-        auctionType: 'dutch',
-        timeLeft: '1d 8h 15m',
-        influencerRequirements: ['Tecnología', 'Reviews', 'Min. 25K seguidores'],
-        commission: 20,
-        engagement: 4.6,
-        views: 8900,
-        hot: true,
-        featured: false
-      },
-      {
-        id: '3',
-        title: 'Campaña Fitness & Wellness',
-        brand: 'Nike',
-        category: 'Deportes',
-        subcategory: 'Ropa Deportiva',
-        description: 'Promoción de la nueva línea de ropa deportiva. Contenido motivacional y de entrenamiento.',
-        originalPrice: 899.99,
-        currentPrice: 899.99,
-        currency: 'MXN',
-        discountPercentage: 0,
-        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d6b?w=400&h=300&fit=crop',
-        location: 'Guadalajara',
-        validUntil: '2024-05-01',
-        totalApplications: 23,
-        maxApplications: 75,
-        status: 'active',
-        auctionType: 'english',
-        timeLeft: '5d 12h 45m',
-        influencerRequirements: ['Fitness', 'Deportes', 'Min. 15K seguidores'],
-        commission: 12,
-        engagement: 4.9,
-        views: 15600,
-        hot: false,
-        featured: true
-      },
-      {
-        id: '4',
-        title: 'Beauty Box Premium',
-        brand: 'Sephora',
-        category: 'Belleza',
-        subcategory: 'Cosméticos',
-        description: 'Kit completo de productos de belleza para review y tutoriales.',
-        originalPrice: 2499.99,
-        currentPrice: 1899.99,
-        currency: 'MXN',
-        discountPercentage: 24,
-        image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=300&fit=crop',
-        location: 'Puebla',
-        validUntil: '2024-04-25',
-        totalApplications: 67,
-        maxApplications: 60,
-        status: 'active',
-        auctionType: 'dutch',
-        timeLeft: '3d 6h 20m',
-        influencerRequirements: ['Belleza', 'Makeup', 'Min. 20K seguidores'],
-        commission: 18,
-        engagement: 4.7,
-        views: 11200,
-        hot: true,
-        featured: false
-      }
-    ];
+    const fetchPromotions = async () => {
+      setIsLoading(true);
+      setError(null);
+      setApiMessage(null);
+      
+      try {
+        const response = await fetch('/api/promotions?limit=50&page=1');
+        const data = await response.json();
+        
+        if (data.success && data.data.docs) {
+          // Guardar mensaje de la API si existe
+          if (data.message) {
+            setApiMessage(data.message);
+          }
+          
+          // Transformar datos de la API al formato del frontend
+          const transformedPromotions: Promotion[] = data.data.docs.map((promo: any) => {
+            // Mapeo de categorías del backend al frontend
+            const categoryMap: { [key: string]: string } = {
+              'fashion': 'Moda',
+              'electronics': 'Tecnología',
+              'sports': 'Deportes',
+              'beauty': 'Belleza',
+              'home': 'Hogar',
+              'books': 'Libros',
+              'food': 'Comida',
+              'other': 'Otros'
+            };
 
-    setPromotions(mockPromotions);
-    setFilteredPromotions(mockPromotions);
+            // Calcular días restantes
+            const validUntil = new Date(promo.validUntil);
+            const now = new Date();
+            const diffTime = validUntil.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffHours = Math.ceil((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const diffMinutes = Math.ceil((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+            
+            const timeLeft = diffDays > 0 
+              ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
+              : diffHours > 0 
+              ? `${diffHours}h ${diffMinutes}m`
+              : `${diffMinutes}m`;
+
+            // Determinar estado basado en fecha
+            let status: 'active' | 'ending' | 'closed' = 'active';
+            if (diffDays <= 0) {
+              status = 'closed';
+            } else if (diffDays <= 3) {
+              status = 'ending';
+            }
+
+            // Calcular descuento si no existe
+            const originalPrice = promo.originalPrice || 0;
+            const currentPrice = promo.currentPrice || 0;
+            const discountPercentage = promo.discountPercentage || 
+              (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+
+            return {
+              id: promo._id || promo.id,
+              title: promo.title || 'Sin título',
+              brand: promo.brand || 'Sin marca',
+              category: categoryMap[promo.category] || promo.category || 'Otros',
+              subcategory: promo.category === 'fashion' ? 'Ropa Femenina' : 
+                           promo.category === 'electronics' ? 'Smartphones' :
+                           promo.category === 'sports' ? 'Ropa Deportiva' : 'General',
+              description: promo.description || '',
+              originalPrice: originalPrice,
+              currentPrice: currentPrice,
+              currency: promo.currency || 'MXN',
+              discountPercentage: discountPercentage,
+              image: promo.images && promo.images.length > 0 
+                ? (promo.images[0].cloudinaryUrl || promo.images[0].path || 'https://via.placeholder.com/400x300')
+                : 'https://via.placeholder.com/400x300',
+              location: promo.storeLocation?.city || promo.storeLocation?.address || 'Ciudad de México',
+              validUntil: promo.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              totalApplications: promo.conversions || promo.totalApplications || 0,
+              maxApplications: promo.maxApplications || 100,
+              status: status,
+              auctionType: (promo.auctionType || 'dutch') as 'dutch' | 'english',
+              timeLeft: timeLeft,
+              influencerRequirements: promo.tags?.slice(0, 3) || promo.influencerRequirements || ['General'],
+              commission: promo.commission || 15,
+              engagement: promo.engagement || 4.5,
+              views: promo.views || 0,
+              hot: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot' || false,
+              featured: promo.featured || promo.hotness === 'fire' || promo.hotness === 'hot' || false
+            };
+          });
+
+          setPromotions(transformedPromotions);
+          setFilteredPromotions(transformedPromotions);
+        } else {
+          // Si no hay promociones pero la respuesta fue exitosa
+          setPromotions([]);
+          setFilteredPromotions([]);
+          if (data.message) {
+            setApiMessage(data.message);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error cargando promociones:', error);
+        setError(error.message || 'Error al cargar las promociones. Por favor, intenta de nuevo.');
+        setPromotions([]);
+        setFilteredPromotions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPromotions();
   }, []);
 
   // Filtrar promociones
@@ -450,9 +455,56 @@ export default function PromotionsMarketplace() {
           </div>
         </div>
 
+        {/* Mensaje de estado de la API */}
+        {apiMessage && (
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <Clock className="w-5 h-5 text-yellow-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-yellow-800">{apiMessage}</p>
+              {apiMessage.includes('simulado') && (
+                <p className="text-xs text-yellow-600 mt-1">
+                  Las promociones se están cargando desde memoria. Conecta MongoDB Atlas para persistencia real.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Estado de carga */}
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+            <p className="text-gray-600">Cargando promociones...</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !isLoading && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800 mb-1">Error al cargar promociones</h3>
+                <p className="text-sm text-red-600">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-3 text-sm text-red-700 hover:text-red-900 underline"
+                >
+                  Recargar página
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Grid de promociones */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPromotions.map((promotion) => (
+        {!isLoading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPromotions.map((promotion) => (
             <div key={promotion.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
               {/* Imagen y badges */}
               <div className="relative">
@@ -599,10 +651,11 @@ export default function PromotionsMarketplace() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
 
         {/* Mensaje si no hay resultados */}
-        {filteredPromotions.length === 0 && (
+        {!isLoading && !error && filteredPromotions.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <Search className="w-16 h-16 mx-auto" />
