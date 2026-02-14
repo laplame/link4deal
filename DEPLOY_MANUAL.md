@@ -4,6 +4,20 @@ Ejecutar **en el servidor** (ej. `cto@damecode`). Ajusta rutas si tu usuario o p
 
 ---
 
+## Actualización rápida (solo Nginx y verificación)
+
+Si el proyecto ya está clonado y el backend corre (PM2 en puerto 3000), usa este script **en el servidor** para actualizar config de Nginx y verificar con curl:
+
+```bash
+cd ~/project/link4deal
+git pull
+bash scripts/deploy-server.sh
+```
+
+El script hace: `git pull` → copia `nginx.conf` a `/etc/nginx/sites-available/link4deal` → `nginx -t` → `systemctl reload nginx` → comprueba backend en 3000 y hace curls de verificación.
+
+---
+
 ## Parte 1: Borrar todo (manual)
 
 ### 1.1 Parar y quitar PM2
