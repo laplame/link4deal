@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import CouponRequestForm from '../components/CouponRequestForm';
 import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
+import { getPromotionImageUrl } from '../utils/promotionImage';
 
 interface SmartContract {
     address: string;
@@ -142,9 +143,7 @@ export default function PromotionDetailsPage() {
                     price: currentPrice,
                     originalPrice: originalPrice > 0 ? originalPrice : undefined,
                     currency: promo.currency || 'MXN',
-                    image: promo.images && promo.images.length > 0 
-                        ? (promo.images[0].cloudinaryUrl || promo.images[0].url || promo.images[0].path || 'https://via.placeholder.com/800x600')
-                        : 'https://via.placeholder.com/800x600',
+                    image: getPromotionImageUrl(promo.images, 'https://via.placeholder.com/800x600'),
                     offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
                     category: categoryMap[promo.category] || promo.category || 'Otros',
                     brand: promo.brand || 'Sin marca',

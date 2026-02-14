@@ -23,9 +23,9 @@ server {
     listen 5173;
     server_name damecodigo.com www.damecodigo.com localhost;
     
-    # Frontend (React/Vite build)
+    # Frontend (React/Vite build - link4deal)
     location / {
-        root /home/cto/project/front_mongo/dist;
+        root /home/cto/project/link4deal/dist;
         try_files $uri $uri/ /index.html;
         
         # Cache static assets
@@ -38,6 +38,14 @@ server {
         add_header Access-Control-Allow-Origin *;
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
         add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
+    }
+    
+    # Uploads (imágenes del backend)
+    location /uploads/ {
+        proxy_pass http://localhost:5001/uploads/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # API proxy to backend

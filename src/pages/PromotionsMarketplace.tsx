@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { NavigationHeader } from '../components/navigation/NavigationHeader';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
+import { getPromotionImageUrl } from '../utils/promotionImage';
 
 interface Promotion {
   id: string;
@@ -154,9 +155,7 @@ export default function PromotionsMarketplace() {
               currentPrice: currentPrice,
               currency: promo.currency || 'MXN',
               discountPercentage: discountPercentage,
-              image: promo.images && promo.images.length > 0 
-                ? (promo.images[0].cloudinaryUrl || promo.images[0].path || 'https://via.placeholder.com/400x300')
-                : 'https://via.placeholder.com/400x300',
+              image: getPromotionImageUrl(promo.images, 'https://via.placeholder.com/400x300'),
               location: promo.storeLocation?.city || promo.storeLocation?.address || 'Ciudad de México',
               validUntil: promo.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
               totalApplications: promo.conversions || promo.totalApplications || 0,

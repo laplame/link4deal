@@ -11,6 +11,7 @@ import LocationSelector from '../components/LocationSelector';
 import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
 import { SITE_CONFIG } from '../config/site';
+import { getPromotionImageUrl } from '../utils/promotionImage';
 
 // Productos de ejemplo (fallback si no hay datos de la API)
 const fallbackProducts = [
@@ -472,9 +473,7 @@ export default function LandingPage() {
                             price: currentPrice,
                             originalPrice: originalPrice > 0 ? originalPrice : undefined,
                             currency: promo.currency || 'MXN',
-                            image: promo.images && promo.images.length > 0 
-                                ? (promo.images[0].cloudinaryUrl || promo.images[0].path || 'https://via.placeholder.com/400x300')
-                                : 'https://via.placeholder.com/400x300',
+                            image: getPromotionImageUrl(promo.images, 'https://via.placeholder.com/400x300'),
                             offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
                             category: categoryMap[promo.category] || promo.category || 'otros',
                             brand: promo.brand || 'Sin marca',
