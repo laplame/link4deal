@@ -434,13 +434,28 @@ export default function LandingPage() {
             
             try {
                 const response = await fetch('/api/promotions?limit=12&page=1&status=active');
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status}`);
+                const contentType = response.headers.get('content-type') || '';
+                const text = await response.text();
+                let data: { success?: boolean; data?: { docs?: unknown[] }; message?: string };
+                try {
+                    if (!contentType.includes('application/json')) {
+                        throw new Error('API_NO_JSON');
+                    }
+                    data = JSON.parse(text);
+                } catch (parseError: unknown) {
+                    if (parseError instanceof SyntaxError || (parseError as Error)?.message === 'API_NO_JSON') {
+                        setProductsError('El servicio de ofertas no está disponible (comprueba que el backend y Nginx estén configurados).');
+                        setProducts([]);
+                        return;
+                    }
+                    throw parseError;
                 }
 
-                if (data.success && data.data.docs && data.data.docs.length > 0) {
+                if (!response.ok) {
+                    throw new Error(data?.message || `Error HTTP: ${response.status}`);
+                }
+
+                if (data.success && data.data?.docs && data.data.docs.length > 0) {
                     // Transformar promociones de la API al formato de ProductCard
                     const transformedProducts: Product[] = data.data.docs.map((promo: any) => {
                         // Calcular descuento
