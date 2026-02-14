@@ -18,7 +18,8 @@
     "db:start": "mongod --dbpath ./data/db",
     "db:stop": "pkill mongod",
     "setup": "npm install && npm run python:install && mkdir -p data/db public/uploads logs",
-    "verify-api": "node scripts/verify-api.js"
+    "verify-api": "node scripts/verify-api.js",
+    "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js"
   },
   "dependencies": {
     "axios": "^1.6.2",

@@ -433,7 +433,7 @@ export default function LandingPage() {
             setProductsError(null);
             
             try {
-                const response = await fetch('/api/promotions?limit=12&page=1&status=active');
+                const response = await fetch('/api/promotions?limit=1&page=1&status=active');
                 const contentType = response.headers.get('content-type') || '';
                 const text = await response.text();
                 let data: { success?: boolean; data?: { docs?: unknown[] }; message?: string };
@@ -532,20 +532,17 @@ export default function LandingPage() {
                     
                     setProducts(transformedProducts);
                 } else {
-                    // Si no hay promociones, mostrar array vacío (no usar fallback)
-                    console.log('No se encontraron promociones en la API');
+                    // Solo mostramos datos de la API; si no hay promociones, lista vacía
                     setProducts([]);
                 }
             } catch (error: any) {
                 console.error('Error cargando promociones:', error);
-                // Solo usar fallback si hay un error real de conexión/red
                 if (error.name === 'TypeError' || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                     setProductsError('No se pudo conectar al servidor. Verifica tu conexión a internet.');
-                    setProducts(fallbackProducts);
                 } else {
                     setProductsError('No se pudieron cargar las promociones.');
-                    setProducts([]);
                 }
+                setProducts([]);
             } finally {
                 setIsLoadingProducts(false);
             }
