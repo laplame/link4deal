@@ -5,7 +5,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const path = require('path');
-require('dotenv').config();
+// Cargar .env desde server/ para que funcione con PM2 (cwd = raíz del proyecto)
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Import database connection
 const database = require('./config/database');
