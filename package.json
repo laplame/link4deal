@@ -17,7 +17,8 @@
     "start:all": "concurrently \"npm run server:dev\" \"npm run python:dev\" \"npm run dev\"",
     "db:start": "mongod --dbpath ./data/db",
     "db:stop": "pkill mongod",
-    "setup": "npm install && npm run python:install && mkdir -p data/db public/uploads logs"
+    "setup": "npm install && npm run python:install && mkdir -p data/db public/uploads logs",
+    "verify-api": "node scripts/verify-api.js"
   },
   "dependencies": {
     "axios": "^1.6.2",
