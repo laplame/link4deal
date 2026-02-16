@@ -86,23 +86,15 @@ class PromotionController {
     async createPromotion(req, res) {
         try {
             console.log('🔄 Creando nueva promoción...');
-            
-            // Validar que hay imágenes ANTES de procesar
-            if (!req.files || req.files.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Se requiere al menos una imagen'
-                });
-            }
 
-            const { 
-                title, 
-                description, 
-                productName, 
-                brand, 
+            const {
+                title,
+                description,
+                productName,
+                brand,
                 category,
-                originalPrice, 
-                currentPrice, 
+                originalPrice,
+                currentPrice,
                 currency,
                 storeName,
                 storeAddress,
@@ -118,19 +110,19 @@ class PromotionController {
                 hotness
             } = req.body;
 
-            // Validar campos requeridos ANTES de procesar imágenes
-            const requiredFields = ['title', 'productName', 'category', 'originalPrice', 'currentPrice'];
+            // Solo el título es obligatorio para permitir crear promociones de forma amplia
+            const requiredFields = ['title'];
             const missingFields = this.validateRequiredFields(req.body, requiredFields);
-            
+
             if (missingFields.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Campos requeridos faltantes',
+                    message: 'El título es requerido',
                     missingFields: missingFields
                 });
             }
 
-            // Validar fechas
+            // Validar fechas (por defecto: desde ahora hasta 30 días)
             const dateValidation = this.validateDates(validFrom, validUntil);
             if (!dateValidation.valid) {
                 return res.status(400).json({
@@ -139,11 +131,11 @@ class PromotionController {
                 });
             }
 
-            // Procesar imágenes con OCR
+            // Procesar imágenes con OCR (opcional: se puede crear promoción sin imagen)
             const processedImages = [];
             let ocrData = null;
-            
-            // Importar optimizador de imágenes
+
+            if (req.files && req.files.length > 0) {
             const imageOptimizer = require('../utils/imageOptimizer');
 
             for (const file of req.files) {
@@ -299,12 +291,6 @@ class PromotionController {
                     continue;
                 }
             }
-
-            if (processedImages.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'No se pudo procesar ninguna imagen'
-                });
             }
 
             // Calcular descuento si no se proporcionó
@@ -330,27 +316,30 @@ class PromotionController {
                 }
             }
 
-            // Crear la promoción
+            const numOriginal = (originalPrice !== undefined && originalPrice !== '') ? parseFloat(originalPrice) : 0;
+            const numCurrent = (currentPrice !== undefined && currentPrice !== '') ? parseFloat(currentPrice) : 0;
+
+            // Crear la promoción (campos con valores por defecto para máxima flexibilidad)
             const promotionData = {
                 title: title.trim(),
-                description: description ? description.trim() : '',
-                productName: productName.trim(),
-                brand: brand ? brand.trim() : '',
-                category: category,
-                originalPrice: parseFloat(originalPrice),
-                currentPrice: parseFloat(currentPrice),
+                description: (description && String(description).trim()) ? String(description).trim() : '',
+                productName: (productName && String(productName).trim()) ? String(productName).trim() : title.trim(),
+                brand: brand ? String(brand).trim() : '',
+                category: category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(category) ? category : 'other',
+                originalPrice: Number.isFinite(numOriginal) ? numOriginal : 0,
+                currentPrice: Number.isFinite(numCurrent) ? numCurrent : 0,
                 currency: currency || 'MXN',
                 discountPercentage: discountPercentage || 0,
-                storeName: storeName ? storeName.trim() : '',
+                storeName: storeName ? String(storeName).trim() : '',
                 storeLocation: {
-                    address: storeAddress ? storeAddress.trim() : '',
-                    city: storeCity ? storeCity.trim() : '',
-                    state: storeState ? storeState.trim() : '',
+                    address: storeAddress ? String(storeAddress).trim() : '',
+                    city: storeCity ? String(storeCity).trim() : '',
+                    state: storeState ? String(storeState).trim() : '',
                     country: 'México'
                 },
                 isPhysicalStore: isPhysicalStore === 'true' || isPhysicalStore === true,
                 images: processedImages,
-                ocrData: ocrData,
+                ocrData: ocrData || undefined,
                 tags: parsedTags,
                 features: parsedFeatures,
                 specifications: parsedSpecifications,
@@ -366,14 +355,13 @@ class PromotionController {
                 }
             };
 
-            // Validar que los precios sean válidos
+            // Validar que los precios no sean negativos y que actual <= original (si hay precios)
             if (promotionData.originalPrice < 0 || promotionData.currentPrice < 0) {
                 return res.status(400).json({
                     success: false,
                     message: 'Los precios no pueden ser negativos'
                 });
             }
-
             if (promotionData.currentPrice > promotionData.originalPrice) {
                 return res.status(400).json({
                     success: false,

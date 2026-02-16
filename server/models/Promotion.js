@@ -11,7 +11,7 @@ const promotionSchema = new mongoose.Schema({
     },
     description: {
         type: String,
-        required: [true, 'La descripción es requerida'],
+        default: '',
         trim: true,
         maxlength: [1000, 'La descripción no puede exceder 1000 caracteres']
     },
@@ -19,7 +19,7 @@ const promotionSchema = new mongoose.Schema({
     // Información del producto
     productName: {
         type: String,
-        required: [true, 'El nombre del producto es requerido'],
+        default: '',
         trim: true
     },
     brand: {
@@ -28,24 +28,23 @@ const promotionSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: [true, 'La categoría es requerida'],
+        default: 'other',
         enum: ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other']
     },
     
     // Precios y descuentos
     originalPrice: {
         type: Number,
-        required: [true, 'El precio original es requerido'],
+        default: 0,
         min: [0, 'El precio no puede ser negativo']
     },
     currentPrice: {
         type: Number,
-        required: [true, 'El precio actual es requerido'],
+        default: 0,
         min: [0, 'El precio no puede ser negativo']
     },
     currency: {
         type: String,
-        required: [true, 'La moneda es requerida'],
         default: 'MXN',
         enum: ['MXN', 'USD', 'EUR']
     },
@@ -121,14 +120,14 @@ const promotionSchema = new mongoose.Schema({
         default: 'warm'
     },
     
-    // Fechas importantes
+    // Fechas importantes (por defecto: desde ahora hasta 30 días)
     validFrom: {
         type: Date,
-        required: [true, 'La fecha de inicio es requerida']
+        default: Date.now
     },
     validUntil: {
         type: Date,
-        required: [true, 'La fecha de expiración es requerida']
+        default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     },
     
     // Información del vendedor
