@@ -433,7 +433,7 @@ export default function LandingPage() {
             setProductsError(null);
             
             try {
-                const response = await fetch('/api/promotions?limit=1&page=1&status=active');
+                const response = await fetch('/api/promotions?limit=50&page=1&status=active');
                 const contentType = response.headers.get('content-type') || '';
                 const text = await response.text();
                 let data: { success?: boolean; data?: { docs?: unknown[] }; message?: string };

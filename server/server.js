@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Importar configuraciones
@@ -40,8 +41,19 @@ app.use((req, res, next) => {
 
 // ===== SERVIR ARCHIVOS ESTÁTICOS =====
 
-// Servir archivos de uploads
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+// Servir uploads desde la misma carpeta donde se guardan (getUploadDir del middleware)
+const { getUploadDir, getPromotionUploadDir } = require('./middleware/upload');
+const uploadsPath = path.resolve(getUploadDir());
+if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+}
+// Carpeta única para imágenes de promociones
+const promotionsUploadPath = path.resolve(getPromotionUploadDir());
+if (!fs.existsSync(promotionsUploadPath)) {
+    fs.mkdirSync(promotionsUploadPath, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsPath));
+console.log('📁 Serviendo uploads desde:', uploadsPath);
 
 // Servir archivos del frontend (para desarrollo)
 if (process.env.NODE_ENV === 'development') {

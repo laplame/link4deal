@@ -99,7 +99,7 @@ Ajusta al menos: `MONGODB_URI_*`, `PORT=5001`, `FRONTEND_URL`, etc.
 ### 2.4 Crear directorios que usa la app
 
 ```bash
-mkdir -p logs public/uploads server/public/uploads
+mkdir -p logs server/uploads server/uploads/promotions
 ```
 
 ---
@@ -190,7 +190,7 @@ git clone <URL_DEL_REPO> link4deal
 cd link4deal
 npm install
 npm run build
-mkdir -p logs public/uploads server/public/uploads
+mkdir -p logs server/uploads server/uploads/promotions
 cp server/.env.example server/.env
 # Editar server/.env con tus valores
 

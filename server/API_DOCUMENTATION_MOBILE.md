@@ -139,7 +139,7 @@ curl -X GET "http://localhost:3000/api/promotions?page=1&limit=20&category=elect
             "originalName": "iphone.jpg",
             "filename": "promotion-1234567890-abc123.webp",
             "path": "/path/to/image.webp",
-            "url": "/uploads/promotion-1234567890-abc123.webp",
+            "url": "/uploads/promotions/promotion-1234567890-abc123.webp",
             "cloudinaryUrl": "https://res.cloudinary.com/...",
             "uploadedAt": "2024-01-22T10:00:00.000Z",
             "optimized": true,

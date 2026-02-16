@@ -83,7 +83,7 @@ const promotionSchema = new mongoose.Schema({
         originalName: String,
         filename: String,
         path: String,
-        url: String,           // URL pública para el frontend (ej: /uploads/promotion-xxx.jpg)
+        url: String,           // URL pública para el frontend (ej: /uploads/promotions/promotion-xxx.jpg)
         cloudinaryUrl: String,
         cloudinaryPublicId: String,
         uploadedAt: {

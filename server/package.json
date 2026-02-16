@@ -10,6 +10,7 @@
     "seed": "node seeders/initialData.js",
     "seed:promotions": "node seeders/promotionsSeeder.js",
     "test:connection": "node scripts/testConnection.js",
+    "verify:sharp": "node scripts/verifySharp.js",
     "delete:test-promotions": "node scripts/deleteTestPromotions.js"
   },
   "keywords": [

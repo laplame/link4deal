@@ -17,7 +17,7 @@
     "start:all": "concurrently \"npm run server:dev\" \"npm run python:dev\" \"npm run dev\"",
     "db:start": "mongod --dbpath ./data/db",
     "db:stop": "pkill mongod",
-    "setup": "npm install && npm run python:install && mkdir -p data/db public/uploads logs",
+    "setup": "npm install && npm run python:install && mkdir -p data/db server/uploads server/uploads/promotions logs",
     "verify-api": "node scripts/verify-api.js",
     "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js"
   },

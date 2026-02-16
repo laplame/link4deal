@@ -1,0 +1,10 @@
+{
+  "name": "DameCodigo - Cupones y Ofertas",
+  "short_name": "DameCodigo",
+  "description": "Cupones y ofertas personalizadas por ubicación",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": []
+}

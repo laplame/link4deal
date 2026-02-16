@@ -2,6 +2,7 @@ const Promotion = require('../models/Promotion');
 const cloudinaryConfig = require('../config/cloudinary');
 const ocrService = require('../services/ocrService');
 const database = require('../config/database');
+const { getPromotionUploadDir } = require('../middleware/upload');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -184,18 +185,8 @@ class PromotionController {
                         // Continuar con imagen original si falla la optimización
                     }
                     
-                    // Crear directorio de uploads si no existe (usar ruta relativa al servidor)
-                    // Usar la misma lógica que en middleware/upload.js
-                    const getUploadDir = () => {
-                        if (process.env.UPLOAD_PATH && path.isAbsolute(process.env.UPLOAD_PATH)) {
-                            return process.env.UPLOAD_PATH;
-                        }
-                        if (process.env.UPLOAD_PATH) {
-                            return path.resolve(__dirname, process.env.UPLOAD_PATH);
-                        }
-                        return path.join(__dirname, '../uploads');
-                    };
-                    const uploadDir = getUploadDir();
+                    // Carpeta única para imágenes de promociones (servida en /uploads/promotions/)
+                    const uploadDir = getPromotionUploadDir();
                     await fs.mkdir(uploadDir, { recursive: true });
                     
                     // Generar nombre único para el archivo (usar extensión del formato optimizado)
@@ -281,8 +272,8 @@ class PromotionController {
                         }
                     }
 
-                    // Generar URL pública para la imagen (relativa al servidor)
-                    const publicUrl = `/uploads/${uniqueFilename}`;
+                    // URL pública: única ruta para todas las imágenes de promociones
+                    const publicUrl = `/uploads/promotions/${uniqueFilename}`;
                     
                     processedImages.push({
                         originalName: file.originalname,
@@ -520,6 +511,10 @@ class PromotionController {
             // Filtros
             if (category) query.category = category;
             if (status) query.status = status;
+            // Por vigencia: si se pide status active, solo promociones vigentes (validUntil >= hoy)
+            if (status === 'active') {
+                query.validUntil = { $gte: new Date() };
+            }
             if (isHotOffer) query.isHotOffer = isHotOffer === 'true';
             if (search) {
                 query.$or = [

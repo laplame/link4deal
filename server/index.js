@@ -132,22 +132,17 @@ app.use((req, res, next) => {
 
 // ===== ARCHIVOS ESTÁTICOS =====
 
-// Servir archivos de uploads
-// Usar la misma lógica que en middleware/upload.js para consistencia
-const getUploadsPath = () => {
-    if (process.env.UPLOAD_PATH && path.isAbsolute(process.env.UPLOAD_PATH)) {
-        return process.env.UPLOAD_PATH;
-    }
-    if (process.env.UPLOAD_PATH) {
-        return path.resolve(__dirname, process.env.UPLOAD_PATH);
-    }
-    return path.join(__dirname, 'uploads');
-};
-
-const uploadsPath = getUploadsPath();
-// Crear directorio si no existe
-const fs = require('fs').promises;
-fs.mkdir(uploadsPath, { recursive: true }).catch(() => {});
+// Servir archivos de uploads (misma ruta que middleware/upload.js)
+const { getUploadDir, getPromotionUploadDir } = require('./middleware/upload');
+const uploadsPath = path.resolve(getUploadDir());
+const fsSync = require('fs');
+if (!fsSync.existsSync(uploadsPath)) {
+    fsSync.mkdirSync(uploadsPath, { recursive: true });
+}
+const promotionsPath = path.resolve(getPromotionUploadDir());
+if (!fsSync.existsSync(promotionsPath)) {
+    fsSync.mkdirSync(promotionsPath, { recursive: true });
+}
 app.use('/uploads', express.static(uploadsPath));
 
 // Servir archivos públicos

@@ -8,7 +8,7 @@ Sistema completo para crear y gestionar promociones con captura de cámara, OCR 
 - 🔍 **OCR automático** con servidor Python y RapidAPI como fallback
 - 🗄️ **Base de datos MongoDB** con fallback a Atlas
 - ☁️ **Almacenamiento en la nube** con Cloudinary
-- 💾 **Respaldo local** de imágenes en `/public/uploads`
+- 💾 **Respaldo local** de imágenes en `server/uploads` (promociones en `server/uploads/promotions`)
 - 🎯 **Sistema de ofertas calientes** con geolocalización
 - 🔐 **Autenticación y autorización** con JWT
 - 📊 **API RESTful** completa con rate limiting
@@ -168,7 +168,7 @@ npm run lint             # Linting del código
 
 - **Cloudinary**: Almacenamiento principal en la nube
 - **MongoDB**: Base de datos con modelo completo de promociones
-- **Respaldo local**: Copia de seguridad en `/public/uploads`
+- **Respaldo local**: Copia de seguridad en `server/uploads` (promociones en `server/uploads/promotions`)
 
 ## 🗄️ Modelo de Datos
 

@@ -5,19 +5,23 @@ const fs = require('fs').promises;
 // Configuración de almacenamiento en memoria para procesamiento OCR
 const memoryStorage = multer.memoryStorage();
 
-// Obtener ruta de uploads (relativa al servidor)
+/**
+ * Ruta base de subida de imágenes.
+ * Debe coincidir con la ruta que sirve express.static('/uploads') en server.js e index.js.
+ * Por defecto: server/uploads (subcarpetas: agencies, brands, influencers, promotions, users).
+ */
 const getUploadDir = () => {
-    // Si UPLOAD_PATH está definido y es absoluto, usarlo
     if (process.env.UPLOAD_PATH && path.isAbsolute(process.env.UPLOAD_PATH)) {
         return process.env.UPLOAD_PATH;
     }
-    // Si es relativo, hacerlo relativo al directorio del servidor
     if (process.env.UPLOAD_PATH) {
         return path.resolve(__dirname, process.env.UPLOAD_PATH);
     }
-    // Por defecto, usar server/uploads
     return path.join(__dirname, '../uploads');
 };
+
+/** Carpeta única para todas las imágenes de promociones. URL: /uploads/promotions/<filename> */
+const getPromotionUploadDir = () => path.join(getUploadDir(), 'promotions');
 
 // Configuración de almacenamiento en disco para respaldo local
 const diskStorage = multer.diskStorage({
@@ -258,8 +262,10 @@ const optimizeImages = async (req, res, next) => {
     }
 };
 
-// Exportar middlewares
+// Exportar middlewares y ruta de uploads (para servir estáticos y guardar en el mismo sitio)
 module.exports = {
+    getUploadDir,
+    getPromotionUploadDir,
     upload,
     memoryUpload,
     diskUpload,
