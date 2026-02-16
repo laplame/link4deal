@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { PRIMARY_ROLE_LABELS } from '../types/auth';
+import type { PrimaryRole } from '../types/auth';
+
+const SIGNUP_ROLES: PrimaryRole[] = ['user', 'influencer', 'brand', 'agency'];
 
 export default function SignUpPage() {
+    const navigate = useNavigate();
+    const { register } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [formData, setFormData] = useState({
@@ -11,27 +18,54 @@ export default function SignUpPage() {
         email: '',
         password: '',
         confirmPassword: '',
+        primaryRole: 'user' as PrimaryRole,
         agreeToTerms: false
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type, checked } = e.target as HTMLInputElement;
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+        setError(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
+        if (formData.password !== formData.confirmPassword) {
+            setError('Las contraseñas no coinciden');
+            return;
+        }
+        if (formData.password.length < 8) {
+            setError('La contraseña debe tener al menos 8 caracteres');
+            return;
+        }
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+            setError('La contraseña debe contener al menos una mayúscula, una minúscula y un número');
+            return;
+        }
+        const primaryRole = formData.primaryRole && ['user', 'influencer', 'brand', 'agency'].includes(formData.primaryRole)
+            ? formData.primaryRole
+            : 'user';
         setIsLoading(true);
-        
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            await register({
+                email: formData.email.trim(),
+                password: formData.password,
+                firstName: formData.firstName.trim(),
+                lastName: formData.lastName.trim(),
+                primaryRole
+            });
+            navigate('/dashboard', { replace: true });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al crear la cuenta');
+        } finally {
             setIsLoading(false);
-            console.log('Form submitted:', formData);
-        }, 2000);
+        }
     };
 
     const handleGoogleSignUp = () => {
@@ -114,6 +148,11 @@ export default function SignUpPage() {
 
                 {/* Email Sign Up Form */}
                 <form className="space-y-6" onSubmit={handleSubmit}>
+                    {error && (
+                        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -152,6 +191,23 @@ export default function SignUpPage() {
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="primaryRole" className="block text-sm font-medium text-gray-700 mb-2">
+                            Tipo de cuenta
+                        </label>
+                        <select
+                            id="primaryRole"
+                            name="primaryRole"
+                            value={formData.primaryRole}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        >
+                            {SIGNUP_ROLES.map(role => (
+                                <option key={role} value={role}>{PRIMARY_ROLE_LABELS[role]}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div>

@@ -6,6 +6,26 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const router = express.Router();
 
+/** Asegura que exista el rol 'user' en la BD (para registro sin ejecutar seeder). */
+async function ensureUserRole() {
+    let role = await Role.findOne({ name: 'user' });
+    if (role) return role;
+    role = await Role.create({
+        name: 'user',
+        displayName: 'Usuario',
+        description: 'Usuario básico de la plataforma',
+        type: 'user',
+        level: 1,
+        isDefault: true,
+        isSystem: true,
+        permissions: [],
+        capabilities: { canCreateContent: true, canViewAnalytics: false },
+        limits: { maxPromotionsPerMonth: 0, maxFileUploadSize: 5 * 1024 * 1024, maxStorageQuota: 100 * 1024 * 1024 }
+    });
+    console.log('✅ Rol "user" creado automáticamente (no existía en la BD)');
+    return role;
+}
+
 // Middleware para validar JWT
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -23,7 +43,7 @@ const authenticateToken = async (req, res, next) => {
             return res.status(401).json({ message: 'Usuario no encontrado' });
         }
 
-        if (user.isLocked) {
+        if (user.isLocked()) {
             return res.status(423).json({ message: 'Cuenta bloqueada temporalmente' });
         }
 
@@ -57,8 +77,9 @@ const registerValidation = [
         .isLength({ min: 2, max: 50 })
         .withMessage('El apellido debe tener entre 2 y 50 caracteres'),
     body('primaryRole')
-        .isIn(['influencer', 'brand', 'agency'])
-        .withMessage('Rol primario inválido')
+        .optional({ values: 'falsy' })
+        .isIn(['user', 'influencer', 'brand', 'agency'])
+        .withMessage('Rol primario inválido (user, influencer, brand, agency)')
 ];
 
 // Validaciones para login
@@ -84,7 +105,9 @@ router.post('/register', registerValidation, async (req, res) => {
             });
         }
 
-        const { email, password, firstName, lastName, primaryRole } = req.body;
+        const { email, password, firstName, lastName, primaryRole: primaryRoleBody } = req.body;
+        // Rol primario: user (solo usuario), influencer (content creator), brand (marketing/marca), agency (agencia de mkt)
+        const primaryRole = primaryRoleBody || 'user';
 
         // Verificar si el usuario ya existe
         const existingUser = await User.findOne({ email });
@@ -94,17 +117,15 @@ router.post('/register', registerValidation, async (req, res) => {
             });
         }
 
-        // Obtener el rol por defecto
-        const defaultRole = await Role.findOne({ name: 'user' });
-        if (!defaultRole) {
-            return res.status(500).json({
-                message: 'Error en la configuración del sistema'
-            });
-        }
+        // Obtener o crear el rol por defecto (permite registro sin ejecutar seeder)
+        const defaultRole = await ensureUserRole();
 
         // Hashear la contraseña
         const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // profileTypes solo incluye influencer, brand, agency (no 'user')
+        const profileTypes = primaryRole && primaryRole !== 'user' ? [primaryRole] : [];
 
         // Crear el usuario
         const user = new User({
@@ -113,7 +134,7 @@ router.post('/register', registerValidation, async (req, res) => {
             firstName,
             lastName,
             primaryRole,
-            profileTypes: [primaryRole],
+            profileTypes,
             roles: [defaultRole._id],
             settings: {
                 language: 'es',
@@ -169,8 +190,9 @@ router.post('/register', registerValidation, async (req, res) => {
 
     } catch (error) {
         console.error('Error en registro:', error);
+        const message = process.env.NODE_ENV === 'development' ? error.message : 'Error interno del servidor';
         res.status(500).json({
-            message: 'Error interno del servidor',
+            message,
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -199,7 +221,7 @@ router.post('/login', loginValidation, async (req, res) => {
         }
 
         // Verificar si la cuenta está bloqueada
-        if (user.isLocked) {
+        if (user.isLocked()) {
             const lockTime = user.lockUntil;
             if (lockTime && lockTime > Date.now()) {
                 const remainingTime = Math.ceil((lockTime - Date.now()) / 1000);
@@ -221,7 +243,7 @@ router.post('/login', loginValidation, async (req, res) => {
             user.incLoginAttempts();
             await user.save();
 
-            if (user.isLocked) {
+            if (user.isLocked()) {
                 return res.status(423).json({
                     message: 'Demasiados intentos fallidos. Cuenta bloqueada temporalmente'
                 });

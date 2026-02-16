@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
+import { AuthProvider } from './context/AuthContext';
 import { GeolocationProvider } from './context/GeolocationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { routerConfig } from './config/router';
@@ -26,8 +27,9 @@ import KYCForm from './pages/KYCForm';
 import KYCSuccess from './pages/KYCSuccess';
 import CreateCoupon from './pages/CreateCoupon';
 import AdminPage from './pages/AdminPage';
-import SignInPage from './pages/SignUpPage';
+import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
+import DashboardPage from './pages/DashboardPage';
 import CartPage from './pages/CartPage';
 import BusinessLanding from './pages/BusinessLanding';
 import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
@@ -91,11 +93,12 @@ function NotFoundPage() {
 function App() {
   return (
     <ErrorBoundary>
-      <GeolocationProvider>
-        <CartProvider>
-          <Router {...routerConfig}>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
+      <AuthProvider>
+        <GeolocationProvider>
+          <CartProvider>
+            <Router {...routerConfig}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<BusinessLanding />} />
               <Route path="/comisionista-digital" element={<DigitalCommissionerLanding />} />
               <Route path="/checkout" element={<CheckoutPage />} />
@@ -126,6 +129,7 @@ function App() {
               <Route path="/create-coupon" element={<CreateCoupon />} />
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/cart" element={<CartPage />} />
               {/* Ruta catch-all para rutas no encontradas */}
               <Route path="*" element={<NotFoundPage />} />
@@ -136,6 +140,7 @@ function App() {
           </Router>
         </CartProvider>
       </GeolocationProvider>
+    </AuthProvider>
     </ErrorBoundary>
   );
 }

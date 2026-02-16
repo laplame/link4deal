@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function SignInPage() {
+    const navigate = useNavigate();
+    const { login } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
@@ -10,6 +13,7 @@ export default function SignInPage() {
         rememberMe: false
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
@@ -17,17 +21,21 @@ export default function SignInPage() {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+        setError(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
         setIsLoading(true);
-        
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            await login({ email: formData.email, password: formData.password });
+            navigate('/dashboard', { replace: true });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+        } finally {
             setIsLoading(false);
-            console.log('Form submitted:', formData);
-        }, 2000);
+        }
     };
 
     const handleGoogleSignIn = () => {
@@ -110,6 +118,11 @@ export default function SignInPage() {
 
                 {/* Email Sign In Form */}
                 <form className="space-y-6" onSubmit={handleSubmit}>
+                    {error && (
+                        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                             Correo electrónico

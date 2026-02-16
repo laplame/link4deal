@@ -60,6 +60,8 @@ export default function ProductCard({
 }: ProductCardProps) {
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
+    const [imageError, setImageError] = useState(false);
+    const imageSrc = imageError ? 'https://via.placeholder.com/400x300?text=Oferta' : product.image;
 
     const discountPercentage = product.originalPrice 
         ? calculateDiscountPercentage(product.originalPrice, product.price)
@@ -114,9 +116,10 @@ export default function ProductCard({
             <div className="relative overflow-hidden">
                 <Link to={`/promotion-details/${product.id}`} className="block cursor-pointer">
                     <img
-                        src={product.image}
+                        src={imageSrc}
                         alt={product.name}
                         className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={() => setImageError(true)}
                     />
                     {/* Overlay on hover */}
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300 flex items-center justify-center">
