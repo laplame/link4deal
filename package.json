@@ -19,6 +19,7 @@
     "db:stop": "pkill mongod",
     "setup": "npm install && npm run python:install && mkdir -p data/db server/uploads server/uploads/promotions logs",
     "verify-api": "node scripts/verify-api.js",
+    "ensure-uploads": "node scripts/ensure-uploads-accessible.cjs",
     "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js"
   },
   "dependencies": {
