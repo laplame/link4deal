@@ -155,7 +155,7 @@ export default function PromotionsMarketplace() {
               currentPrice: currentPrice,
               currency: promo.currency || 'MXN',
               discountPercentage: discountPercentage,
-              image: getPromotionImageUrl(promo.images, 'https://via.placeholder.com/400x300'),
+              image: getPromotionImageUrl(promo.images),
               location: promo.storeLocation?.city || promo.storeLocation?.address || 'Ciudad de México',
               validUntil: promo.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
               totalApplications: promo.conversions || promo.totalApplications || 0,

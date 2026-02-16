@@ -61,7 +61,8 @@ export default function ProductCard({
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [imageError, setImageError] = useState(false);
-    const imageSrc = imageError ? 'https://via.placeholder.com/400x300?text=Oferta' : product.image;
+    const placeholderSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
+    const imageSrc = imageError ? placeholderSvg : product.image;
 
     const discountPercentage = product.originalPrice 
         ? calculateDiscountPercentage(product.originalPrice, product.price)

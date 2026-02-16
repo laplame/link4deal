@@ -488,7 +488,7 @@ export default function LandingPage() {
                             price: currentPrice,
                             originalPrice: originalPrice > 0 ? originalPrice : undefined,
                             currency: promo.currency || 'MXN',
-                            image: getPromotionImageUrl(promo.images, 'https://via.placeholder.com/400x300'),
+                            image: getPromotionImageUrl(promo.images),
                             offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
                             category: categoryMap[promo.category] || promo.category || 'otros',
                             brand: promo.brand || 'Sin marca',
