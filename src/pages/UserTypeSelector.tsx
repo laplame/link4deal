@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 import { 
     Building2, 
     Users, 
@@ -164,7 +165,7 @@ const UserTypeSelector: React.FC = () => {
                                 alt="DameCódigo" 
                                 className="w-8 h-8 object-contain"
                             />
-                            <span className="text-xl font-bold text-gray-900">Link4Deal</span>
+                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
                         </Link>
                         
                         <div className="flex items-center space-x-4">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Building2, TrendingUp } from 'lucide-react';
+import { SITE_CONFIG } from '../config/site';
 
 export default function UserSelectorPage() {
   return (
@@ -10,7 +11,7 @@ export default function UserSelectorPage() {
         <div className="text-center mb-16">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <TrendingUp className="h-8 w-8 text-blue-400" />
-            <h1 className="text-3xl font-bold text-white">Link4Deal</h1>
+            <h1 className="text-3xl font-bold text-white">{SITE_CONFIG.name}</h1>
           </div>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
             Connect brands with influencers. Create meaningful partnerships that drive results.

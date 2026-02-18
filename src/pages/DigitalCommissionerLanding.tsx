@@ -34,6 +34,7 @@ import {
     Store
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 
 const DigitalCommissionerLanding: React.FC = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -222,14 +223,14 @@ const DigitalCommissionerLanding: React.FC = () => {
             }`}>
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <Link to="/" className="flex items-center space-x-3">
                             <img 
                                 src="/logo.png" 
                                 alt="Link4Deal" 
                                 className="w-10 h-10 object-contain"
                             />
-                            <span className="text-xl font-bold text-gray-900">Link4Deal</span>
-                        </div>
+                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
+                        </Link>
                         
                         <nav className="hidden md:flex items-center space-x-8">
                             <a href="#beneficios" className="text-gray-700 hover:text-green-600 transition-colors">Beneficios</a>
@@ -868,14 +869,14 @@ const DigitalCommissionerLanding: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                         <div>
-                            <div className="flex items-center space-x-3 mb-4">
+                            <Link to="/" className="flex items-center space-x-3 mb-4">
                                 <img 
                                     src="/logo.png" 
                                     alt="Link4Deal" 
                                     className="w-10 h-10 object-contain"
                                 />
-                                <span className="text-xl font-bold">Link4Deal</span>
-                            </div>
+                                <span className="text-xl font-bold">{SITE_CONFIG.name}</span>
+                            </Link>
                             <p className="text-gray-400">
                                 Conectando creadores de contenido con negocios locales para generar ingresos mutuos.
                             </p>
@@ -912,7 +913,7 @@ const DigitalCommissionerLanding: React.FC = () => {
                     </div>
                     
                     <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 Link4Deal. Todos los derechos reservados.</p>
+                        <p>{SITE_CONFIG.copyright}</p>
                     </div>
                 </div>
             </footer>

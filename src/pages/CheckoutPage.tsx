@@ -22,6 +22,7 @@ import {
     Flag
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 
 const CheckoutPage: React.FC = () => {
     const navigate = useNavigate();
@@ -159,14 +160,14 @@ const CheckoutPage: React.FC = () => {
                             <span className="text-gray-600">Volver al inicio</span>
                         </Link>
                         
-                        <div className="flex items-center space-x-3">
+                        <Link to="/" className="flex items-center space-x-3">
                             <img 
                                 src="/logo.png" 
                                 alt="DameCódigo" 
                                 className="w-8 h-8 object-contain"
                             />
-                            <span className="font-bold text-gray-900">Link4Deal</span>
-                        </div>
+                            <span className="font-bold text-gray-900">{SITE_CONFIG.name}</span>
+                        </Link>
 
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                             <Lock className="h-4 w-4" />

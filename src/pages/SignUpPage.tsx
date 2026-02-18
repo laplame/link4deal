@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PRIMARY_ROLE_LABELS } from '../types/auth';
@@ -91,14 +92,14 @@ export default function SignUpPage() {
                         Volver al inicio
                     </Link>
                     
-                    <div className="flex items-center justify-center mb-6">
+                    <Link to="/" className="flex items-center justify-center mb-6">
                         <img 
                             src="/logo.png" 
                             alt="DameCódigo" 
                             className="w-12 h-12 object-contain"
                         />
-                        <span className="text-3xl font-bold text-gray-900 ml-3">Link4Deal</span>
-                    </div>
+                        <span className="text-3xl font-bold text-gray-900 ml-3">{SITE_CONFIG.name}</span>
+                    </Link>
                     
                     <h2 className="text-3xl font-bold text-gray-900 mb-2">
                         Crear tu cuenta
@@ -338,7 +339,7 @@ export default function SignUpPage() {
 
                 {/* Features */}
                 <div className="bg-blue-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">¿Por qué Link4Deal?</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">¿Por qué {SITE_CONFIG.name}?</h3>
                     <div className="space-y-2 text-sm text-gray-600">
                         <div className="flex items-center">
                             <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />

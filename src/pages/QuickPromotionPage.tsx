@@ -171,25 +171,17 @@ export default function QuickPromotionPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Validaciones
+        // Solo el título es obligatorio (el API acepta el resto opcional)
         if (!formData.title.trim()) {
             setSubmitError('El título es requerido');
             return;
         }
-        if (!formData.brand.trim()) {
-            setSubmitError('La marca es requerida');
+        if (formData.originalPrice < 0 || formData.currentPrice < 0) {
+            setSubmitError('Los precios no pueden ser negativos');
             return;
         }
-        if (formData.originalPrice <= 0 || formData.currentPrice <= 0) {
-            setSubmitError('Los precios deben ser mayores a 0');
-            return;
-        }
-        if (formData.currentPrice > formData.originalPrice) {
+        if (formData.currentPrice > formData.originalPrice && formData.originalPrice > 0) {
             setSubmitError('El precio con oferta no puede ser mayor al precio original');
-            return;
-        }
-        if (formData.images.length === 0) {
-            setSubmitError('Se requiere al menos una imagen');
             return;
         }
 

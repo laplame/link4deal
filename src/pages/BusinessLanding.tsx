@@ -23,6 +23,7 @@ import {
     CreditCard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 
 const BusinessLanding: React.FC = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -193,14 +194,14 @@ const BusinessLanding: React.FC = () => {
             }`}>
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <Link to="/" className="flex items-center space-x-3">
                             <img 
                                 src="/logo.png" 
                                 alt="DameCódigo" 
                                 className="w-10 h-10 object-contain"
                             />
-                            <span className="text-xl font-bold text-gray-900">Link4Deal</span>
-                        </div>
+                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
+                        </Link>
                         
                         <nav className="hidden md:flex items-center space-x-8">
                             <a href="#beneficios" className="text-gray-700 hover:text-blue-600 transition-colors">Beneficios</a>
@@ -325,7 +326,7 @@ const BusinessLanding: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="text-center mb-16">
                         <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                            ¿Por qué elegir Link4Deal?
+                            ¿Por qué elegir {SITE_CONFIG.name}?
                         </h2>
                         <p className="text-xl text-gray-600 max-w-3xl mx-auto">
                             Nuestro paquete de inauguración combina la mejor tecnología de marketing digital 
@@ -516,7 +517,7 @@ const BusinessLanding: React.FC = () => {
                                 </div>
                                 
                                 <p className="text-xl mb-8 opacity-90">
-                                    Acceso completo al ecosistema Link4Deal por un solo pago
+                                    Acceso completo al ecosistema {SITE_CONFIG.name} por un solo pago
                                 </p>
                                 
                                 <Link 
@@ -566,14 +567,14 @@ const BusinessLanding: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                         <div>
-                            <div className="flex items-center space-x-3 mb-4">
+                            <Link to="/" className="flex items-center space-x-3 mb-4">
                                 <img 
                                     src="/logo.png" 
                                     alt="DameCódigo" 
                                     className="w-10 h-10 object-contain"
                                 />
-                                <span className="text-xl font-bold">Link4Deal</span>
-                            </div>
+                                <span className="text-xl font-bold">{SITE_CONFIG.name}</span>
+                            </Link>
                             <p className="text-gray-400">
                                 Revolucionando el marketing digital con blockchain y geolocalización.
                             </p>
@@ -610,7 +611,7 @@ const BusinessLanding: React.FC = () => {
                     </div>
                     
                     <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 Link4Deal. Todos los derechos reservados.</p>
+                        <p>{SITE_CONFIG.copyright}</p>
                     </div>
                 </div>
             </footer>

@@ -18,6 +18,7 @@ import {
     Wallet
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 
 const CheckoutSuccess: React.FC = () => {
     const location = useLocation();
@@ -126,7 +127,7 @@ const CheckoutSuccess: React.FC = () => {
         // Aquí se implementaría el compartir en redes sociales
         if (navigator.share) {
             navigator.share({
-                title: '¡Contraté mi Paquete de Inauguración en Link4Deal!',
+                title: `¡Contraté mi Paquete de Inauguración en ${SITE_CONFIG.name}!`,
                 text: `Acabo de contratar el paquete de inauguración por ${selectedPrice.symbol}${checkoutData.amount} y estoy emocionado por llenar mi tienda desde el primer día.`,
                 url: window.location.origin
             });
@@ -139,14 +140,14 @@ const CheckoutSuccess: React.FC = () => {
             <header className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <Link to="/" className="flex items-center space-x-3">
                             <img 
                                 src="/logo.png" 
                                 alt="DameCódigo" 
                                 className="w-8 h-8 object-contain"
                             />
-                            <span className="font-bold text-gray-900">Link4Deal</span>
-                        </div>
+                            <span className="font-bold text-gray-900">{SITE_CONFIG.name}</span>
+                        </Link>
 
                         <div className="text-sm text-gray-500">
                             Redirigiendo al dashboard en {countdown} segundos...

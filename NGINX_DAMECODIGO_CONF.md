@@ -4,6 +4,8 @@ Archivo en el servidor: `/etc/nginx/sites-available/damecodigo.com`
 
 Editar: `sudo nano /etc/nginx/sites-available/damecodigo.com`
 
+**Importante:** El backend (PM2) usa **puerto 5001** por defecto (`ecosystem.config.cjs`). Nginx debe hacer proxy a ese puerto. Si en el servidor usas otro puerto (p. ej. 3000), cambia `set $backend` a ese valor. Para que las imágenes en `/uploads/` se sirvan bien, usa `location ^~ /uploads/` para que no sea capturado por la regla de archivos estáticos (`.png`, etc.).
+
 ---
 
 ## Config completa (server listen 443 ssl)
@@ -36,18 +38,21 @@ server {
         }
     }
 
-    # Uploads (imágenes del backend)
-    location /uploads/ {
-        proxy_pass http://localhost:3000/uploads/;
+    # Backend: mismo puerto que PM2 (ecosystem.config.cjs → 5001)
+    set $backend "http://127.0.0.1:5001";
+
+    # Uploads (^~ evita que location ~* \.(png|...) capture /uploads/*.png)
+    location ^~ /uploads/ {
+        proxy_pass $backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # API proxy (puerto 3000; sin barra final en proxy_pass para conservar /api/)
+    # API proxy
     location /api/ {
-        proxy_pass http://localhost:3000;
+        proxy_pass $backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -69,7 +74,7 @@ server {
 
     # Health check
     location /health {
-        proxy_pass http://localhost:3000;
+        proxy_pass $backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -77,7 +82,7 @@ server {
 
     # Legacy image paths (if needed)
     location /image/ {
-        proxy_pass http://localhost:3000/image/;
+        proxy_pass $backend/image/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -99,27 +104,27 @@ Comprobar: `curl -s -o /dev/null -w "%{http_code}" "https://damecodigo.com/api/p
 
 ## Si sigue 404: diagnóstico en el servidor
 
-**1. Backend en 3000 (debe dar 200):**
+**1. Backend en 5001 (debe dar 200):**
 ```bash
-curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/api/promotions?limit=1"
+curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5001/api/promotions?limit=1"
 ```
-Si da 000 o 502, el backend no está en 3000 o no está corriendo (`pm2 list`).
+Si da 000 o 502, el backend no está en 5001 o no está corriendo (`pm2 list`).
 
 **2. Revisar que proxy_pass NO tenga barra final en `/api/`:**
 
-Si está `proxy_pass http://localhost:3000/;` (con `/` al final), Nginx envía `/promotions` al backend y el backend devuelve 404. Tiene que ser **sin** barra:
+Si está `proxy_pass $backend/;` (con `/` al final), Nginx puede enviar la URI mal. Para API usa `proxy_pass $backend;` (sin `/`).
 ```bash
 sudo grep -A1 "location /api/" /etc/nginx/sites-available/damecodigo.com
 ```
-Debe verse: `proxy_pass http://localhost:3000;` (sin `/` después de 3000).
+Debe verse: `proxy_pass $backend;` (sin `/` después de 3000).
 
 **3. Corregir a mano si hace falta:**
 ```bash
 sudo nano /etc/nginx/sites-available/damecodigo.com
 ```
 Dentro de `location /api/ {` la línea debe ser exactamente:
-- `proxy_pass http://localhost:3000;`
-- No: `proxy_pass http://localhost:3000/;` ni `proxy_pass http://localhost:5001/;`
+- `proxy_pass $backend;`
+- No: `proxy_pass $backend/;` (la barra final cambia el comportamiento de la URI)
 
 Luego: `sudo nginx -t && sudo systemctl reload nginx`
 

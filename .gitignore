@@ -25,3 +25,4 @@ dist-ssr
 
 # Python server (not currently in use)
 server_py/
+.env

@@ -15,6 +15,7 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { SITE_CONFIG } from '../../config/site';
 import { PRIMARY_ROLE_LABELS } from '../../types/auth';
 import type { PrimaryRole } from '../../types/auth';
 
@@ -90,8 +91,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           }`}
         >
           {!collapsed && (
-            <Link to="/dashboard" className="flex items-center gap-2 font-semibold text-gray-900">
-              <span className="text-lg">Link4Deal</span>
+            <Link to="/" className="flex items-center gap-2 font-semibold text-gray-900">
+              <span className="text-lg">{SITE_CONFIG.name}</span>
             </Link>
           )}
           <button

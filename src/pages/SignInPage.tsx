@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SITE_CONFIG } from '../config/site';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -61,14 +62,14 @@ export default function SignInPage() {
                         Volver al inicio
                     </Link>
                     
-                    <div className="flex items-center justify-center mb-6">
+                    <Link to="/" className="flex items-center justify-center mb-6">
                         <img 
                             src="/logo.png" 
                             alt="DameCódigo" 
                             className="w-12 h-12 object-contain"
                         />
-                        <span className="text-3xl font-bold text-gray-900 ml-3">Link4Deal</span>
-                    </div>
+                        <span className="text-3xl font-bold text-gray-900 ml-3">{SITE_CONFIG.name}</span>
+                    </Link>
                     
                     <h2 className="text-3xl font-bold text-gray-900 mb-2">
                         Bienvenido de vuelta
