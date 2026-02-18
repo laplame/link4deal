@@ -4,7 +4,7 @@ Archivo en el servidor: `/etc/nginx/sites-available/damecodigo.com`
 
 Editar: `sudo nano /etc/nginx/sites-available/damecodigo.com`
 
-**Importante:** El backend (PM2) usa **puerto 5001** por defecto (`ecosystem.config.cjs`). Nginx debe hacer proxy a ese puerto. Si en el servidor usas otro puerto (p. ej. 3000), cambia `set $backend` a ese valor. Para que las imágenes en `/uploads/` se sirvan bien, usa `location ^~ /uploads/` para que no sea capturado por la regla de archivos estáticos (`.png`, etc.).
+**Importante:** El backend (PM2) usa **puerto 5001** por defecto (`ecosystem.config.cjs`). Nginx debe hacer proxy a ese puerto. Para generar o actualizar el .conf desde el repo: `./scripts/update-nginx-conf.sh` (ver `--output` y `--print-instructions`). Si en el servidor usas otro puerto (p. ej. 3000), cambia `set $backend` a ese valor. Para que las imágenes en `/uploads/` se sirvan bien, usa `location ^~ /uploads/` para que no sea capturado por la regla de archivos estáticos (`.png`, etc.).
 
 ---
 
