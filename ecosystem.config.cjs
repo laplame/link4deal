@@ -10,11 +10,11 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
-        PORT: 5001
+        PORT: 3000
       },
       env_production: {
         NODE_ENV: 'production',
-        PORT: 5001
+        PORT: 3000
       },
       error_file: '/home/cto/project/link4deal/logs/pm2-error.log',
       out_file: '/home/cto/project/link4deal/logs/pm2-out.log',

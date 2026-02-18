@@ -10,7 +10,7 @@
 #   ./scripts/update-nginx-conf.sh --check-backend     # Comprueba si el backend responde en BACKEND_PORT
 #
 # Variables de entorno (opcionales):
-#   BACKEND_PORT      Puerto del backend (PM2). Por defecto: 5001
+#   BACKEND_PORT      Puerto del backend (PM2). Por defecto: 3000
 #   PROJECT_ROOT      Ruta del proyecto. Por defecto: /home/cto/project/link4deal
 #   SERVER_NAME       server_name. Por defecto: damecodigo.com www.damecodigo.com
 #   NGINX_CONF_SOURCE Ruta del nginx.conf. Por defecto: repo/nginx.conf
@@ -22,7 +22,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_CONF="${NGINX_CONF_SOURCE:-$REPO_ROOT/nginx.conf}"
-BACKEND_PORT="${BACKEND_PORT:-5001}"
+BACKEND_PORT="${BACKEND_PORT:-3000}"
 PROJECT_ROOT="${PROJECT_ROOT:-/home/cto/project/link4deal}"
 SERVER_NAME="${SERVER_NAME:-damecodigo.com www.damecodigo.com}"
 TARGET_CONF="${NGINX_SITES_AVAILABLE:-/etc/nginx/sites-available/damecodigo.com}"
@@ -34,7 +34,7 @@ if [ ! -f "$SOURCE_CONF" ]; then
 fi
 
 generate_conf() {
-  sed -e "s|http://127.0.0.1:5001|http://127.0.0.1:${BACKEND_PORT}|g" \
+  sed -e "s|http://127.0.0.1:3000|http://127.0.0.1:${BACKEND_PORT}|g" \
       -e "s|/home/cto/project/link4deal|${PROJECT_ROOT}|g" \
       -e "s|server_name damecodigo.com www.damecodigo.com|server_name ${SERVER_NAME}|g" \
       "$SOURCE_CONF"
