@@ -136,8 +136,10 @@ export default function InfluencersMarketplace() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoadingInfluencers, setIsLoadingInfluencers] = useState(true);
+  const [apiMessage, setApiMessage] = useState<string | null>(null);
 
-  // Mock data - en producción esto vendría de una API
+  // Cargar influencers desde la API (fallback a mock si no hay datos)
   useEffect(() => {
     const mockInfluencers: Influencer[] = [
       {
@@ -145,12 +147,7 @@ export default function InfluencersMarketplace() {
         name: 'María García',
         username: '@mariagarcia',
         avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-        followers: {
-          instagram: 125000,
-          tiktok: 89000,
-          youtube: 45000,
-          twitter: 32000
-        },
+        followers: { instagram: 125000, tiktok: 89000, youtube: 45000, twitter: 32000 },
         totalFollowers: 291000,
         engagement: 4.8,
         categories: ['Moda', 'Belleza', 'Lifestyle'],
@@ -163,60 +160,16 @@ export default function InfluencersMarketplace() {
         rating: 4.9,
         location: 'Madrid, España',
         bio: 'Influencer de moda y lifestyle. Especializada en contenido de belleza y tendencias.',
-        socialMedia: {
-          instagram: '@mariagarcia',
-          tiktok: '@mariagarcia',
-          youtube: 'María García'
-        },
+        socialMedia: { instagram: '@mariagarcia', tiktok: '@mariagarcia', youtube: 'María García' },
         recentPromotions: [
-          {
-            id: 'p1',
-            brand: 'Zara',
-            title: 'Lanzamiento Colección Primavera',
-            date: '2024-01-15',
-            status: 'completed',
-            earnings: 2500,
-            couponCode: 'MARIA20',
-            couponUsage: 156,
-            totalSales: 23400
-          },
-          {
-            id: 'p2',
-            brand: 'Sephora',
-            title: 'Beauty Box Premium',
-            date: '2024-01-20',
-            status: 'active',
-            earnings: 1800,
-            couponCode: 'MARIA15',
-            couponUsage: 89,
-            totalSales: 12450
-          }
+          { id: 'p1', brand: 'Zara', title: 'Lanzamiento Colección Primavera', date: '2024-01-15', status: 'completed', earnings: 2500, couponCode: 'MARIA20', couponUsage: 156, totalSales: 23400 },
+          { id: 'p2', brand: 'Sephora', title: 'Beauty Box Premium', date: '2024-01-20', status: 'active', earnings: 1800, couponCode: 'MARIA15', couponUsage: 89, totalSales: 12450 }
         ],
         recentPayments: [
-          {
-            id: 'pay1',
-            date: '2024-01-15',
-            amount: 2500,
-            type: 'commission',
-            status: 'paid',
-            description: 'Comisión Zara - Colección Primavera'
-          },
-          {
-            id: 'pay2',
-            date: '2024-01-10',
-            amount: 500,
-            type: 'bonus',
-            status: 'paid',
-            description: 'Bono por alcance excepcional'
-          }
+          { id: 'pay1', date: '2024-01-15', amount: 2500, type: 'commission', status: 'paid', description: 'Comisión Zara - Colección Primavera' },
+          { id: 'pay2', date: '2024-01-10', amount: 500, type: 'bonus', status: 'paid', description: 'Bono por alcance excepcional' }
         ],
-        couponStats: {
-          totalCoupons: 15,
-          activeCoupons: 8,
-          totalSales: 125000,
-          totalCommission: 45000,
-          averageConversion: 3.2
-        },
+        couponStats: { totalCoupons: 15, activeCoupons: 8, totalSales: 125000, totalCommission: 45000, averageConversion: 3.2 },
         hot: true,
         featured: true
       },
@@ -225,12 +178,7 @@ export default function InfluencersMarketplace() {
         name: 'Carlos Rodríguez',
         username: '@carlosrodriguez',
         avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-        followers: {
-          instagram: 89000,
-          tiktok: 156000,
-          youtube: 78000,
-          twitter: 45000
-        },
+        followers: { instagram: 89000, tiktok: 156000, youtube: 78000, twitter: 45000 },
         totalFollowers: 368000,
         engagement: 4.6,
         categories: ['Tecnología', 'Gaming', 'Reviews'],
@@ -243,41 +191,14 @@ export default function InfluencersMarketplace() {
         rating: 4.7,
         location: 'Barcelona, España',
         bio: 'Content creator especializado en tecnología y gaming. Reviews honestos y análisis detallados.',
-        socialMedia: {
-          instagram: '@carlosrodriguez',
-          tiktok: '@carlosrodriguez',
-          youtube: 'Carlos Tech'
-        },
+        socialMedia: { instagram: '@carlosrodriguez', tiktok: '@carlosrodriguez', youtube: 'Carlos Tech' },
         recentPromotions: [
-          {
-            id: 'p3',
-            brand: 'Samsung',
-            title: 'Review Galaxy S24',
-            date: '2024-01-18',
-            status: 'completed',
-            earnings: 1800,
-            couponCode: 'CARLOS10',
-            couponUsage: 234,
-            totalSales: 187200
-          }
+          { id: 'p3', brand: 'Samsung', title: 'Review Galaxy S24', date: '2024-01-18', status: 'completed', earnings: 1800, couponCode: 'CARLOS10', couponUsage: 234, totalSales: 187200 }
         ],
         recentPayments: [
-          {
-            id: 'pay3',
-            date: '2024-01-18',
-            amount: 1800,
-            type: 'commission',
-            status: 'paid',
-            description: 'Comisión Samsung - Galaxy S24'
-          }
+          { id: 'pay3', date: '2024-01-18', amount: 1800, type: 'commission', status: 'paid', description: 'Comisión Samsung - Galaxy S24' }
         ],
-        couponStats: {
-          totalCoupons: 12,
-          activeCoupons: 5,
-          totalSales: 89000,
-          totalCommission: 32000,
-          averageConversion: 2.8
-        },
+        couponStats: { totalCoupons: 12, activeCoupons: 5, totalSales: 89000, totalCommission: 32000, averageConversion: 2.8 },
         hot: true,
         featured: false
       },
@@ -286,12 +207,7 @@ export default function InfluencersMarketplace() {
         name: 'Ana Martínez',
         username: '@anamartinez',
         avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-        followers: {
-          instagram: 234000,
-          tiktok: 189000,
-          youtube: 67000,
-          twitter: 56000
-        },
+        followers: { instagram: 234000, tiktok: 189000, youtube: 67000, twitter: 56000 },
         totalFollowers: 546000,
         engagement: 4.9,
         categories: ['Fitness', 'Salud', 'Bienestar'],
@@ -304,48 +220,44 @@ export default function InfluencersMarketplace() {
         rating: 4.9,
         location: 'Valencia, España',
         bio: 'Coach de fitness y bienestar. Contenido motivacional y rutinas de entrenamiento.',
-        socialMedia: {
-          instagram: '@anamartinez',
-          tiktok: '@anamartinez',
-          youtube: 'Ana Fitness'
-        },
+        socialMedia: { instagram: '@anamartinez', tiktok: '@anamartinez', youtube: 'Ana Fitness' },
         recentPromotions: [
-          {
-            id: 'p4',
-            brand: 'Nike',
-            title: 'Campaña Fitness & Wellness',
-            date: '2024-01-22',
-            status: 'active',
-            earnings: 3200,
-            couponCode: 'ANA25',
-            couponUsage: 67,
-            totalSales: 15600
-          }
+          { id: 'p4', brand: 'Nike', title: 'Campaña Fitness & Wellness', date: '2024-01-22', status: 'active', earnings: 3200, couponCode: 'ANA25', couponUsage: 67, totalSales: 15600 }
         ],
         recentPayments: [
-          {
-            id: 'pay4',
-            date: '2024-01-22',
-            amount: 3200,
-            type: 'commission',
-            status: 'processing',
-            description: 'Comisión Nike - Campaña Fitness'
-          }
+          { id: 'pay4', date: '2024-01-22', amount: 3200, type: 'commission', status: 'processing', description: 'Comisión Nike - Campaña Fitness' }
         ],
-        couponStats: {
-          totalCoupons: 22,
-          activeCoupons: 12,
-          totalSales: 234000,
-          totalCommission: 67000,
-          averageConversion: 4.1
-        },
+        couponStats: { totalCoupons: 22, activeCoupons: 12, totalSales: 234000, totalCommission: 67000, averageConversion: 4.1 },
         hot: false,
         featured: true
       }
     ];
 
-    setInfluencers(mockInfluencers);
-    setFilteredInfluencers(mockInfluencers);
+    const fetchInfluencers = async () => {
+      setIsLoadingInfluencers(true);
+      setApiMessage(null);
+      try {
+        const response = await fetch('/api/influencers?limit=50&page=1');
+        const data = await response.json();
+        if (data.success && data.data?.docs?.length > 0) {
+          if (data.message) setApiMessage(data.message);
+          const list = data.data.docs as Influencer[];
+          setInfluencers(list);
+          setFilteredInfluencers(list);
+        } else {
+          if (data.message) setApiMessage(data.message);
+          setInfluencers(mockInfluencers);
+          setFilteredInfluencers(mockInfluencers);
+        }
+      } catch {
+        setInfluencers(mockInfluencers);
+        setFilteredInfluencers(mockInfluencers);
+      } finally {
+        setIsLoadingInfluencers(false);
+      }
+    };
+
+    fetchInfluencers();
   }, []);
 
   // Filtrar influencers
@@ -630,6 +542,12 @@ export default function InfluencersMarketplace() {
         </div>
 
         {/* Grid de influencers */}
+        {apiMessage && (
+          <p className="text-sm text-gray-500 mb-2">{apiMessage}</p>
+        )}
+        {isLoadingInfluencers ? (
+          <div className="py-12 text-center text-gray-500">Cargando influencers...</div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredInfluencers.map((influencer) => (
             <div key={influencer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
@@ -808,6 +726,7 @@ export default function InfluencersMarketplace() {
             </div>
           ))}
         </div>
+        )}
 
         {/* Mensaje si no hay resultados */}
         {filteredInfluencers.length === 0 && (

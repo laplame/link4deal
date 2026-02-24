@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Role = require('../models/Role');
 const router = express.Router();
+const SESSION_EXPIRES_IN = '24h';
 
 /** Asegura que exista el rol 'user' en la BD (para registro sin ejecutar seeder). */
 async function ensureUserRole() {
@@ -120,17 +121,14 @@ router.post('/register', registerValidation, async (req, res) => {
         // Obtener o crear el rol por defecto (permite registro sin ejecutar seeder)
         const defaultRole = await ensureUserRole();
 
-        // Hashear la contraseña
-        const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-
         // profileTypes solo incluye influencer, brand, agency (no 'user')
         const profileTypes = primaryRole && primaryRole !== 'user' ? [primaryRole] : [];
 
         // Crear el usuario
         const user = new User({
             email,
-            password: hashedPassword,
+            // El hash se realiza en el pre-save middleware del modelo User
+            password,
             firstName,
             lastName,
             primaryRole,
@@ -158,14 +156,14 @@ router.post('/register', registerValidation, async (req, res) => {
         const token = jwt.sign(
             { userId: user._id, email: user.email },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRE || '24h' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Generar refresh token
         const refreshToken = jwt.sign(
             { userId: user._id, type: 'refresh' },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Guardar refresh token
@@ -180,6 +178,7 @@ router.post('/register', registerValidation, async (req, res) => {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
+                isSuperAdmin: user.isSuperAdmin,
                 profileTypes: user.profileTypes,
                 isVerified: user.isVerified,
                 createdAt: user.createdAt
@@ -213,7 +212,7 @@ router.post('/login', loginValidation, async (req, res) => {
         const { email, password } = req.body;
 
         // Buscar usuario por email
-        const user = await User.findOne({ email }).populate('roles');
+        const user = await User.findOne({ email }).select('+password').populate('roles');
         if (!user) {
             return res.status(401).json({
                 message: 'Credenciales inválidas'
@@ -240,8 +239,7 @@ router.post('/login', loginValidation, async (req, res) => {
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             // Incrementar intentos fallidos
-            user.incLoginAttempts();
-            await user.save();
+            await user.incLoginAttempts();
 
             if (user.isLocked()) {
                 return res.status(423).json({
@@ -254,23 +252,26 @@ router.post('/login', loginValidation, async (req, res) => {
             });
         }
 
-        // Resetear intentos fallidos
-        user.resetLoginAttempts();
-        user.updateLastLogin();
+        // Resetear intentos fallidos y actualizar último acceso
+        user.loginAttempts = 0;
+        user.lockUntil = undefined;
+        user.stats = user.stats || {};
+        user.stats.lastLogin = new Date();
+        user.stats.loginCount = (user.stats.loginCount || 0) + 1;
         await user.save();
 
         // Generar token JWT
         const token = jwt.sign(
             { userId: user._id, email: user.email },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRE || '24h' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Generar refresh token
         const refreshToken = jwt.sign(
             { userId: user._id, type: 'refresh' },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Guardar refresh token
@@ -285,6 +286,7 @@ router.post('/login', loginValidation, async (req, res) => {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
+                isSuperAdmin: user.isSuperAdmin,
                 profileTypes: user.profileTypes,
                 roles: user.roles.map(role => ({
                     id: role._id,
@@ -340,14 +342,14 @@ router.post('/refresh', async (req, res) => {
         const newToken = jwt.sign(
             { userId: user._id, email: user.email },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRE || '24h' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Generar nuevo refresh token
         const newRefreshToken = jwt.sign(
             { userId: user._id, type: 'refresh' },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: SESSION_EXPIRES_IN }
         );
 
         // Actualizar refresh token
@@ -408,6 +410,7 @@ router.get('/me', authenticateToken, async (req, res) => {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
+                isSuperAdmin: user.isSuperAdmin,
                 profileTypes: user.profileTypes,
                 roles: user.roles.map(role => ({
                     id: role._id,
@@ -454,21 +457,25 @@ router.post('/change-password', authenticateToken, [
 
         const { currentPassword, newPassword } = req.body;
 
+        // Cargar contraseña explícitamente (password tiene select: false en el modelo)
+        const userWithPassword = await User.findById(req.user._id).select('+password');
+        if (!userWithPassword) {
+            return res.status(404).json({
+                message: 'Usuario no encontrado'
+            });
+        }
+
         // Verificar contraseña actual
-        const isValidPassword = await bcrypt.compare(currentPassword, req.user.password);
+        const isValidPassword = await bcrypt.compare(currentPassword, userWithPassword.password);
         if (!isValidPassword) {
             return res.status(400).json({
                 message: 'Contraseña actual incorrecta'
             });
         }
 
-        // Hashear nueva contraseña
-        const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
-        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-        // Actualizar contraseña
-        req.user.password = hashedPassword;
-        await req.user.save();
+        // Actualizar contraseña (el hash lo hace pre-save middleware del modelo)
+        userWithPassword.password = newPassword;
+        await userWithPassword.save();
 
         res.json({
             message: 'Contraseña cambiada exitosamente'

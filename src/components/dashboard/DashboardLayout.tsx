@@ -36,6 +36,7 @@ const commonNav: NavItem[] = [
 ];
 
 const roleNav: NavItem[] = [
+  { to: '/admin/promotions', label: 'Gestionar promociones', icon: <Tag className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator', 'agency'] },
   { to: '/admin/influencers', label: 'Influencers', icon: <Sparkles className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
   { to: '/admin/brands', label: 'Marcas', icon: <ShoppingBag className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
   { to: '/admin/agencies', label: 'Agencias', icon: <Building2 className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },

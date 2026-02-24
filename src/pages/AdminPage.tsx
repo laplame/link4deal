@@ -24,6 +24,7 @@ import {
     ShoppingCart,
     Eye,
     Shield,
+    Lock,
     Clock,
     Tag,
     MapPin,
@@ -51,6 +52,20 @@ interface AdminSection {
 
 export default function AdminPage() {
     const adminSections: AdminSection[] = [
+        {
+            title: "Super Admin",
+            description: "Panel restringido por PIN: todas las promociones de todos los shops",
+            icon: <Lock className="w-6 h-6" />,
+            color: "from-slate-700 to-slate-800",
+            links: [
+                {
+                    name: "Dashboard todas las promociones",
+                    path: "/admin/dashboard",
+                    description: "Ver, editar y borrar cualquier promoción (requiere PIN)",
+                    icon: <Lock className="w-5 h-5" />
+                }
+            ]
+        },
         {
             title: "Gestión de Usuarios",
             description: "Administra usuarios, marcas e influencers",
@@ -124,12 +139,17 @@ export default function AdminPage() {
             color: "from-green-500 to-green-600",
             links: [
                 {
+                    name: "Gestionar / Quitar promociones",
+                    path: "/admin/promotions",
+                    description: "Listar y eliminar promociones (admin, agencia, moderador)",
+                    icon: <Store className="w-5 h-5" />
+                },
+                {
                     name: "Crear Promoción (Wizard)",
                     path: "/create-promotion",
                     description: "Asistente paso a paso para crear promociones",
                     icon: <Plus className="w-5 h-5" />
                 },
-
                 {
                     name: "Sistema de Referencias",
                     path: "/referral-system",

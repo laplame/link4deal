@@ -38,6 +38,9 @@ import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerDashboard from './pages/dashboards/InfluencerDashboard';
 import BrandDashboard from './pages/dashboards/BrandDashboard';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
+import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
+import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
+import DashboardLayout from './components/dashboard/DashboardLayout';
 import { useLocation, Link } from 'react-router-dom';
 import { Home, AlertCircle } from 'lucide-react';
 
@@ -120,10 +123,12 @@ function App() {
               <Route path="/influencers" element={<InfluencersMarketplace />} />
               <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
               <Route path="/admin/influencers" element={<InfluencerDashboard />} />
               <Route path="/admin/brands" element={<BrandDashboard />} />
               <Route path="/admin/agencies" element={<AgencyDashboard />} />
               <Route path="/admin/ocr-profile" element={<InfluencerOCRProfile />} />
+              <Route path="/admin/promotions" element={<DashboardLayout><PromotionsManagePage /></DashboardLayout>} />
               <Route path="/kyc-form" element={<KYCForm />} />
               <Route path="/kyc-success" element={<KYCSuccess />} />
               <Route path="/create-coupon" element={<CreateCoupon />} />

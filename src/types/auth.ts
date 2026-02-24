@@ -20,6 +20,7 @@ export interface AuthUser {
   firstName: string;
   lastName: string;
   primaryRole: PrimaryRole;
+  isSuperAdmin?: boolean;
   profileTypes: ProfileType[];
   roles?: ApiRole[];
   isVerified?: boolean;

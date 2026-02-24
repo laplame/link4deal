@@ -948,6 +948,7 @@ export default function PromotionDetailsPage() {
                     productPrice={product.price}
                     productCurrency={product.currency}
                     productImage={product.image}
+                    autoGenerateOnOpen={true}
                     onClose={() => setShowCouponForm(false)}
                 />
             )}

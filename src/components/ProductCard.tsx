@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Star, ShoppingCart, Eye, Share2, Truck, Shield, Clock, Tag, MapPin, FileText, ExternalLink, Flame, Zap, Target, Navigation, Info } from 'lucide-react';
 import { formatPrice, calculateDiscountPercentage, shortenAddress } from '../utils/formatters';
+import CouponRequestForm from './CouponRequestForm';
 
 interface ProductCardProps {
     product: {
@@ -61,6 +62,7 @@ export default function ProductCard({
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [imageError, setImageError] = useState(false);
+    const [showCouponForm, setShowCouponForm] = useState(false);
     const placeholderSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
     const imageSrc = imageError ? placeholderSvg : product.image;
 
@@ -317,13 +319,14 @@ export default function ProductCard({
 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
-                    <Link
-                        to="/signup"
+                    <button
+                        type="button"
+                        onClick={() => setShowCouponForm(true)}
                         className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 shadow-lg"
                     >
                         <Tag className="w-4 h-4" />
                         <span>Pedir Cupón</span>
-                    </Link>
+                    </button>
                     
                     <Link
                         to={`/promotion-details/${product.id}`}
@@ -350,6 +353,17 @@ export default function ProductCard({
                     ))}
                 </div>
             </div>
+            {showCouponForm && (
+                <CouponRequestForm
+                    productId={product.id}
+                    productName={product.name}
+                    productPrice={product.price}
+                    productCurrency={product.currency}
+                    productImage={product.image}
+                    autoGenerateOnOpen={true}
+                    onClose={() => setShowCouponForm(false)}
+                />
+            )}
         </div>
     );
 }

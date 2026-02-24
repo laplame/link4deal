@@ -20,7 +20,10 @@
     "setup": "npm install && npm run python:install && mkdir -p data/db server/uploads server/uploads/promotions logs",
     "verify-api": "node scripts/verify-api.js",
     "ensure-uploads": "node scripts/ensure-uploads-accessible.cjs",
-    "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js"
+    "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js",
+    "promote:superadmin": "node server/scripts/promote-user-to-super-admin.js",
+    "cleanup:promo-images": "node server/scripts/cleanup-missing-promotion-images.js",
+    "qr:keys": "node server/scripts/generate-qr-keys.js"
   },
   "dependencies": {
     "axios": "^1.6.2",
@@ -32,6 +35,7 @@
     "lucide-react": "^0.540.0",
     "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1"

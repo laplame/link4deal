@@ -116,6 +116,7 @@ export default function QuickPromotionPage() {
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [showReward, setShowReward] = useState(false);
+    const [createdPromotionId, setCreatedPromotionId] = useState<string | null>(null);
 
     const loadTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
         setFormData({
@@ -227,26 +228,10 @@ export default function QuickPromotionPage() {
             const data = await response.json();
 
             if (response.ok && data.success) {
+                const id = data.data?.id ?? null;
+                if (id) setCreatedPromotionId(id);
                 setSubmitSuccess(true);
                 setShowReward(true);
-                
-                // Limpiar formulario después de 3 segundos
-                setTimeout(() => {
-                    setFormData({
-                        title: '',
-                        description: '',
-                        brand: '',
-                        category: 'electronics',
-                        originalPrice: 0,
-                        currentPrice: 0,
-                        currency: 'MXN',
-                        storeCity: 'Ciudad de México',
-                        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                        images: []
-                    });
-                    setImagePreviews([]);
-                    setSubmitSuccess(false);
-                }, 5000);
             } else {
                 throw new Error(data.message || 'Error al crear la promoción');
             }
@@ -307,40 +292,105 @@ export default function QuickPromotionPage() {
                     </div>
                 </div>
 
-                {/* Mensaje de Recompensa */}
+                {/* Modal de éxito: recompensa y redirección a la promoción */}
                 {showReward && (
-                    <div className="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-6 shadow-lg animate-pulse">
-                        <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0">
-                                <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                                    <Gift className="w-8 h-8 text-white" />
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="success-modal-title"
+                        onClick={() => {
+                            const id = createdPromotionId;
+                            setShowReward(false);
+                            setSubmitSuccess(false);
+                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                            setImagePreviews([]);
+                            setCreatedPromotionId(null);
+                            if (id) navigate(`/promotion-details/${id}`);
+                        }}
+                    >
+                        <div
+                            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border-2 border-yellow-200"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-14 h-14 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                                            <Gift className="w-7 h-7 text-white" />
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 id="success-modal-title" className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                            <Zap className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                                            ¡Promoción Creada Exitosamente!
+                                        </h3>
+                                        <p className="text-base text-gray-800 mb-2">
+                                            Has ganado <span className="font-bold text-orange-600">50 Tokens Luxae</span> de premio
+                                        </p>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Valida tu KYC para recibir tus tokens. Los tokens se acreditarán automáticamente una vez completada la verificación.
+                                        </p>
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const id = createdPromotionId;
+                                                    setShowReward(false);
+                                                    setSubmitSuccess(false);
+                                                    setFormData({
+                                                        title: '',
+                                                        description: '',
+                                                        brand: '',
+                                                        category: 'electronics',
+                                                        originalPrice: 0,
+                                                        currentPrice: 0,
+                                                        currency: 'MXN',
+                                                        storeCity: 'Ciudad de México',
+                                                        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                                                        images: []
+                                                    });
+                                                    setImagePreviews([]);
+                                                    setCreatedPromotionId(null);
+                                                    if (id) navigate(`/promotion-details/${id}`);
+                                                }}
+                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-yellow-600 transition-all shadow-md"
+                                            >
+                                                <CheckCircle className="w-5 h-5" />
+                                                {createdPromotionId ? 'Ver promoción creada' : 'Aceptar'}
+                                            </button>
+                                            <Link
+                                                to="/kyc-form"
+                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-orange-400 text-orange-600 rounded-lg font-medium hover:bg-orange-50 transition-colors"
+                                                onClick={() => {
+                                                    setShowReward(false);
+                                                    setSubmitSuccess(false);
+                                                    setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                                                    setImagePreviews([]);
+                                                    setCreatedPromotionId(null);
+                                                }}
+                                            >
+                                                Validar KYC Ahora
+                                            </Link>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const id = createdPromotionId;
+                                            setShowReward(false);
+                                            setSubmitSuccess(false);
+                                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                                            setImagePreviews([]);
+                                            setCreatedPromotionId(null);
+                                            if (id) navigate(`/promotion-details/${id}`);
+                                        }}
+                                        className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded"
+                                        aria-label="Cerrar"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex-1">
-                                <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                                    <Zap className="w-6 h-6 text-yellow-600" />
-                                    ¡Promoción Creada Exitosamente!
-                                </h3>
-                                <p className="text-lg text-gray-800 mb-2">
-                                    Has ganado <span className="font-bold text-orange-600">50 Tokens Luxae</span> de premio
-                                </p>
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Valida tu KYC para recibir tus tokens. Los tokens se acreditarán automáticamente una vez completada la verificación.
-                                </p>
-                                <Link
-                                    to="/kyc-form"
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-yellow-600 transition-all shadow-md"
-                                >
-                                    <CheckCircle className="w-5 h-5" />
-                                    Validar KYC Ahora
-                                </Link>
-                            </div>
-                            <button
-                                onClick={() => setShowReward(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
                         </div>
                     </div>
                 )}

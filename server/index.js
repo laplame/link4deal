@@ -17,6 +17,8 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const agencyRoutes = require('./routes/agencies');
 const promotionRoutes = require('./routes/promotions');
+const influencerRoutes = require('./routes/influencers');
+const discountQrRoutes = require('./routes/discountQr');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -197,7 +199,8 @@ app.get('/api', (req, res) => {
             auth: '/api/auth',
             users: '/api/users',
             promotions: '/api/promotions',
-            agencies: '/api/agencies'
+            agencies: '/api/agencies',
+            discountQr: '/api/discount-qr'
         },
         documentation: 'https://github.com/link4deal/api-docs', // Actualizar con tu doc
         support: 'support@link4deal.com'
@@ -218,14 +221,11 @@ app.use('/api/agencies', agencyRoutes);
 // Promotion routes - La ruta principal para la app móvil
 app.use('/api/promotions', promotionRoutes);
 
-// Placeholder routes para futuras implementaciones
-app.use('/api/influencers', (req, res) => {
-    res.status(501).json({
-        success: false,
-        message: 'Influencer routes coming soon',
-        endpoint: '/api/influencers'
-    });
-});
+// Influencer routes (listado y detalle; datos compatibles con OCR de perfil)
+app.use('/api/influencers', influencerRoutes);
+
+// Discount QR routes (issuer + scanner verifier)
+app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
 
 app.use('/api/brands', (req, res) => {
     res.status(501).json({
@@ -249,7 +249,12 @@ app.use('*', (req, res) => {
             'POST /api/auth/register',
             'POST /api/auth/login',
             'GET /api/promotions',
-            'POST /api/promotions'
+            'POST /api/promotions',
+            'GET /api/influencers',
+            'GET /api/influencers/:id',
+            'POST /api/discount-qr/create',
+            'POST /api/discount-qr/verify',
+            'POST /api/discount-qr/redeem'
         ],
         timestamp: new Date().toISOString()
     });

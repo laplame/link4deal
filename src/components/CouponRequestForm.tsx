@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
     MessageCircle, 
     User, 
@@ -10,6 +10,7 @@ import {
     ShoppingCart
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import QRCode from 'qrcode';
 
 interface CouponRequestFormProps {
     productId: string;
@@ -18,6 +19,7 @@ interface CouponRequestFormProps {
     productCurrency: string;
     productImage: string;
     onClose: () => void;
+    autoGenerateOnOpen?: boolean;
 }
 
 interface FormData {
@@ -31,7 +33,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     productPrice, 
     productCurrency, 
     productImage, 
-    onClose 
+    onClose,
+    autoGenerateOnOpen = false
 }) => {
     const [step, setStep] = useState<'form' | 'qr' | 'success'>('form');
     const [formData, setFormData] = useState<FormData>({
@@ -41,7 +44,31 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState<Partial<FormData>>({});
     const [couponCode, setCouponCode] = useState<string>('');
+    const [qrValue, setQrValue] = useState<string>('');
+    const [qrImageDataUrl, setQrImageDataUrl] = useState<string>('');
+    const [qrWarning, setQrWarning] = useState<string | null>(null);
     const { addItem } = useCart();
+    const autoRequestedRef = useRef(false);
+
+    const getOrCreateDeviceId = () => {
+        const key = 'link4deal_device_id';
+        const existing = localStorage.getItem(key);
+        if (existing) return existing;
+        const generated = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(key, generated);
+        return generated;
+    };
+
+    const getAuthUserId = () => {
+        try {
+            const raw = localStorage.getItem('auth_user');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed?.id || parsed?._id || null;
+        } catch {
+            return null;
+        }
+    };
 
     const validateForm = () => {
         const newErrors: Partial<FormData> = {};
@@ -60,22 +87,49 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        if (!validateForm()) {
-            return;
-        }
-
+    const issueCouponQr = async () => {
         setIsLoading(true);
+        setQrWarning(null);
 
         try {
-            // Simular proceso de generación de cupón
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
             // Generar código de cupón único
             const generatedCouponCode = `L4D-${productId}-${Date.now().toString(36).toUpperCase()}`;
             setCouponCode(generatedCouponCode);
+            const fallbackPrefixed = `LINK4DEAL-DISCOUNT.local.${generatedCouponCode}`;
+            let nextQrValue = fallbackPrefixed;
+
+            // Intentar generar token QR seguro desde backend (issuer)
+            try {
+                const response = await fetch('/api/discount-qr/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: getOrCreateDeviceId(),
+                        influencerId: getAuthUserId() || 'guest',
+                        promotionId: productId,
+                        referralCode: generatedCouponCode,
+                        discountPercentage: 0,
+                        walletAddress: 'not-provided'
+                    })
+                });
+                const data = await response.json();
+                if (response.ok && data?.ok && data?.qrValue) {
+                    nextQrValue = data.qrValue;
+                } else {
+                    const detail = data?.message ? ` (${data.message})` : '';
+                    setQrWarning(`No se pudo emitir QR seguro desde backend${detail}. Se mostró un QR local de respaldo.`);
+                }
+            } catch {
+                setQrWarning('Error conectando con backend QR. Se mostró un QR local de respaldo.');
+            }
+
+            setQrValue(nextQrValue);
+            const dataUrl = await QRCode.toDataURL(nextQrValue, {
+                width: 320,
+                margin: 1,
+                errorCorrectionLevel: 'L'
+            });
+            setQrImageDataUrl(dataUrl);
 
             // Simular envío por WhatsApp
             const whatsappMessage = `¡Hola! Tu cupón de Link4Deal está listo:\n\n🎫 Código: ${generatedCouponCode}\n🏷️ Producto: ${productName}\n\nEscanea el QR para activarlo. ¡Gracias por elegirnos!`;
@@ -91,6 +145,22 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         }
     };
 
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            return;
+        }
+
+        await issueCouponQr();
+    };
+
+    useEffect(() => {
+        if (!autoGenerateOnOpen || autoRequestedRef.current) return;
+        autoRequestedRef.current = true;
+        issueCouponQr();
+    }, [autoGenerateOnOpen]);
+
     const handleWhatsAppRedirect = () => {
         const message = `¡Hola! Necesito ayuda con mi cupón de Link4Deal:\n\n🎫 Código: ${couponCode}\n🏷️ Producto: ${productName}`;
         const whatsappUrl = `https://wa.me/+1234567890?text=${encodeURIComponent(message)}`;
@@ -98,8 +168,13 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     };
 
     const generateQRCode = () => {
-        // En una implementación real, esto generaría un QR real
-        // Por ahora, mostramos un placeholder
+        if (qrImageDataUrl) {
+            return (
+                <div className="inline-flex items-center justify-center p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <img src={qrImageDataUrl} alt="QR del cupón" className="w-48 h-48" />
+                </div>
+            );
+        }
         return (
             <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
                 <div className="text-center">
@@ -131,11 +206,19 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     <div className="mb-6">
                         {generateQRCode()}
                     </div>
+                    {qrWarning && (
+                        <p className="text-xs text-amber-600 mb-4">{qrWarning}</p>
+                    )}
 
                     {/* Coupon Code */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-6">
                         <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
                         <p className="text-lg font-mono font-bold text-blue-600">{couponCode}</p>
+                        {qrValue && (
+                            <p className="text-[11px] text-gray-400 mt-2 break-all">
+                                Token QR: {qrValue}
+                            </p>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
@@ -163,6 +246,9 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     >
                         Cerrar
                     </button>
+                    <p className="mt-3 text-sm text-gray-600">
+                        Envíame este cupón a mi app
+                    </p>
                 </div>
             </div>
         );
@@ -239,8 +325,26 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     </p>
                 </div>
 
-                {/* Form */}
+                {/* Form / Auto-generate */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {autoGenerateOnOpen ? (
+                        <div className="text-center py-8">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <QrCode className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h4 className="text-lg font-semibold text-gray-900 mb-2">Generando tu cupón...</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Estamos preparando el QR para esta promoción.
+                            </p>
+                            {isLoading && (
+                                <div className="inline-flex items-center gap-2 text-blue-600 text-sm">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                    Procesando...
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                    <>
                     {/* Name Field */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -333,6 +437,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                             Política de Privacidad
                         </a>
                     </p>
+                    </>
+                    )}
                 </form>
             </div>
         </div>

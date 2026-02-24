@@ -57,6 +57,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    isSuperAdmin: {
+        type: Boolean,
+        default: false
+    },
     
     // User Roles and Permissions - Updated for multiple roles
     roles: [{
