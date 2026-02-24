@@ -21,6 +21,7 @@
     "verify-api": "node scripts/verify-api.js",
     "ensure-uploads": "node scripts/ensure-uploads-accessible.cjs",
     "ensure-promotion": "node server/scripts/check-and-ensure-one-promotion.js",
+    "check:promo-images": "node server/scripts/check-promotion-images-integrity.js",
     "promote:superadmin": "node server/scripts/promote-user-to-super-admin.js",
     "cleanup:promo-images": "node server/scripts/cleanup-missing-promotion-images.js",
     "qr:keys": "node server/scripts/generate-qr-keys.js"
