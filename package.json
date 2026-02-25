@@ -24,6 +24,7 @@
     "check:promo-images": "node server/scripts/check-promotion-images-integrity.js",
     "repair:promo-images": "node server/scripts/repair-promotion-images-from-disk.js",
     "promote:superadmin": "node server/scripts/promote-user-to-super-admin.js",
+    "delete:user": "node server/scripts/delete-user-by-email.js",
     "cleanup:promo-images": "node server/scripts/cleanup-missing-promotion-images.js",
     "qr:keys": "node server/scripts/generate-qr-keys.js"
   },

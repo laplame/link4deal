@@ -95,12 +95,15 @@ const registerValidation = [
         .withMessage('Rol primario inválido (user, influencer, brand, agency)')
 ];
 
-// Validaciones para login (email o teléfono + contraseña)
+// Validaciones para login: acepta "login" (nuevo) o "email" (compatibilidad)
 const loginValidation = [
     body('login')
-        .notEmpty()
-        .trim()
-        .withMessage('Email o teléfono/WhatsApp requerido'),
+        .optional({ values: 'null', checkFalsy: true })
+        .trim(),
+    body('email')
+        .optional({ values: 'null', checkFalsy: true })
+        .isEmail()
+        .normalizeEmail(),
     body('password')
         .notEmpty()
         .withMessage('Contraseña requerida')
@@ -220,8 +223,15 @@ router.post('/login', loginValidation, async (req, res) => {
             });
         }
 
-        const { login, password } = req.body;
-        const loginTrim = String(login).trim();
+        const { login: loginRaw, email: emailRaw, password } = req.body;
+        // Aceptar "login" (nuevo) o "email" (compatibilidad con frontend antiguo/proxy)
+        const loginTrim = (loginRaw != null && String(loginRaw).trim() !== ''
+            ? String(loginRaw).trim()
+            : (emailRaw != null ? String(emailRaw).trim() : '')
+        );
+        if (!loginTrim) {
+            return res.status(400).json({ message: 'Email o teléfono/WhatsApp requerido' });
+        }
         const isEmail = loginTrim.includes('@');
 
         let user;
