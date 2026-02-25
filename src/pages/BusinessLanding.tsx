@@ -194,26 +194,26 @@ const BusinessLanding: React.FC = () => {
             }`}>
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <Link to="/" className="flex items-center space-x-3">
+                        <Link to="/" className={`flex items-center space-x-3 transition-colors ${isSticky ? 'text-gray-900' : 'text-white'}`}>
                             <img 
                                 src="/logo.png" 
                                 alt="DameCódigo" 
                                 className="w-10 h-10 object-contain"
                             />
-                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
+                            <span className="text-xl font-bold">{SITE_CONFIG.name}</span>
                         </Link>
                         
                         <nav className="hidden md:flex items-center space-x-8">
-                            <a href="#beneficios" className="text-gray-700 hover:text-blue-600 transition-colors">Beneficios</a>
-                            <a href="#proceso" className="text-gray-700 hover:text-blue-600 transition-colors">Proceso</a>
-                            <a href="#testimonios" className="text-gray-700 hover:text-blue-600 transition-colors">Casos de Éxito</a>
-                            <a href="#precios" className="text-gray-700 hover:text-blue-600 transition-colors">Precios</a>
+                            <a href="#beneficios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Beneficios</a>
+                            <a href="#proceso" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Proceso</a>
+                            <a href="#testimonios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Casos de Éxito</a>
+                            <a href="#precios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Precios</a>
                         </nav>
 
                         <div className="flex items-center space-x-4">
                             <Link 
-                                to="/login" 
-                                className="text-gray-700 hover:text-blue-600 transition-colors"
+                                to="/signin" 
+                                className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}
                             >
                                 Iniciar Sesión
                             </Link>
@@ -241,19 +241,16 @@ const BusinessLanding: React.FC = () => {
                 </div>
                 <div className="max-w-7xl mx-auto px-4 relative z-10">
                     <div className="text-center max-w-4xl mx-auto">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold mb-6 border border-white/30 text-stroke-black-thin text-shadow-soft">
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold mb-6 border border-white/30">
                             <Rocket className="h-4 w-4" />
-                            PAQUETE DE INAUGURACIÓN
+                            Paquete de inauguración
                         </div>
                         
-                        <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight text-stroke-black text-shadow-hero">
-                            Llena tu tienda con clientes desde el{' '}
-                            <span className="text-blue-200 text-stroke-black">
-                                primer día
-                            </span>
+                        <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight tracking-tight">
+                            Llena tu tienda con clientes desde el primer día
                         </h1>
                         
-                        <p className="text-xl md:text-2xl text-gray-100 mb-8 leading-relaxed">
+                        <p className="text-lg md:text-xl text-white/90 mb-8 leading-relaxed">
                             Conecta con influencers locales, genera cupones geolocalizados y construye una comunidad leal 
                             desde tu inauguración. Todo por solo{' '}
                             <span className="font-bold text-blue-200">$1 USD, €1 EUR o $20 MXN</span>.
@@ -270,7 +267,7 @@ const BusinessLanding: React.FC = () => {
                             
                             <button 
                                 onClick={() => setIsVideoModalOpen(true)}
-                                className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-stroke-black-thin text-shadow-soft"
+                                className="flex items-center gap-2 text-white/90 hover:text-white transition-colors"
                             >
                                 <Play className="h-5 w-5" />
                                 Ver Demo (2 min)

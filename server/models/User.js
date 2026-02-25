@@ -239,9 +239,7 @@ userSchema.virtual('totalFollowers').get(function() {
     );
 });
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 }, { sparse: true });
+// Indexes (email y phone ya tienen unique+sparse en la definición del campo)
 userSchema.index({ primaryRole: 1 });
 userSchema.index({ profileTypes: 1 });
 userSchema.index({ isActive: 1 });

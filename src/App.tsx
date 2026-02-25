@@ -133,6 +133,7 @@ function App() {
               <Route path="/kyc-success" element={<KYCSuccess />} />
               <Route path="/create-coupon" element={<CreateCoupon />} />
               <Route path="/signin" element={<SignInPage />} />
+              <Route path="/login" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/cart" element={<CartPage />} />
