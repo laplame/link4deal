@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Heart, Star, ShoppingCart, Eye, Share2, Truck, Shield, Clock, Tag, MapPin, FileText, ExternalLink, Flame, Zap, Target, Navigation, Info } from 'lucide-react';
 import { formatPrice, calculateDiscountPercentage, shortenAddress } from '../utils/formatters';
 import CouponRequestForm from './CouponRequestForm';
+import { useAuth } from '../context/AuthContext';
 
 interface ProductCardProps {
     product: {
@@ -59,6 +60,7 @@ export default function ProductCard({
     onAddToWishlist, 
     onViewDetails 
 }: ProductCardProps) {
+    const { isAuthenticated } = useAuth();
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [imageError, setImageError] = useState(false);
@@ -336,11 +338,11 @@ export default function ProductCard({
                     </Link>
                 </div>
 
-                {/* Info Message */}
-                <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-xs text-blue-700">
+                {/* Info Message: estado usuario logueado para acceso a cupones */}
+                <div className={`mt-3 p-2 rounded-lg border ${isAuthenticated ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className={`flex items-center gap-2 text-xs ${isAuthenticated ? 'text-green-700' : 'text-blue-700'}`}>
                         <Info className="w-3 h-3" />
-                        <span>Regístrate para obtener tu cupón y acceder al carrito</span>
+                        <span>{isAuthenticated ? 'Tienes acceso a cupones. Pide tu cupón y guárdalo en tu perfil.' : 'Inicia sesión o regístrate para guardar tus cupones y acceder al carrito'}</span>
                     </div>
                 </div>
 

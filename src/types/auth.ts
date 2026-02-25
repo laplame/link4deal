@@ -16,7 +16,8 @@ export interface ApiRole {
 
 export interface AuthUser {
   id: string;
-  email: string;
+  email?: string;
+  phone?: string;
   firstName: string;
   lastName: string;
   primaryRole: PrimaryRole;
@@ -31,13 +32,15 @@ export interface AuthUser {
   createdAt?: string;
 }
 
+/** Inicio de sesión con email o teléfono/WhatsApp + contraseña */
 export interface LoginCredentials {
-  email: string;
+  login: string;
   password: string;
 }
 
 export interface RegisterData {
-  email: string;
+  email?: string;
+  phone?: string;
   password: string;
   firstName: string;
   lastName: string;

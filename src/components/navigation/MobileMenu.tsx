@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { X, User, LogOut } from 'lucide-react';
 import { MobileMenuButton } from './MobileMenuButton';
+import { useAuth } from '../../context/AuthContext';
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +11,7 @@ interface Props {
 
 export function MobileMenu({ isOpen, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const { user, isAuthenticated, logout } = useAuth();
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -59,6 +62,26 @@ export function MobileMenu({ isOpen, onClose }: Props) {
           </div>
           
           <nav className="flex-1 px-4 py-6 space-y-4">
+            {isAuthenticated && user ? (
+              <>
+                <div className="text-gray-300 text-sm mb-2">Hola, {user.firstName}</div>
+                <MobileMenuButton to="/dashboard" onClick={onClose}>
+                  <span className="flex items-center gap-2"><User className="h-4 w-4" /> Mi cuenta</span>
+                </MobileMenuButton>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); logout(); }}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Salir
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/signin" onClick={onClose} className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg">Iniciar sesión</Link>
+                <Link to="/signup" onClick={onClose} className="block px-4 py-3 text-green-400 hover:text-green-300 hover:bg-gray-700 rounded-lg font-medium">Registrarse</Link>
+              </>
+            )}
             <MobileMenuButton to="/brands" onClick={onClose}>
               View Brand Opportunities
             </MobileMenuButton>

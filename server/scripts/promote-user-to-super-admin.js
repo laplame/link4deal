@@ -69,6 +69,28 @@ async function ensureAdminRole() {
   return adminRole;
 }
 
+async function ensureUserRole() {
+  let userRole = await Role.findOne({ name: 'user' });
+  if (userRole) return userRole;
+
+  userRole = await Role.create({
+    name: 'user',
+    displayName: 'Usuario',
+    description: 'Usuario básico de la plataforma',
+    type: 'user',
+    level: 1,
+    isDefault: true,
+    isSystem: true,
+    permissions: [],
+    capabilities: {
+      canCreateContent: true
+    }
+  });
+
+  console.log('✅ Rol "user" creado automáticamente.');
+  return userRole;
+}
+
 async function main() {
   console.log('===============================================');
   console.log('  Promover usuario a SUPER ADMIN');
@@ -92,11 +114,12 @@ async function main() {
     }
 
     const adminRole = await ensureAdminRole();
+    const userRole = await ensureUserRole();
 
     user.primaryRole = 'admin';
     user.isSuperAdmin = true;
     user.isActive = true;
-    user.roles = [adminRole._id];
+    user.roles = [adminRole._id, userRole._id];
     user.password = NEW_PASSWORD; // Se hashea automáticamente en pre-save
 
     await user.save();
@@ -105,7 +128,7 @@ async function main() {
     console.log(`   - email: ${user.email}`);
     console.log(`   - primaryRole: ${user.primaryRole}`);
     console.log(`   - isSuperAdmin: ${user.isSuperAdmin}`);
-    console.log(`   - roles: ${user.roles.length} (admin)`);
+    console.log(`   - roles: ${user.roles.length} (admin + user)`);
     console.log('🔐 Password actualizada.');
 
     await mongoose.connection.close();

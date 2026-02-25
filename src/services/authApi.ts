@@ -19,7 +19,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
   const res = await fetch(`${API_AUTH}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({ login: credentials.login.trim(), password: credentials.password }),
     credentials: 'include',
   });
   const data = await res.json();

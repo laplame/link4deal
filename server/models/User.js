@@ -17,8 +17,10 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: [true, 'El email es requerido'],
+        required: false,
+        default: null,
         unique: true,
+        sparse: true, // permite múltiples null
         lowercase: true,
         trim: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email inválido']
@@ -27,7 +29,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, 'La contraseña es requerida'],
         minlength: [8, 'La contraseña debe tener al menos 8 caracteres'],
-        select: false // No incluir en queries por defecto
+        select: false
     },
     
     // Profile Information
@@ -37,7 +39,9 @@ const userSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        trim: true
+        trim: true,
+        unique: true,
+        sparse: true
     },
     dateOfBirth: {
         type: Date
@@ -237,12 +241,24 @@ userSchema.virtual('totalFollowers').get(function() {
 
 // Indexes
 userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 }, { sparse: true });
 userSchema.index({ primaryRole: 1 });
 userSchema.index({ profileTypes: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ 'agencyMembership.agency': 1 });
 userSchema.index({ roles: 1 });
+
+// Validar que al menos email o phone esté presente
+userSchema.pre('save', function(next) {
+    const hasEmail = this.email != null && String(this.email).trim() !== '';
+    const hasPhone = this.phone != null && String(this.phone).trim() !== '';
+    if (!hasEmail && !hasPhone) {
+        next(new Error('Se requiere email o teléfono/WhatsApp'));
+        return;
+    }
+    next();
+});
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {

@@ -140,7 +140,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <p className="truncate font-medium text-gray-700">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="truncate">{user.email}</p>
+              <p className="truncate">{user.email || user.phone || '—'}</p>
               <p className="mt-0.5">{roleLabel}</p>
             </div>
           )}

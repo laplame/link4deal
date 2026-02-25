@@ -58,12 +58,24 @@ const authenticateToken = async (req, res, next) => {
     }
 };
 
-// Validaciones para registro
+/** Normaliza teléfono/WhatsApp a solo dígitos para búsqueda. */
+function normalizePhone(value) {
+    if (typeof value !== 'string') return '';
+    return value.replace(/\D/g, '').trim();
+}
+
+// Validaciones para registro (email opcional si hay phone; phone opcional si hay email)
 const registerValidation = [
     body('email')
+        .optional({ values: 'null', checkFalsy: true })
         .isEmail()
         .normalizeEmail()
         .withMessage('Email inválido'),
+    body('phone')
+        .optional({ values: 'null', checkFalsy: true })
+        .trim()
+        .isLength({ min: 10, max: 20 })
+        .withMessage('Teléfono/WhatsApp debe tener entre 10 y 20 caracteres'),
     body('password')
         .isLength({ min: 8 })
         .withMessage('La contraseña debe tener al menos 8 caracteres')
@@ -83,21 +95,20 @@ const registerValidation = [
         .withMessage('Rol primario inválido (user, influencer, brand, agency)')
 ];
 
-// Validaciones para login
+// Validaciones para login (email o teléfono + contraseña)
 const loginValidation = [
-    body('email')
-        .isEmail()
-        .normalizeEmail()
-        .withMessage('Email inválido'),
+    body('login')
+        .notEmpty()
+        .trim()
+        .withMessage('Email o teléfono/WhatsApp requerido'),
     body('password')
         .notEmpty()
         .withMessage('Contraseña requerida')
 ];
 
-// POST /api/auth/register - Registro de usuario
+// POST /api/auth/register - Registro de usuario (email o teléfono/WhatsApp)
 router.post('/register', registerValidation, async (req, res) => {
     try {
-        // Verificar errores de validación
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
@@ -106,28 +117,36 @@ router.post('/register', registerValidation, async (req, res) => {
             });
         }
 
-        const { email, password, firstName, lastName, primaryRole: primaryRoleBody } = req.body;
-        // Rol primario: user (solo usuario), influencer (content creator), brand (marketing/marca), agency (agencia de mkt)
-        const primaryRole = primaryRoleBody || 'user';
-
-        // Verificar si el usuario ya existe
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(409).json({
-                message: 'Ya existe un usuario con este email'
+        const { email: emailRaw, phone: phoneRaw, password, firstName, lastName, primaryRole: primaryRoleBody } = req.body;
+        const email = emailRaw ? String(emailRaw).trim().toLowerCase() : null;
+        const phone = phoneRaw ? normalizePhone(String(phoneRaw)) : null;
+        if (!email && !phone) {
+            return res.status(400).json({
+                message: 'Indica tu correo electrónico o tu teléfono/WhatsApp'
             });
         }
 
-        // Obtener o crear el rol por defecto (permite registro sin ejecutar seeder)
-        const defaultRole = await ensureUserRole();
+        const primaryRole = primaryRoleBody || 'user';
 
-        // profileTypes solo incluye influencer, brand, agency (no 'user')
+        if (email) {
+            const existingByEmail = await User.findOne({ email });
+            if (existingByEmail) {
+                return res.status(409).json({ message: 'Ya existe un usuario con este email' });
+            }
+        }
+        if (phone) {
+            const existingByPhone = await User.findOne({ phone });
+            if (existingByPhone) {
+                return res.status(409).json({ message: 'Ya existe un usuario con este teléfono/WhatsApp' });
+            }
+        }
+
+        const defaultRole = await ensureUserRole();
         const profileTypes = primaryRole && primaryRole !== 'user' ? [primaryRole] : [];
 
-        // Crear el usuario
         const user = new User({
-            email,
-            // El hash se realiza en el pre-save middleware del modelo User
+            email: email || undefined,
+            phone: phone || undefined,
             password,
             firstName,
             lastName,
@@ -137,16 +156,8 @@ router.post('/register', registerValidation, async (req, res) => {
             settings: {
                 language: 'es',
                 timezone: 'America/Mexico_City',
-                notifications: {
-                    email: true,
-                    push: true,
-                    sms: false
-                },
-                privacy: {
-                    profileVisibility: 'public',
-                    showEmail: false,
-                    showPhone: false
-                }
+                notifications: { email: true, push: true, sms: false },
+                privacy: { profileVisibility: 'public', showEmail: false, showPhone: false }
             }
         });
 
@@ -174,7 +185,8 @@ router.post('/register', registerValidation, async (req, res) => {
             message: 'Usuario registrado exitosamente',
             user: {
                 id: user._id,
-                email: user.email,
+                email: user.email || undefined,
+                phone: user.phone || undefined,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
@@ -197,10 +209,9 @@ router.post('/register', registerValidation, async (req, res) => {
     }
 });
 
-// POST /api/auth/login - Inicio de sesión
+// POST /api/auth/login - Inicio de sesión (email o teléfono/WhatsApp + contraseña)
 router.post('/login', loginValidation, async (req, res) => {
     try {
-        // Verificar errores de validación
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
@@ -209,10 +220,21 @@ router.post('/login', loginValidation, async (req, res) => {
             });
         }
 
-        const { email, password } = req.body;
+        const { login, password } = req.body;
+        const loginTrim = String(login).trim();
+        const isEmail = loginTrim.includes('@');
 
-        // Buscar usuario por email
-        const user = await User.findOne({ email }).select('+password').populate('roles');
+        let user;
+        if (isEmail) {
+            user = await User.findOne({ email: loginTrim.toLowerCase() }).select('+password').populate('roles');
+        } else {
+            const phoneNorm = normalizePhone(loginTrim);
+            if (!phoneNorm || phoneNorm.length < 10) {
+                return res.status(400).json({ message: 'Teléfono/WhatsApp inválido' });
+            }
+            user = await User.findOne({ phone: phoneNorm }).select('+password').populate('roles');
+        }
+
         if (!user) {
             return res.status(401).json({
                 message: 'Credenciales inválidas'
@@ -282,7 +304,8 @@ router.post('/login', loginValidation, async (req, res) => {
             message: 'Inicio de sesión exitoso',
             user: {
                 id: user._id,
-                email: user.email,
+                email: user.email || undefined,
+                phone: user.phone || undefined,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
@@ -406,7 +429,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         res.json({
             user: {
                 id: user._id,
-                email: user.email,
+                email: user.email || undefined,
+                phone: user.phone || undefined,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
