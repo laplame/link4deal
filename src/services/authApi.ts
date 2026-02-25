@@ -16,10 +16,15 @@ function getAuthHeaders(): HeadersInit {
 }
 
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
+  const login = credentials.login.trim();
+  // Compatibilidad producción: backend antiguo espera { email, password }; el nuevo { login, password }
+  const body: Record<string, string> = { login, password: credentials.password };
+  if (login.includes('@')) body.email = login;
+
   const res = await fetch(`${API_AUTH}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login: credentials.login.trim(), password: credentials.password }),
+    body: JSON.stringify(body),
     credentials: 'include',
   });
   const data = await res.json();
