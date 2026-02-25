@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle, LogOut } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import AdminAccessModal from '../components/AdminAccessModal';
 import CartIcon from '../components/CartIcon';
@@ -10,6 +10,7 @@ import NewsSection from '../components/NewsSection';
 import LocationSelector from '../components/LocationSelector';
 import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 
@@ -425,6 +426,7 @@ export default function LandingPage() {
     const [productsError, setProductsError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { addItem } = useCart();
+    const { user, isAuthenticated, logout } = useAuth();
 
     // Cargar promociones desde la API
     useEffect(() => {
@@ -667,18 +669,28 @@ export default function LandingPage() {
                                 <Download className="w-4 h-4" />
                                 Descargar App
                             </button>
-                            <Link 
-                                to="/signin" 
-                                className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                            >
-                                Iniciar Sesión
-                            </Link>
-                            <Link 
-                                to="/signup" 
-                                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
-                            >
-                                Registrarse
-                            </Link>
+                            {isAuthenticated && user ? (
+                                <>
+                                    <span className="text-gray-600 font-medium">Hola, {user.firstName}</span>
+                                    <Link to="/dashboard" className="flex items-center gap-1.5 text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                        <User className="w-4 h-4" />
+                                        Mi cuenta
+                                    </Link>
+                                    <button type="button" onClick={() => logout()} className="flex items-center gap-1.5 text-gray-700 hover:text-red-600 font-medium transition-colors">
+                                        <LogOut className="w-4 h-4" />
+                                        Salir
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <Link to="/signin" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                        Iniciar Sesión
+                                    </Link>
+                                    <Link to="/signup" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg">
+                                        Registrarse
+                                    </Link>
+                                </>
+                            )}
                         </div>
 
                         {/* Mobile menu button */}
@@ -754,20 +766,26 @@ export default function LandingPage() {
                                     <Download className="w-4 h-4" />
                                     Descargar App
                                 </button>
-                                <Link
-                                    to="/signin"
-                                    className="block text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                >
-                                    Iniciar Sesión
-                                </Link>
-                                <Link
-                                    to="/signup"
-                                    className="block bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium text-center hover:from-blue-600 hover:to-purple-700 transition-all duration-300"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                >
-                                    Registrarse
-                                </Link>
+                                {isAuthenticated && user ? (
+                                    <>
+                                        <div className="text-gray-600 font-medium text-center">Hola, {user.firstName}</div>
+                                        <Link to="/dashboard" className="flex items-center justify-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2" onClick={() => setMobileMenuOpen(false)}>
+                                            <User className="w-4 h-4" /> Mi cuenta
+                                        </Link>
+                                        <button type="button" onClick={() => { setMobileMenuOpen(false); logout(); }} className="flex items-center justify-center gap-2 w-full text-gray-700 hover:text-red-600 font-medium py-2">
+                                            <LogOut className="w-4 h-4" /> Salir
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link to="/signin" className="block text-gray-700 hover:text-blue-600 font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
+                                            Iniciar Sesión
+                                        </Link>
+                                        <Link to="/signup" className="block bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium text-center hover:from-blue-600 hover:to-purple-700 transition-all duration-300" onClick={() => setMobileMenuOpen(false)}>
+                                            Registrarse
+                                        </Link>
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}

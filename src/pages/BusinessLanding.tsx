@@ -20,15 +20,19 @@ import {
     Clock,
     DollarSign,
     Euro,
-    CreditCard
+    CreditCard,
+    User,
+    LogOut
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 
 const BusinessLanding: React.FC = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [activeTestimonial, setActiveTestimonial] = useState(0);
     const [isSticky, setIsSticky] = useState(false);
+    const { user, isAuthenticated, logout } = useAuth();
 
     // Testimonios de negocios exitosos
     const testimonials = [
@@ -211,18 +215,26 @@ const BusinessLanding: React.FC = () => {
                         </nav>
 
                         <div className="flex items-center space-x-4">
-                            <Link 
-                                to="/signin" 
-                                className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}
-                            >
-                                Iniciar Sesión
-                            </Link>
-                            <Link 
-                                to="/checkout" 
-                                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
-                            >
-                                Contratar Ahora
-                            </Link>
+                            {isAuthenticated && user ? (
+                                <>
+                                    <span className={`text-sm font-medium ${isSticky ? 'text-gray-600' : 'text-white/90'}`}>Hola, {user.firstName}</span>
+                                    <Link to="/dashboard" className={`flex items-center gap-1.5 transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>
+                                        <User className="w-4 h-4" /> Mi cuenta
+                                    </Link>
+                                    <button type="button" onClick={() => logout()} className={`flex items-center gap-1.5 transition-colors ${isSticky ? 'text-gray-600 hover:text-red-600' : 'text-white/80 hover:text-white'}`}>
+                                        <LogOut className="w-4 h-4" /> Salir
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <Link to="/signin" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>
+                                        Iniciar Sesión
+                                    </Link>
+                                    <Link to="/checkout" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105">
+                                        Contratar Ahora
+                                    </Link>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
