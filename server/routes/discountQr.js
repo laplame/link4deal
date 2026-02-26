@@ -167,9 +167,11 @@ router.post('/verify', async (req, res) => {
             });
         }
 
+        const tokenId = tokenDoc ? tokenDoc.tokenId : (payload && payload.jti) || null;
         return res.json({
             ok: true,
             message: 'QR válido',
+            couponId: tokenId,
             payload,
             redemption: tokenDoc
                 ? {
@@ -270,6 +272,7 @@ router.post('/redeem', async (req, res) => {
         return res.json({
             ok: true,
             message: 'QR redimido exitosamente',
+            couponId: redeemed.tokenId,
             payload: redeemed.payload,
             usedAt: redeemed.usedAt
         });

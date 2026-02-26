@@ -1,0 +1,147 @@
+# Endpoint: verificar cupón (QR) – contrato para la app
+
+La app (p. ej. LUXAE) llama a **verify** para validar el código escaneado y obtener los datos necesarios para mostrar/verificar el cupón. Este documento define el contrato del endpoint y confirma que **la lógica está implementada** en este backend (link4deal); para bizneai.com hay que desplegar el mismo backend o exponer este endpoint.
+
+---
+
+## Flujo en el backend: id del token → BD → validar si aplica
+
+1. El backend **obtiene el id del cupón** del token enviado por la app. El token tiene la forma `LINK4DEAL-DISCOUNT.v1.<id>.<sig>`: se extrae `<id>` (y se valida `<sig>` con la llave del servidor).
+2. Con ese **id** se **busca el cupón en la base de datos** (colección de tokens de descuento).
+3. Se **valida si aplica**: promoción existente y activa, vigencia, y, si aplica en tu negocio, tienda, productos, etc. Toda esta lógica es del backend (reglas de negocio).
+4. **Si no aplica** (tienda incorrecta, producto no incluido, cupón expirado, ya usado, etc.), el backend responde con **error** y un **mensaje claro** (p. ej. `"Promoción no activa"`, `"Cupón no aplica a esta tienda"`, `"QR ya redimido"`).
+5. **La app** recibe esa respuesta de error y **muestra el mensaje al usuario** (`message` y, si viene, `errors`).
+
+En resumen: **token → id → BD → validación (tienda, productos, etc.) → si no aplica, error con mensaje → la app muestra ese mensaje al usuario.**
+
+---
+
+## 0. Simplificación: un solo id del cupón
+
+**No hay campos** en el payload para “shop id” ni “producto seleccionado”. Se simplifica usando **el id del cupón** como única referencia:
+
+- **couponId** (en la respuesta de verify) = identificador único del cupón (el mismo que va dentro del QR como referencia).
+- Con ese **couponId** el backend (o la app) resuelve todo:
+  - El payload del verify ya trae **promotionId**; con la promoción puedes obtener producto, tienda, etc. (p. ej. `GET /api/promotions/:id`).
+  - No hace falta duplicar `shopId` ni `productId` en el cupón: la promoción es el vínculo a producto/tienda.
+
+Flujo resumido: **QR → verify → couponId + payload (promotionId, discountPercentage, walletAddress, …) → con promotionId pides detalle de promoción (producto/tienda)**.
+
+---
+
+## 1. Request
+
+**Método y URL**
+
+```http
+POST /api/discount-qr/verify
+Content-Type: application/json
+```
+
+**Body (exactamente lo que debe enviar la app)**
+
+```json
+{
+  "qrValue": "<código escaneado del QR o ingresado a mano>"
+}
+```
+
+- También se acepta el campo `token` como alias de `qrValue`: `{ "token": "<código>" }`.
+- Si falta `qrValue` y `token` → **400** con `message: "qrValue/token requerido"`.
+
+---
+
+## 2. Respuesta éxito (cupón válido)
+
+**HTTP 200**
+
+```json
+{
+  "ok": true,
+  "message": "QR válido",
+  "couponId": "abc123XYZ",
+  "payload": {
+    "deviceId": "string",
+    "influencerId": "string",
+    "promotionId": "string",
+    "referralCode": "string",
+    "discountPercentage": 20,
+    "walletAddress": "0x..."
+  },
+  "redemption": {
+    "redeemable": true,
+    "usedAt": null
+  }
+}
+```
+
+**Campos que la app necesita para verificar el cupón**
+
+| Campo                   | Dónde               | Descripción breve |
+|-------------------------|---------------------|-------------------|
+| **couponId**            | raíz de la respuesta | **Id único del cupón.** Usar este id para toda la lógica (redimir, asociar a shop/producto vía backend). |
+| **walletAddress**       | `payload.walletAddress` | Dirección asociada al cupón. |
+| **discountPercentage**  | `payload.discountPercentage` | Porcentaje de descuento (0–100). |
+| **promotionId**         | `payload.promotionId` | ID de la promoción; con él el backend obtiene producto/tienda (no hay shopId ni productId en el cupón). |
+| **referralCode**        | `payload.referralCode` | Código de referencia. |
+| **influencerId**        | `payload.influencerId` | ID del influencer (opcional). |
+
+- **redemption.redeemable**: `true` si el cupón aún se puede redimir (one-time), `false` si ya fue usado.
+- **redemption.usedAt**: `null` si no se ha redimido, fecha ISO si ya se usó.
+
+**Producto / tienda:** no vienen en el payload del cupón. Se resuelven con **promotionId** (p. ej. `GET /api/promotions/:id`); la promoción tiene el contexto de producto y tienda. Toda la lógica de “a qué shop o producto aplica” se simplifica usando **couponId** + **promotionId**.
+
+---
+
+## 3. Respuestas de error
+
+Cuando el cupón **no aplica** (tienda, productos, vigencia, ya redimido, etc.), el backend responde con error y un mensaje; **la app debe mostrar ese mensaje al usuario**.
+
+| HTTP | Situación                    | Body (ejemplo) |
+|------|------------------------------|----------------|
+| **400** | Sin `qrValue`/`token`        | `{"ok":false,"message":"qrValue/token requerido"}` |
+| **400** | Token inválido o expirado    | `{"ok":false,"message":"QR inválido"}` o `"QR expired"` |
+| **400** | Cupón no aplica (reglas de negocio: tienda, productos, promo inactiva, etc.) | `{"ok":false,"message":"Cupón no aplica a esta tienda","errors":["..."]}` o similar |
+| **400** | QR válido pero reglas de negocio fallan | `{"ok":false,"message":"QR válido criptográficamente, pero inválido por negocio","errors":["Promoción no activa",...],"payload":{...}}` |
+
+En todos los errores la app debe leer **`message`** (y, si viene, **`errors`**) y **mostrarlos al usuario**.
+
+---
+
+## 4. Lógica que debe tener el backend (ya implementada aquí)
+
+1. Recibir `{ "qrValue": "<código>" }` (o `token`).
+2. Validar el token:
+   - **Formato referencia** `LINK4DEAL-DISCOUNT.v1.<id>.<sig>`: verificar firma con `QR_SIGN_KEY`, buscar token por `id` en BD, comprobar que no esté expirado.
+   - **Formato legacy** (7 partes): verificar firma y descifrar con `QR_ENC_KEY`/`QR_SIGN_KEY` si aplica.
+3. Reglas de negocio: promoción existente y activa, vigencia, `discountPercentage` 0–100, etc.
+4. Responder con `ok: true`, `payload` (con `walletAddress`, `discountPercentage`, `promotionId`, etc.) y `redemption` (redeemable, usedAt).
+
+**Implementación en este repo**
+
+- Ruta: `server/routes/discountQr.js` → `POST /verify`
+- Validación: `server/utils/qrCrypto.js` (`verifyReferenceQrToken`, `verifyAndDecodeQrToken`)
+- Modelo: `server/models/DiscountQrToken.js`
+- Montaje en app: `server/index.js` → `app.use('/api/discount-qr', ...)`
+
+Variables de entorno necesarias en el servidor (p. ej. bizneai.com):
+
+```env
+QR_PREFIX=LINK4DEAL-DISCOUNT
+QR_VERSION=v1
+QR_SIGN_KEY=<base64 de 32 bytes>
+QR_TTL_SECONDS=300
+```
+
+Y MongoDB con la colección de tokens (creada por `create`).
+
+---
+
+## 5. Para bizneai.com
+
+Si el backend de **bizneai.com** aún no tiene este endpoint:
+
+- **Opción A:** Desplegar en bizneai el mismo backend de este repo (Node + `server/routes/discountQr.js`, modelo `DiscountQrToken`, `qrCrypto`, env de QR) y exponer `POST https://www.bizneai.com/api/discount-qr/verify` con el contrato anterior.
+- **Opción B:** Implementar en bizneai un único endpoint que cumpla este contrato (mismo request/response y mismas validaciones), reutilizando la lógica de `server/utils/qrCrypto.js` y `server/routes/discountQr.js` (verify) si comparten código.
+
+La app solo necesita que **POST /api/discount-qr/verify** exista y responda como en las secciones 1–3 (en especial `payload.walletAddress`, `payload.discountPercentage`, `payload.promotionId` y `redemption.redeemable`).

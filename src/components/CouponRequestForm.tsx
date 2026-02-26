@@ -4,12 +4,10 @@ import {
     User, 
     Phone, 
     QrCode, 
-    Download, 
     CheckCircle, 
     Info,
-    ShoppingCart
+    Ticket
 } from 'lucide-react';
-import { useCart } from '../context/CartContext';
 import QRCode from 'qrcode';
 
 interface CouponRequestFormProps {
@@ -47,7 +45,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const [qrValue, setQrValue] = useState<string>('');
     const [qrImageDataUrl, setQrImageDataUrl] = useState<string>('');
     const [qrWarning, setQrWarning] = useState<string | null>(null);
-    const { addItem } = useCart();
+    const [countdownSeconds, setCountdownSeconds] = useState(120); // 2 minutos para que el cupón sea único/válido
     const autoRequestedRef = useRef(false);
 
     const getOrCreateDeviceId = () => {
@@ -138,12 +136,20 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
             console.log('Mensaje de WhatsApp:', whatsappMessage);
 
             setStep('qr');
+            setCountdownSeconds(120); // reiniciar contador de 2 min al generar cupón
         } catch (error) {
             console.error('Error al procesar la solicitud:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Contador de 2 minutos en pantalla de cupón generado
+    useEffect(() => {
+        if (step !== 'qr' || countdownSeconds <= 0) return;
+        const t = setInterval(() => setCountdownSeconds((s) => s - 1), 1000);
+        return () => clearInterval(t);
+    }, [step, countdownSeconds]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -210,6 +216,15 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                         <p className="text-xs text-amber-600 mb-4">{qrWarning}</p>
                     )}
 
+                    {/* Contador 2 minutos */}
+                    <div className="mb-4 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
+                        <span className="text-sm font-medium">
+                            {countdownSeconds > 0
+                                ? `Válido por ${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}`
+                                : 'Cupón expirado'}
+                        </span>
+                    </div>
+
                     {/* Coupon Code */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-6">
                         <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
@@ -232,11 +247,11 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                         </button>
                         
                         <button
-                            onClick={() => setStep('success')}
+                            onClick={onClose}
                             className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                         >
-                            <Download className="w-5 h-5" />
-                            Descargar Cupón
+                            <Ticket className="w-5 h-5" />
+                            Redimir cupón
                         </button>
                     </div>
 
@@ -249,56 +264,6 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     <p className="mt-3 text-sm text-gray-600">
                         Envíame este cupón a mi app
                     </p>
-                </div>
-            </div>
-        );
-    }
-
-    if (step === 'success') {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle className="w-8 h-8 text-blue-600" />
-                    </div>
-                    
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                        ¡Proceso Completado!
-                    </h3>
-                    
-                    <p className="text-gray-600 mb-6">
-                        Tu cupón ha sido enviado por WhatsApp y está listo para usar. 
-                        ¡Gracias por elegir Link4Deal!
-                    </p>
-
-                    <div className="space-y-3">
-                        <button
-                            onClick={() => {
-                                // Agregar el producto al carrito (necesitamos precio, currency e image)
-                                // Por ahora usamos valores por defecto, en una implementación real
-                                // estos vendrían del producto
-                                addItem({ 
-                                    id: productId, 
-                                    name: productName, 
-                                    price: productPrice, 
-                                    currency: productCurrency,
-                                    image: productImage
-                                });
-                                onClose();
-                            }}
-                            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Download className="w-5 h-5" />
-                            Agregar al Carrito con Cupón
-                        </button>
-                        
-                        <button
-                            onClick={onClose}
-                            className="w-full bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors"
-                        >
-                            Continuar Comprando
-                        </button>
-                    </div>
                 </div>
             </div>
         );
