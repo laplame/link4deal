@@ -93,18 +93,37 @@ Content-Type: application/json
 
 ---
 
-## 3. Respuestas de error
+## 3. Respuestas de error (códigos unificados)
 
-Cuando el cupón **no aplica** (tienda, productos, vigencia, ya redimido, etc.), el backend responde con error y un mensaje; **la app debe mostrar ese mensaje al usuario**.
+Cuando el cupón **no aplica**, el backend responde con **`errorCode`** y **`message`**. La app debe mostrar **`message`** al usuario y puede usar **`errorCode`** para lógica o traducciones.
 
-| HTTP | Situación                    | Body (ejemplo) |
-|------|------------------------------|----------------|
-| **400** | Sin `qrValue`/`token`        | `{"ok":false,"message":"qrValue/token requerido"}` |
-| **400** | Token inválido o expirado    | `{"ok":false,"message":"QR inválido"}` o `"QR expired"` |
-| **400** | Cupón no aplica (reglas de negocio: tienda, productos, promo inactiva, etc.) | `{"ok":false,"message":"Cupón no aplica a esta tienda","errors":["..."]}` o similar |
-| **400** | QR válido pero reglas de negocio fallan | `{"ok":false,"message":"QR válido criptográficamente, pero inválido por negocio","errors":["Promoción no activa",...],"payload":{...}}` |
+**Códigos y mensajes que envía el backend:**
 
-En todos los errores la app debe leer **`message`** (y, si viene, **`errors`**) y **mostrarlos al usuario**.
+| errorCode | message |
+|-----------|--------|
+| **PROMO_NOT_FOR_SHOP** | La promoción existe pero no está habilitada para esta tienda. |
+| **PROMO_NOT_FOR_PRODUCT** | La promoción existe pero no aplica para este producto. |
+| **PROMO_NOT_UNDER_TERMS** | La promoción existe pero no aplica bajo estos términos. |
+| **PROMO_ONE_PER_PERSON** | La promoción solo permite un producto por persona. |
+| **PROMO_INACTIVE** | La promoción no está activa. |
+| **PROMO_EXPIRED** | La promoción ha expirado. |
+| **PROMO_NOT_FOUND** | Promoción no encontrada. |
+| **QR_INVALID** | Código QR inválido o expirado. |
+| **QR_ALREADY_REDEEMED** | Este cupón ya fue redimido. |
+
+**Formato de respuesta de error (siempre incluye `errorCode` y `message`):**
+
+```json
+{
+  "ok": false,
+  "errorCode": "PROMO_INACTIVE",
+  "message": "La promoción no está activa.",
+  "errors": [{ "code": "PROMO_INACTIVE", "message": "La promoción no está activa." }],
+  "payload": { ... }
+}
+```
+
+**Validación por tienda/producto:** si la app envía `shopId` o `productId` en el body de verify (o query en GET), el backend comprueba si la promoción tiene `allowedShopIds` / `allowedProductIds` y responde **PROMO_NOT_FOR_SHOP** o **PROMO_NOT_FOR_PRODUCT** cuando no aplica.
 
 ---
 
@@ -145,3 +164,23 @@ Si el backend de **bizneai.com** aún no tiene este endpoint:
 - **Opción B:** Implementar en bizneai un único endpoint que cumpla este contrato (mismo request/response y mismas validaciones), reutilizando la lógica de `server/utils/qrCrypto.js` y `server/routes/discountQr.js` (verify) si comparten código.
 
 La app solo necesita que **POST /api/discount-qr/verify** exista y responda como en las secciones 1–3 (en especial `payload.walletAddress`, `payload.discountPercentage`, `payload.promotionId` y `redemption.redeemable`).
+
+---
+
+## 6. Puertos en este proyecto
+
+- **Backend (API):** por defecto usa el puerto **3000** (`server/.env` → `PORT=3000`). Al ejecutar `npm run server` o `node server/index.js`, la API queda en `http://localhost:3000`.
+- **Frontend (Vite):** en desarrollo corre en el puerto **5173** y hace proxy de `/api` y `/uploads` a `http://localhost:3000`.
+- En producción el puerto puede ser otro (p. ej. PM2 con `PORT=5001`) o no verse si Nginx hace proxy; la URL será la del dominio (ej. `https://www.damecodigo.com/api/...`).
+
+**Ejemplos de verify con puerto 3000 (local):**
+
+```bash
+# GET (ver JSON del cupón)
+curl -s "http://localhost:3000/api/discount-qr/verify?qrValue=LINK4DEAL-DISCOUNT.v1.XXX.sig"
+
+# POST (lo que usa la app)
+curl -s -X POST "http://localhost:3000/api/discount-qr/verify" \
+  -H "Content-Type: application/json" \
+  -d '{"qrValue":"LINK4DEAL-DISCOUNT.v1.XXX.sig"}'
+```

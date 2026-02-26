@@ -76,7 +76,17 @@ const promotionSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    
+    /** IDs de tiendas donde aplica la promoción (si está vacío, aplica a todas) */
+    allowedShopIds: [{
+        type: String,
+        trim: true
+    }],
+    /** IDs de productos a los que aplica la promoción (si está vacío, aplica a todos) */
+    allowedProductIds: [{
+        type: String,
+        trim: true
+    }],
+
     // Imágenes y archivos
     images: [{
         originalName: String,

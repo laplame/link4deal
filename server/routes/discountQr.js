@@ -14,45 +14,78 @@ const {
 const router = express.Router();
 const STRICT_CREATE_VALIDATION = process.env.QR_STRICT_CREATE_VALIDATION === 'true';
 
+/** Códigos y mensajes de error para la app (unificados) */
+const ERROR_CODES = {
+    PROMO_NOT_FOR_SHOP: 'La promoción existe pero no está habilitada para esta tienda.',
+    PROMO_NOT_FOR_PRODUCT: 'La promoción existe pero no aplica para este producto.',
+    PROMO_NOT_UNDER_TERMS: 'La promoción existe pero no aplica bajo estos términos.',
+    PROMO_ONE_PER_PERSON: 'La promoción solo permite un producto por persona.',
+    PROMO_INACTIVE: 'La promoción no está activa.',
+    PROMO_EXPIRED: 'La promoción ha expirado.',
+    PROMO_NOT_FOUND: 'Promoción no encontrada.',
+    QR_INVALID: 'Código QR inválido o expirado.',
+    QR_ALREADY_REDEEMED: 'Este cupón ya fue redimido.'
+};
+
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
 }
 
-async function validateBusinessRules(payload) {
+/**
+ * Valida reglas de negocio del cupón. Opcionalmente recibe shopId/productId para validar tienda/producto.
+ * @param {object} payload - payload del token (promotionId, etc.)
+ * @param {object} context - opcional: { shopId, productId } para validar si aplica a esa tienda/producto
+ * @returns {Promise<Array<{code: string, message: string}>>}
+ */
+async function validateBusinessRules(payload, context = {}) {
     const errors = [];
+    const { shopId: requestShopId, productId: requestProductId } = context;
 
-    // Validar promoción activa y vigente
     if (!isValidObjectId(payload.promotionId)) {
-        errors.push('promotionId inválido');
-    } else {
-        const promotion = await Promotion.findById(payload.promotionId).lean();
-        if (!promotion) {
-            errors.push('Promoción no encontrada');
-        } else {
-            const now = new Date();
-            if (promotion.status !== 'active') {
-                errors.push('Promoción no activa');
-            }
-            if (promotion.validFrom && new Date(promotion.validFrom) > now) {
-                errors.push('Promoción aún no vigente');
-            }
-            if (promotion.validUntil && new Date(promotion.validUntil) < now) {
-                errors.push('Promoción expirada');
-            }
+        errors.push({ code: 'QR_INVALID', message: ERROR_CODES.QR_INVALID });
+        return errors;
+    }
+
+    const promotion = await Promotion.findById(payload.promotionId).lean();
+    if (!promotion) {
+        errors.push({ code: 'PROMO_NOT_FOUND', message: ERROR_CODES.PROMO_NOT_FOUND });
+        return errors;
+    }
+
+    const now = new Date();
+
+    if (promotion.status !== 'active') {
+        errors.push({ code: 'PROMO_INACTIVE', message: ERROR_CODES.PROMO_INACTIVE });
+    }
+    if (promotion.validFrom && new Date(promotion.validFrom) > now) {
+        errors.push({ code: 'PROMO_NOT_UNDER_TERMS', message: ERROR_CODES.PROMO_NOT_UNDER_TERMS });
+    }
+    if (promotion.validUntil && new Date(promotion.validUntil) < now) {
+        errors.push({ code: 'PROMO_EXPIRED', message: ERROR_CODES.PROMO_EXPIRED });
+    }
+
+    if (requestShopId && promotion.allowedShopIds && promotion.allowedShopIds.length > 0) {
+        const allowed = promotion.allowedShopIds.map(String);
+        if (!allowed.includes(String(requestShopId))) {
+            errors.push({ code: 'PROMO_NOT_FOR_SHOP', message: ERROR_CODES.PROMO_NOT_FOR_SHOP });
+        }
+    }
+    if (requestProductId && promotion.allowedProductIds && promotion.allowedProductIds.length > 0) {
+        const allowed = promotion.allowedProductIds.map(String);
+        if (!allowed.includes(String(requestProductId))) {
+            errors.push({ code: 'PROMO_NOT_FOR_PRODUCT', message: ERROR_CODES.PROMO_NOT_FOR_PRODUCT });
         }
     }
 
-    // Validar influencer si se envía como ObjectId
     if (payload.influencerId && isValidObjectId(payload.influencerId)) {
         const influencer = await Influencer.findById(payload.influencerId).lean();
         if (!influencer) {
-            errors.push('Influencer no encontrado');
+            errors.push({ code: 'QR_INVALID', message: ERROR_CODES.QR_INVALID });
         }
     }
 
-    // Validar descuento básico
     if (Number(payload.discountPercentage) < 0 || Number(payload.discountPercentage) > 100) {
-        errors.push('discountPercentage fuera de rango (0-100)');
+        errors.push({ code: 'PROMO_NOT_UNDER_TERMS', message: ERROR_CODES.PROMO_NOT_UNDER_TERMS });
     }
 
     return errors;
@@ -88,9 +121,11 @@ router.post('/create', async (req, res) => {
 
         const businessErrors = await validateBusinessRules(payloadInput);
         if (businessErrors.length > 0 && STRICT_CREATE_VALIDATION) {
+            const first = businessErrors[0];
             return res.status(400).json({
                 ok: false,
-                message: 'Validación de negocio fallida',
+                errorCode: first.code,
+                message: first.message,
                 errors: businessErrors
             });
         }
@@ -124,44 +159,142 @@ router.post('/create', async (req, res) => {
     }
 });
 
-// POST /api/discount-qr/verify (lector/scanner)
+async function runVerify(token, context = {}) {
+    const ref = verifyReferenceQrToken(String(token));
+    const tokenDoc = await DiscountQrToken.findOne({ tokenId: ref.tokenId });
+    if (!tokenDoc) {
+        const err = new Error(ERROR_CODES.QR_INVALID);
+        err.code = 'QR_INVALID';
+        throw err;
+    }
+    if (tokenDoc.expiresAt && tokenDoc.expiresAt.getTime() < Date.now()) {
+        const err = new Error(ERROR_CODES.PROMO_EXPIRED);
+        err.code = 'PROMO_EXPIRED';
+        throw err;
+    }
+    const payload = tokenDoc.payload;
+    tokenDoc.lastVerifiedAt = new Date();
+    await tokenDoc.save();
+
+    const businessErrors = await validateBusinessRules(payload, context);
+    if (businessErrors.length > 0) {
+        const first = businessErrors[0];
+        const err = new Error(first.message);
+        err.status = 400;
+        err.code = first.code;
+        err.errors = businessErrors;
+        err.payload = payload;
+        throw err;
+    }
+
+    const tokenId = tokenDoc.tokenId;
+    return {
+        ok: true,
+        message: 'QR válido',
+        couponId: tokenId,
+        payload,
+        redemption: {
+            redeemable: !tokenDoc.usedAt,
+            usedAt: tokenDoc.usedAt || null
+        }
+    };
+}
+
+// GET /api/discount-qr/verify?qrValue=<token>&shopId=...&productId=... — ver el JSON del cupón
+router.get('/verify', async (req, res) => {
+    try {
+        const token = req.query?.qrValue || req.query?.token;
+        if (!token) {
+            return res.status(400).json({
+                ok: false,
+                errorCode: 'QR_INVALID',
+                message: ERROR_CODES.QR_INVALID
+            });
+        }
+        const context = {
+            shopId: req.query.shopId || null,
+            productId: req.query.productId || null
+        };
+        const result = await runVerify(token, context);
+        return res.json(result);
+    } catch (error) {
+        const code = error.code || 'QR_INVALID';
+        if (error.status === 400 && error.errors) {
+            return res.status(400).json({
+                ok: false,
+                errorCode: code,
+                message: error.message,
+                errors: error.errors,
+                payload: error.payload
+            });
+        }
+        return res.status(400).json({
+            ok: false,
+            errorCode: code,
+            message: error.message || ERROR_CODES.QR_INVALID
+        });
+    }
+});
+
+// POST /api/discount-qr/verify (lector/scanner). Opcional: body.shopId, body.productId para validar tienda/producto.
 router.post('/verify', async (req, res) => {
     try {
         const token = req.body?.qrValue || req.body?.token;
         if (!token) {
             return res.status(400).json({
                 ok: false,
+                errorCode: 'QR_INVALID',
                 message: 'qrValue/token requerido'
             });
         }
 
+        const context = {
+            shopId: req.body.shopId || null,
+            productId: req.body.productId || null
+        };
+
         let payload = null;
         let tokenDoc = null;
 
-        // Modo recomendado: token por referencia (4 partes)
         try {
             const ref = verifyReferenceQrToken(String(token));
             tokenDoc = await DiscountQrToken.findOne({ tokenId: ref.tokenId });
             if (!tokenDoc) {
-                throw new Error('QR reference no encontrado');
+                return res.status(400).json({
+                    ok: false,
+                    errorCode: 'QR_INVALID',
+                    message: ERROR_CODES.QR_INVALID
+                });
             }
             if (tokenDoc.expiresAt && tokenDoc.expiresAt.getTime() < Date.now()) {
-                throw new Error('QR expired');
+                return res.status(400).json({
+                    ok: false,
+                    errorCode: 'PROMO_EXPIRED',
+                    message: ERROR_CODES.PROMO_EXPIRED
+                });
             }
             payload = tokenDoc.payload;
             tokenDoc.lastVerifiedAt = new Date();
             await tokenDoc.save();
         } catch (referenceError) {
-            // Compatibilidad con formato anterior cifrado (7 partes)
-            payload = verifyAndDecodeQrToken(String(token));
+            try {
+                payload = verifyAndDecodeQrToken(String(token));
+            } catch {
+                return res.status(400).json({
+                    ok: false,
+                    errorCode: 'QR_INVALID',
+                    message: ERROR_CODES.QR_INVALID
+                });
+            }
         }
 
-        const businessErrors = await validateBusinessRules(payload);
-
+        const businessErrors = await validateBusinessRules(payload, context);
         if (businessErrors.length > 0) {
+            const first = businessErrors[0];
             return res.status(400).json({
                 ok: false,
-                message: 'QR válido criptográficamente, pero inválido por negocio',
+                errorCode: first.code,
+                message: first.message,
                 errors: businessErrors,
                 payload
             });
@@ -187,7 +320,8 @@ router.post('/verify', async (req, res) => {
     } catch (error) {
         return res.status(400).json({
             ok: false,
-            message: error.message || 'QR inválido'
+            errorCode: error.code || 'QR_INVALID',
+            message: error.message || ERROR_CODES.QR_INVALID
         });
     }
 });
@@ -237,33 +371,43 @@ router.post('/redeem', async (req, res) => {
             if (!existing) {
                 return res.status(404).json({
                     ok: false,
-                    message: 'QR reference no encontrado'
+                    errorCode: 'QR_INVALID',
+                    message: ERROR_CODES.QR_INVALID
                 });
             }
             if (existing.expiresAt && new Date(existing.expiresAt).getTime() <= now.getTime()) {
                 return res.status(400).json({
                     ok: false,
-                    message: 'QR expired'
+                    errorCode: 'PROMO_EXPIRED',
+                    message: ERROR_CODES.PROMO_EXPIRED
                 });
             }
             if (existing.usedAt) {
                 return res.status(409).json({
                     ok: false,
-                    message: 'QR ya redimido',
+                    errorCode: 'QR_ALREADY_REDEEMED',
+                    message: ERROR_CODES.QR_ALREADY_REDEEMED,
                     usedAt: existing.usedAt
                 });
             }
             return res.status(400).json({
                 ok: false,
-                message: 'No se pudo redimir el QR'
+                errorCode: 'QR_INVALID',
+                message: ERROR_CODES.QR_INVALID
             });
         }
 
-        const businessErrors = await validateBusinessRules(redeemed.payload);
+        const context = {
+            shopId: req.body.shopId || null,
+            productId: req.body.productId || null
+        };
+        const businessErrors = await validateBusinessRules(redeemed.payload, context);
         if (businessErrors.length > 0) {
+            const first = businessErrors[0];
             return res.status(400).json({
                 ok: false,
-                message: 'QR redimido, pero inválido por negocio',
+                errorCode: first.code,
+                message: first.message,
                 errors: businessErrors,
                 payload: redeemed.payload
             });
@@ -279,7 +423,8 @@ router.post('/redeem', async (req, res) => {
     } catch (error) {
         return res.status(400).json({
             ok: false,
-            message: error.message || 'QR inválido'
+            errorCode: 'QR_INVALID',
+            message: error.message || ERROR_CODES.QR_INVALID
         });
     }
 });
