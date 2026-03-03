@@ -26,6 +26,9 @@ const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Detrás de Nginx: confiar en X-Forwarded-For para que express-rate-limit no lance ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
+
 // ===== MIDDLEWARE DE SEGURIDAD =====
 
 // Helmet para seguridad HTTP
@@ -40,11 +43,10 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
     'http://localhost:5174',
-    // Agregar aquí los dominios de tu app móvil cuando los tengas
-    // 'capacitor://localhost',
-    // 'ionic://localhost',
-    // 'http://localhost',
-    // 'https://tu-dominio.com'
+    'https://damecodigo.com',
+    'https://www.damecodigo.com',
+    'http://damecodigo.com',
+    'http://www.damecodigo.com',
 ];
 
 app.use(cors({

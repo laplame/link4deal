@@ -446,6 +446,7 @@ export default function LandingPage() {
                     data = JSON.parse(text);
                 } catch (parseError: unknown) {
                     if (parseError instanceof SyntaxError || (parseError as Error)?.message === 'API_NO_JSON') {
+                        console.warn('[Promociones] Respuesta no JSON:', response.status, contentType, text.slice(0, 200));
                         setProductsError('El servicio de ofertas no está disponible (comprueba que el backend y Nginx estén configurados).');
                         setProducts([]);
                         return;
@@ -454,7 +455,8 @@ export default function LandingPage() {
                 }
 
                 if (!response.ok) {
-                    throw new Error(data?.message || `Error HTTP: ${response.status}`);
+                    const serverMessage = data?.message || data?.error || `Error HTTP: ${response.status}`;
+                    throw new Error(serverMessage);
                 }
 
                 if (data.success && data.data?.docs && data.data.docs.length > 0) {
@@ -539,8 +541,10 @@ export default function LandingPage() {
                 }
             } catch (error: any) {
                 console.error('Error cargando promociones:', error);
-                if (error.name === 'TypeError' || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                if (error.name === 'TypeError' || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
                     setProductsError('No se pudo conectar al servidor. Verifica tu conexión a internet.');
+                } else if (error?.message && typeof error.message === 'string' && error.message.length > 0 && error.message.length < 200) {
+                    setProductsError(error.message);
                 } else {
                     setProductsError('No se pudieron cargar las promociones.');
                 }
