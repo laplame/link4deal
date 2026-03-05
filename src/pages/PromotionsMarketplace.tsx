@@ -153,7 +153,7 @@ export default function PromotionsMarketplace() {
               description: promo.description || '',
               originalPrice: originalPrice,
               currentPrice: currentPrice,
-              currency: promo.currency || 'MXN',
+              currency: promo.currency || 'USD',
               discountPercentage: discountPercentage,
               image: getPromotionImageUrl(promo.images),
               location: promo.storeLocation?.city || promo.storeLocation?.address || 'Ciudad de México',

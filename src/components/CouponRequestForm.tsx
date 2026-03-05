@@ -16,6 +16,8 @@ interface CouponRequestFormProps {
     productPrice: number;
     productCurrency: string;
     productImage: string;
+    /** Porcentaje de descuento 0-100. Se envía al backend para que el QR lleve el % en el string (mismo formato que app móvil). */
+    discountPercentage?: number;
     onClose: () => void;
     autoGenerateOnOpen?: boolean;
 }
@@ -30,7 +32,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     productName, 
     productPrice, 
     productCurrency, 
-    productImage, 
+    productImage,
+    discountPercentage: discountPercentageProp,
     onClose,
     autoGenerateOnOpen = false
 }) => {
@@ -106,7 +109,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                         influencerId: getAuthUserId() || 'guest',
                         promotionId: productId,
                         referralCode: generatedCouponCode,
-                        discountPercentage: 0,
+                        discountPercentage: typeof discountPercentageProp === 'number' && discountPercentageProp >= 0 && discountPercentageProp <= 100 ? discountPercentageProp : 0,
                         walletAddress: 'not-provided'
                     })
                 });

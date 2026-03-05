@@ -142,7 +142,7 @@ export default function PromotionDetailsPage() {
                     name: promo.title || promo.productName || 'Sin título',
                     price: currentPrice,
                     originalPrice: originalPrice > 0 ? originalPrice : undefined,
-                    currency: promo.currency || 'MXN',
+                    currency: promo.currency || 'USD',
                     image: getPromotionImageUrl(promo.images),
                     offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
                     category: categoryMap[promo.category] || promo.category || 'Otros',
@@ -948,6 +948,9 @@ export default function PromotionDetailsPage() {
                     productPrice={product.price}
                     productCurrency={product.currency}
                     productImage={product.image}
+                    discountPercentage={product.originalPrice && product.originalPrice > 0
+                        ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+                        : undefined}
                     autoGenerateOnOpen={true}
                     onClose={() => setShowCouponForm(false)}
                 />

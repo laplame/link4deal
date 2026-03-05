@@ -16,8 +16,10 @@ import {
     FileText,
     Smartphone,
     Globe,
-    Zap
+    Zap,
+    Sparkles
 } from 'lucide-react';
+import PromotionLegalInfo from '../components/PromotionLegalInfo';
 
 interface PromotionData {
     basicInfo: {
@@ -88,13 +90,13 @@ const categories = [
 ];
 
 const steps = [
+    { id: 'media', title: 'Foto de la promoción', icon: <Upload className="h-5 w-5" /> },
     { id: 'basicInfo', title: 'Información Básica', icon: <FileText className="h-5 w-5" /> },
     { id: 'pricing', title: 'Precios y Ofertas', icon: <DollarSign className="h-5 w-5" /> },
     { id: 'inventory', title: 'Inventario', icon: <Smartphone className="h-5 w-5" /> },
     { id: 'timing', title: 'Tiempo y Validez', icon: <Calendar className="h-5 w-5" /> },
     { id: 'targeting', title: 'Audiencia Objetivo', icon: <Users className="h-5 w-5" /> },
     { id: 'smartContract', title: 'Smart Contract', icon: <Zap className="h-5 w-5" /> },
-    { id: 'media', title: 'Medios y Contenido', icon: <Upload className="h-5 w-5" /> },
     { id: 'terms', title: 'Términos y Condiciones', icon: <Tag className="h-5 w-5" /> }
 ];
 
@@ -185,6 +187,8 @@ export default function CreatePromotionWizard() {
     const isStepValid = (stepIndex: number): boolean => {
         const step = steps[stepIndex];
         switch (step.id) {
+            case 'media':
+                return promotionData.media.images.length > 0;
             case 'basicInfo':
                 return !!(promotionData.basicInfo.title && promotionData.basicInfo.category && promotionData.basicInfo.brand);
             case 'pricing':
@@ -289,10 +293,13 @@ export default function CreatePromotionWizard() {
 
     const renderPricingStep = () => (
         <div className="space-y-6">
+            <p className="text-sm text-gray-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                Precio en <strong>USD</strong> permite representar el valor promocional en tokens estables (BizneAI/DameCodigo). Descuento %, 2x1 y cashback fijo se convierten a monto exacto en USD.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Precio Original *
+                        Precio Original (base) *
                     </label>
                     <div className="relative">
                         <span className="absolute left-3 top-3 text-gray-500">$</span>
@@ -326,6 +333,15 @@ export default function CreatePromotionWizard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Moneda
+                    </label>
+                    <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <span className="font-medium text-gray-700">USD</span>
+                        <p className="mt-1 text-xs text-gray-500">Los cálculos y tokens son solo en dólares (USD).</p>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                         Tipo de Oferta
                     </label>
                     <select
@@ -334,11 +350,13 @@ export default function CreatePromotionWizard() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     >
                         <option value="percentage">Porcentaje de descuento</option>
-                        <option value="fixed">Descuento fijo</option>
-                        <option value="bogo">Compra 1, Lleva 2</option>
+                        <option value="fixed">Descuento fijo (cashback fijo)</option>
+                        <option value="bogo">2x1 (Compra 1, Lleva 2)</option>
                     </select>
                 </div>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Valor de la Oferta
@@ -357,18 +375,23 @@ export default function CreatePromotionWizard() {
 
     const renderInventoryStep = () => (
         <div className="space-y-6">
+            <p className="text-sm text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                El <strong>límite de promociones disponibles</strong> controla cuántas redenciones se permiten. Al llegar al límite la promoción se considera agotada (BizneAI: control de inventario promocional).
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Cantidad Total Disponible *
+                        Máximo de cupones redimibles *
                     </label>
                     <input
                         type="number"
+                        min={1}
                         value={promotionData.inventory.totalQuantity}
                         onChange={(e) => updatePromotionData('inventory', { totalQuantity: Number(e.target.value) })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         placeholder="100"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Límite legal y financiero de redenciones.</p>
                 </div>
 
                 <div>
@@ -417,6 +440,9 @@ export default function CreatePromotionWizard() {
 
     const renderTimingStep = () => (
         <div className="space-y-6">
+            <p className="text-sm text-gray-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                Las redenciones solo son válidas <strong>entre la fecha de inicio y la fecha de fin</strong>. Fuera de ese periodo el sistema rechazará el cupón (vigencia legal BizneAI).
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -578,17 +604,76 @@ export default function CreatePromotionWizard() {
     );
 
     const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
+    const [analyzeMediaError, setAnalyzeMediaError] = useState<string | null>(null);
+
+    const categoryNameFromSlug = (slug: string): string => {
+        const map: Record<string, string> = {
+            electronics: 'Electrónica',
+            fashion: 'Moda',
+            home: 'Hogar',
+            beauty: 'Belleza y Cuidado',
+            sports: 'Deportes',
+            books: 'Productos Digitales',
+            food: 'Comida y Bebidas',
+            other: 'Electrónica'
+        };
+        return map[slug] || slug;
+    };
+
+    /** Analiza imágenes con Gemini. Si se pasan `files`, se usan esos; si no, imageFiles. */
+    const handleAnalyzeWithGemini = async (files?: File[]) => {
+        const toUse = files && files.length > 0 ? files : imageFiles;
+        if (toUse.length === 0) {
+            setAnalyzeMediaError('Sube al menos una imagen para analizar.');
+            return;
+        }
+        setIsAnalyzingMedia(true);
+        setAnalyzeMediaError(null);
+        try {
+            const fd = new FormData();
+            toUse.forEach((file) => fd.append('images', file));
+            const res = await fetch('/api/promotions/analyze-image', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Error al analizar');
+            const d = json.data || {};
+            updatePromotionData('basicInfo', {
+                title: d.title ?? promotionData.basicInfo.title,
+                description: d.description ?? promotionData.basicInfo.description,
+                brand: d.brand ?? promotionData.basicInfo.brand,
+                category: categoryNameFromSlug(d.category || 'other')
+            });
+            const orig = typeof d.originalPrice === 'number' ? d.originalPrice : promotionData.pricing.originalPrice;
+            const offer = typeof d.currentPrice === 'number' ? d.currentPrice : promotionData.pricing.offerPrice;
+            updatePromotionData('pricing', {
+                originalPrice: orig,
+                offerPrice: offer,
+                offerType: (d.offerType === 'bogo' ? 'bogo' : d.offerType === 'percentage' ? 'percentage' : 'fixed') as any,
+                offerValue: typeof d.discountPercentage === 'number' ? d.discountPercentage : (orig > 0 ? Math.round(((orig - offer) / orig) * 100) : 0)
+            });
+            if (typeof d.termsAndConditions === 'string' && d.termsAndConditions.trim()) {
+                updatePromotionData('terms', {
+                    conditions: [d.termsAndConditions.trim()]
+                });
+            }
+        } catch (e: any) {
+            setAnalyzeMediaError(e.message || 'Error al analizar con Gemini.');
+        } finally {
+            setIsAnalyzingMedia(false);
+        }
+    };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
             const fileArray = Array.from(files);
-            const newFiles = [...imageFiles, ...fileArray].slice(0, 5); // Máximo 5 imágenes
+            const newFiles = [...imageFiles, ...fileArray].slice(0, 5);
             setImageFiles(newFiles);
-            
-            // Crear URLs para preview
             const imageUrls = newFiles.map(file => URL.createObjectURL(file));
             updatePromotionData('media', { images: imageUrls });
+            e.target.value = '';
+            // Prioridad foto: analizar con Gemini y rellenar los siguientes pasos
+            handleAnalyzeWithGemini(newFiles);
         }
     };
 
@@ -604,9 +689,12 @@ export default function CreatePromotionWizard() {
 
     const renderMediaStep = () => (
         <div className="space-y-6">
+            <p className="text-sm text-gray-600 bg-purple-50 border border-purple-100 rounded-lg px-4 py-3">
+                <strong>Prioridad: sube la foto de la promoción.</strong> Con Gemini extraemos título, precios, marca y términos. En los siguientes pasos solo completa lo que falte.
+            </p>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Imágenes de la Promoción * (mínimo 1)
+                    Imágenes de la Promoción * (mínimo 1, máx. 5)
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
                     <input
@@ -624,23 +712,48 @@ export default function CreatePromotionWizard() {
                     </label>
                 </div>
                 {promotionData.media.images.length > 0 && (
-                    <div className="mt-4 grid grid-cols-3 gap-4">
-                        {promotionData.media.images.map((image, index) => (
-                            <div key={index} className="relative group">
-                                <img 
-                                    src={image} 
-                                    alt={`Preview ${index + 1}`}
-                                    className="w-full h-32 object-cover rounded-lg"
-                                />
-                                <button
-                                    onClick={() => removeImage(index)}
-                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                    <>
+                        <div className="mt-4 grid grid-cols-3 gap-4">
+                            {promotionData.media.images.map((image, index) => (
+                                <div key={index} className="relative group">
+                                    <img 
+                                        src={image} 
+                                        alt={`Preview ${index + 1}`}
+                                        className="w-full h-32 object-cover rounded-lg"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeImage(index)}
+                                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={handleAnalyzeWithGemini}
+                                disabled={isAnalyzingMedia}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {isAnalyzingMedia ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                        Analizando con Gemini...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="h-5 w-5" />
+                                        Volver a analizar
+                                    </>
+                                )}
+                            </button>
+                            <span className="text-xs text-gray-500">Se analizó al subir. Reanaliza si cambiaste la imagen.</span>
+                        </div>
+                        {analyzeMediaError && <p className="mt-2 text-sm text-red-600">{analyzeMediaError}</p>}
+                    </>
                 )}
             </div>
 
@@ -701,13 +814,13 @@ export default function CreatePromotionWizard() {
 
     const renderStepContent = () => {
         switch (currentStep) {
-            case 0: return renderBasicInfoStep();
-            case 1: return renderPricingStep();
-            case 2: return renderInventoryStep();
-            case 3: return renderTimingStep();
-            case 4: return renderTargetingStep();
-            case 5: return renderSmartContractStep();
-            case 6: return renderMediaStep();
+            case 0: return renderMediaStep();
+            case 1: return renderBasicInfoStep();
+            case 2: return renderPricingStep();
+            case 3: return renderInventoryStep();
+            case 4: return renderTimingStep();
+            case 5: return renderTargetingStep();
+            case 6: return renderSmartContractStep();
             case 7: return renderTermsStep();
             default: return null;
         }
@@ -728,8 +841,8 @@ export default function CreatePromotionWizard() {
         }
 
         if (promotionData.media.images.length === 0) {
-            setSubmitError('Por favor sube al menos una imagen');
-            setCurrentStep(6);
+            setSubmitError('Por favor sube al menos una foto de la promoción (paso 1)');
+            setCurrentStep(0);
             return;
         }
 
@@ -778,6 +891,20 @@ export default function CreatePromotionWizard() {
                 formData.append('tags', JSON.stringify(promotionData.targeting.interests));
             }
 
+            // Términos y condiciones (desde el paso terms o extraídos por Gemini)
+            const termsText = promotionData.terms.conditions.filter(c => c.trim()).join('\n\n');
+            if (termsText) formData.append('termsAndConditions', termsText);
+
+            // Category: backend espera slug (electronics, fashion...); el wizard usa nombre (Electrónica, Moda...)
+            const categoryToSlug: Record<string, string> = {
+                'Electrónica': 'electronics', 'Moda': 'fashion', 'Hogar': 'home',
+                'Deportes': 'sports', 'Fotografía': 'other', 'Comida y Bebidas': 'food',
+                'Servicios': 'other', 'Productos Digitales': 'books', 'Viajes y Turismo': 'other',
+                'Belleza y Cuidado': 'beauty'
+            };
+            const categorySlug = categoryToSlug[promotionData.basicInfo.category] || 'other';
+            formData.set('category', categorySlug);
+
             // Imágenes (usar los archivos directamente)
             if (imageFiles.length === 0) {
                 throw new Error('Por favor sube al menos una imagen');
@@ -796,10 +923,13 @@ export default function CreatePromotionWizard() {
             const data = await response.json();
 
             if (response.ok && data.success) {
+                const id = data.data?.id ?? null;
                 setSubmitSuccess(true);
-                setTimeout(() => {
-                    navigate('/promotions-marketplace');
-                }, 2000);
+                if (id) {
+                    navigate(`/promotion-details/${id}`);
+                } else {
+                    setTimeout(() => navigate('/promotions-marketplace'), 1500);
+                }
             } else {
                 throw new Error(data.message || 'Error al crear la promoción');
             }
@@ -885,6 +1015,11 @@ export default function CreatePromotionWizard() {
                             style={{ width: `${getStepProgress()}%` }}
                         ></div>
                     </div>
+                </div>
+
+                {/* Guía BizneAI / definición legal y tokenización */}
+                <div className="mb-6">
+                    <PromotionLegalInfo />
                 </div>
 
                 {/* Step Navigation */}

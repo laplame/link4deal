@@ -45,15 +45,29 @@ const promotionSchema = new mongoose.Schema({
     },
     currency: {
         type: String,
-        default: 'MXN',
-        enum: ['MXN', 'USD', 'EUR']
+        default: 'USD',
+        enum: ['USD']
     },
     discountPercentage: {
         type: Number,
         min: [0, 'El descuento no puede ser negativo'],
         max: [100, 'El descuento no puede exceder 100%']
     },
-    
+    /** Tipo de oferta para conversión a unidad calculable (contrato): percentage | bogo | cashback_fixed | cashback_percentage */
+    offerType: {
+        type: String,
+        enum: ['percentage', 'bogo', 'cashback_fixed', 'cashback_percentage'],
+        default: 'percentage'
+    },
+    /** Valor del cashback cuando es fijo (USD) o porcentaje aplicado sobre compra (0-100). Para cashback_percentage se usa sobre originalPrice o monto de compra. */
+    cashbackValue: { type: Number, default: null },
+    /** Valor promocional en USD = unidad calculable del contrato. X tokens = X USD. Pasivo financiero medible. Calculable por getPromotionalValueUsd(). */
+    promotionalValueUsd: {
+        type: Number,
+        default: null,
+        min: [0, 'El valor promocional no puede ser negativo']
+    },
+
     // Información de ubicación y tienda
     storeName: {
         type: String,
@@ -113,6 +127,13 @@ const promotionSchema = new mongoose.Schema({
     tags: [String],
     features: [String],
     specifications: mongoose.Schema.Types.Mixed,
+    /** Términos y condiciones (ej. extraídos de imagen con Gemini). */
+    termsAndConditions: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: [5000, 'Términos y condiciones no puede exceder 5000 caracteres']
+    },
     
     // Estado y disponibilidad
     status: {
@@ -138,6 +159,13 @@ const promotionSchema = new mongoose.Schema({
     validUntil: {
         type: Date,
         default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    },
+
+    /** Límite de promociones redimibles (control de inventario promocional). Si se define, al llegar a este número la promoción se considera agotada. */
+    totalQuantity: {
+        type: Number,
+        default: null,
+        min: [0, 'totalQuantity no puede ser negativo']
     },
     
     // Información del vendedor

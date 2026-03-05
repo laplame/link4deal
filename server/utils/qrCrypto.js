@@ -143,33 +143,59 @@ function verifyAndDecodeQrToken(token) {
     return payload;
 }
 
-function createReferenceQrToken(tokenId) {
+/**
+ * Crea el string del token QR por referencia.
+ * @param {string} tokenId - Id único del token en BD
+ * @param {number} [discountPercentage] - Porcentaje de descuento 0-100; si se pasa, el string tendrá 5 partes (id.pct.sig)
+ * @returns {string} Ej: LINK4DEAL-DISCOUNT.v1.<id>.<sig> (4 partes) o LINK4DEAL-DISCOUNT.v1.<id>.<pct>.<sig> (5 partes)
+ */
+function createReferenceQrToken(tokenId, discountPercentage) {
     const { prefix, version, signKey } = getQrConfig({ requireEncKey: false });
-    const body = `${prefix}.${version}.${tokenId}`;
+    const pct = Number(discountPercentage);
+    const includePct = Number.isFinite(pct) && pct >= 0 && pct <= 100;
+    const body = includePct
+        ? `${prefix}.${version}.${tokenId}.${Math.round(pct)}`
+        : `${prefix}.${version}.${tokenId}`;
     const signature = crypto.createHmac('sha256', signKey).update(body).digest();
     return `${body}.${b64u(signature)}`;
 }
 
+/**
+ * Verifica y decodifica token QR por referencia. Acepta formato de 4 partes (sin pct) o 5 partes (con pct).
+ * @returns {{ tokenId: string, discountPercentage?: number, prefix: string, version: string }}
+ */
 function verifyReferenceQrToken(token) {
     const { prefix, version, signKey } = getQrConfig({ requireEncKey: false });
     const parts = String(token || '').split('.');
-    if (parts.length !== 4) {
+    if (parts.length !== 4 && parts.length !== 5) {
         throw new Error('QR reference format invalid');
     }
 
-    const [incomingPrefix, incomingVersion, tokenId, sigS] = parts;
+    const is5Part = parts.length === 5;
+    const [incomingPrefix, incomingVersion, tokenId, pctOrSig, sigS] = parts;
+    const sig = is5Part ? sigS : pctOrSig;
+
     if (incomingPrefix !== prefix || incomingVersion !== version) {
         throw new Error('QR prefix/version invalid');
     }
 
-    const body = `${incomingPrefix}.${incomingVersion}.${tokenId}`;
+    const body = is5Part
+        ? `${incomingPrefix}.${incomingVersion}.${tokenId}.${pctOrSig}`
+        : `${incomingPrefix}.${incomingVersion}.${tokenId}`;
     const expectedSig = crypto.createHmac('sha256', signKey).update(body).digest();
-    const gotSig = fromB64u(sigS);
+    const gotSig = fromB64u(sig);
     if (gotSig.length !== expectedSig.length || !crypto.timingSafeEqual(gotSig, expectedSig)) {
         throw new Error('QR signature invalid');
     }
 
-    return { tokenId, prefix: incomingPrefix, version: incomingVersion };
+    const result = { tokenId, prefix: incomingPrefix, version: incomingVersion };
+    if (is5Part) {
+        const pct = Number(pctOrSig);
+        if (Number.isFinite(pct) && pct >= 0 && pct <= 100) {
+            result.discountPercentage = pct;
+        }
+    }
+    return result;
 }
 
 module.exports = {

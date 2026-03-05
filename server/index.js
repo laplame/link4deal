@@ -255,6 +255,7 @@ app.use('*', (req, res) => {
             'GET /api/influencers',
             'GET /api/influencers/:id',
             'POST /api/discount-qr/create',
+            'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
             'POST /api/discount-qr/redeem'
         ],

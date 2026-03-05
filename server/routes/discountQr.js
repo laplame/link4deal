@@ -91,6 +91,36 @@ async function validateBusinessRules(payload, context = {}) {
     return errors;
 }
 
+/**
+ * Lógica compartida para crear un cupón QR. Usada por POST y GET /create.
+ * @param {object} payloadInput - { deviceId, influencerId, promotionId, referralCode, discountPercentage, walletAddress }
+ * @returns {Promise<{ qrValue, prefix, version, ttlSeconds, businessWarnings }>}
+ */
+async function createCouponToken(payloadInput) {
+    const businessErrors = await validateBusinessRules(payloadInput);
+    if (businessErrors.length > 0 && STRICT_CREATE_VALIDATION) {
+        const first = businessErrors[0];
+        const err = new Error(first.message);
+        err.code = first.code;
+        err.errors = businessErrors;
+        throw err;
+    }
+
+    const { prefix, version, ttlSeconds } = getQrMetaConfig();
+    const tokenId = crypto.randomBytes(9).toString('base64url');
+    const expiresAt = new Date(Date.now() + (ttlSeconds * 1000));
+
+    await DiscountQrToken.create({
+        tokenId,
+        payload: payloadInput,
+        expiresAt,
+        usedAt: null
+    });
+
+    const qrValue = createReferenceQrToken(tokenId, payloadInput.discountPercentage);
+    return { qrValue, prefix, version, ttlSeconds, businessWarnings: businessErrors };
+}
+
 // POST /api/discount-qr/create
 router.post('/create', async (req, res) => {
     try {
@@ -119,39 +149,70 @@ router.post('/create', async (req, res) => {
             walletAddress: String(walletAddress)
         };
 
-        const businessErrors = await validateBusinessRules(payloadInput);
-        if (businessErrors.length > 0 && STRICT_CREATE_VALIDATION) {
-            const first = businessErrors[0];
+        const result = await createCouponToken(payloadInput);
+        return res.json({
+            ok: true,
+            ...result
+        });
+    } catch (error) {
+        if (error.code && error.errors) {
             return res.status(400).json({
                 ok: false,
-                errorCode: first.code,
-                message: first.message,
-                errors: businessErrors
+                errorCode: error.code,
+                message: error.message,
+                errors: error.errors
+            });
+        }
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error creating discount QR'
+        });
+    }
+});
+
+// GET /api/discount-qr/create — Pedir cupón por query (p. ej. desde app o enlace)
+// Parámetros: deviceId, influencerId, promotionId, referralCode, discountPercentage (opcional, default 0), walletAddress (opcional, default "not-provided")
+router.get('/create', async (req, res) => {
+    try {
+        const {
+            deviceId,
+            influencerId,
+            promotionId,
+            referralCode,
+            discountPercentage,
+            walletAddress
+        } = req.query || {};
+
+        if (!deviceId || !influencerId || !promotionId || !referralCode) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Missing required query params: deviceId, influencerId, promotionId, referralCode'
             });
         }
 
-        const { prefix, version, ttlSeconds } = getQrMetaConfig();
-        const tokenId = crypto.randomBytes(9).toString('base64url');
-        const expiresAt = new Date(Date.now() + (ttlSeconds * 1000));
+        const payloadInput = {
+            deviceId: String(deviceId),
+            influencerId: String(influencerId),
+            promotionId: String(promotionId),
+            referralCode: String(referralCode),
+            discountPercentage: Number(discountPercentage || 0),
+            walletAddress: String(walletAddress || 'not-provided')
+        };
 
-        await DiscountQrToken.create({
-            tokenId,
-            payload: payloadInput,
-            expiresAt,
-            usedAt: null
-        });
-
-        const qrValue = createReferenceQrToken(tokenId);
-
+        const result = await createCouponToken(payloadInput);
         return res.json({
             ok: true,
-            qrValue,
-            prefix,
-            version,
-            ttlSeconds,
-            businessWarnings: businessErrors
+            ...result
         });
     } catch (error) {
+        if (error.code && error.errors) {
+            return res.status(400).json({
+                ok: false,
+                errorCode: error.code,
+                message: error.message,
+                errors: error.errors
+            });
+        }
         return res.status(500).json({
             ok: false,
             message: error.message || 'Error creating discount QR'

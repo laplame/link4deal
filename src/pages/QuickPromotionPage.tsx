@@ -13,6 +13,9 @@ import {
     Gift,
     Sparkles
 } from 'lucide-react';
+import PromotionLegalInfo from '../components/PromotionLegalInfo';
+
+type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
 interface QuickPromotionData {
     title: string;
@@ -22,10 +25,22 @@ interface QuickPromotionData {
     originalPrice: number;
     currentPrice: number;
     currency: string;
+    offerType: OfferType;
+    cashbackValue: number;
     storeCity: string;
+    validFrom: string;
     validUntil: string;
+    totalQuantity: number;
     images: File[];
+    termsAndConditions: string;
 }
+
+const OFFER_TYPES: { value: OfferType; label: string; description: string }[] = [
+    { value: 'percentage', label: 'Descuento %', description: 'Ej: Producto $20, 25% → $5 USD (5 tokens)' },
+    { value: 'bogo', label: '2x1', description: 'Ej: Precio $30 → $15 USD (15 tokens) por unidad gratis' },
+    { value: 'cashback_percentage', label: 'Cashback %', description: 'Ej: Compra $50, 10% → $5 USD (5 tokens)' },
+    { value: 'cashback_fixed', label: 'Cashback fijo', description: 'Ej: $10 USD fijos → 10 tokens' },
+];
 
 const QUICK_TEMPLATES = [
     {
@@ -37,9 +52,13 @@ const QUICK_TEMPLATES = [
             category: 'electronics',
             originalPrice: 5000,
             currentPrice: 3999,
-            currency: 'MXN',
+            currency: 'USD',
             storeCity: 'Ciudad de México',
-            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            validFrom: new Date().toISOString().split('T')[0],
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        totalQuantity: 100,
+        offerType: 'percentage' as OfferType,
+        cashbackValue: 0
         }
     },
     {
@@ -51,9 +70,13 @@ const QUICK_TEMPLATES = [
             category: 'fashion',
             originalPrice: 1500,
             currentPrice: 999,
-            currency: 'MXN',
+            currency: 'USD',
             storeCity: 'Monterrey',
-            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            validFrom: new Date().toISOString().split('T')[0],
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        totalQuantity: 100,
+        offerType: 'percentage' as OfferType,
+        cashbackValue: 0
         }
     },
     {
@@ -65,9 +88,13 @@ const QUICK_TEMPLATES = [
             category: 'sports',
             originalPrice: 2500,
             currentPrice: 1999,
-            currency: 'MXN',
+            currency: 'USD',
             storeCity: 'Guadalajara',
-            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            validFrom: new Date().toISOString().split('T')[0],
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        totalQuantity: 100,
+        offerType: 'percentage' as OfferType,
+        cashbackValue: 0
         }
     },
     {
@@ -79,9 +106,13 @@ const QUICK_TEMPLATES = [
             category: 'beauty',
             originalPrice: 800,
             currentPrice: 599,
-            currency: 'MXN',
+            currency: 'USD',
             storeCity: 'Puebla',
-            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            validFrom: new Date().toISOString().split('T')[0],
+            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            totalQuantity: 100,
+            offerType: 'percentage' as OfferType,
+            cashbackValue: 0
         }
     }
 ];
@@ -99,6 +130,8 @@ const CATEGORIES = [
 
 export default function QuickPromotionPage() {
     const navigate = useNavigate();
+    const defaultValidFrom = new Date().toISOString().split('T')[0];
+    const defaultValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const [formData, setFormData] = useState<QuickPromotionData>({
         title: '',
         description: '',
@@ -106,12 +139,19 @@ export default function QuickPromotionPage() {
         category: 'electronics',
         originalPrice: 0,
         currentPrice: 0,
-        currency: 'MXN',
+        currency: 'USD',
         storeCity: 'Ciudad de México',
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        images: []
+        validFrom: defaultValidFrom,
+        validUntil: defaultValidUntil,
+        totalQuantity: 100,
+        offerType: 'percentage',
+        cashbackValue: 0,
+        images: [],
+        termsAndConditions: ''
     });
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -122,16 +162,88 @@ export default function QuickPromotionPage() {
         setFormData({
             ...formData,
             ...template.data,
-            images: []
+            images: [],
+            termsAndConditions: formData.termsAndConditions
         });
         setImagePreviews([]);
     };
 
+    /** Analiza imágenes con Gemini. Si se pasan `files`, se usan esos; si no, formData.images. */
+    const handleAnalyzeWithGemini = async (files?: File[]) => {
+        const toUse = files && files.length > 0 ? files : formData.images;
+        if (toUse.length === 0) {
+            setAnalyzeError('Sube al menos una imagen para analizar.');
+            return;
+        }
+        setIsAnalyzing(true);
+        setAnalyzeError(null);
+        try {
+            const fd = new FormData();
+            toUse.forEach((file) => fd.append('images', file));
+            const res = await fetch('/api/promotions/analyze-image', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.message || 'Error al analizar');
+            }
+            const d = json.data || {};
+            setFormData(prev => ({
+                ...prev,
+                title: d.title ?? prev.title,
+                description: d.description ?? prev.description,
+                brand: d.brand ?? prev.brand,
+                category: (d.category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(d.category)) ? d.category : prev.category,
+                originalPrice: typeof d.originalPrice === 'number' ? d.originalPrice : prev.originalPrice,
+                currentPrice: typeof d.currentPrice === 'number' ? d.currentPrice : prev.currentPrice,
+                offerType: (d.offerType && ['percentage', 'bogo', 'cashback_fixed', 'cashback_percentage'].includes(d.offerType)) ? d.offerType : prev.offerType,
+                cashbackValue: typeof d.cashbackValue === 'number' ? d.cashbackValue : (prev.cashbackValue ?? 0),
+                termsAndConditions: typeof d.termsAndConditions === 'string' ? d.termsAndConditions : prev.termsAndConditions
+            }));
+        } catch (e: any) {
+            setAnalyzeError(e.message || 'Error al analizar las imágenes con Gemini.');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    /** Ajusta campos según el tipo de promoción (porcentajes y valores automáticos). */
+    const applyOfferTypeAuto = (
+        prev: QuickPromotionData,
+        opts: { newOfferType?: OfferType; priceChanged?: 'original' | 'current' }
+    ): Partial<QuickPromotionData> => {
+        const type = opts.newOfferType ?? prev.offerType;
+        const original = Number(prev.originalPrice) || 0;
+        const current = Number(prev.currentPrice) || 0;
+        const discountPct = original > 0 ? ((original - current) / original) * 100 : 0;
+        const savings = Math.max(0, original - current);
+
+        switch (type) {
+            case 'bogo':
+                return opts.priceChanged === 'original' || opts.newOfferType
+                    ? { currentPrice: original > 0 ? Math.round((original / 2) * 100) / 100 : 0 }
+                    : {};
+            case 'cashback_percentage':
+                return { cashbackValue: Math.round(discountPct * 100) / 100 };
+            case 'cashback_fixed':
+                return { cashbackValue: Math.round(savings * 100) / 100 };
+            default:
+                return {};
+        }
+    };
+
     const handleInputChange = (field: keyof QuickPromotionData, value: any) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: value
-        }));
+        setFormData(prev => {
+            const next = { ...prev, [field]: value };
+
+            if (field === 'offerType') {
+                Object.assign(next, applyOfferTypeAuto(next, { newOfferType: value as OfferType }));
+            } else if (field === 'originalPrice') {
+                Object.assign(next, applyOfferTypeAuto(next, { priceChanged: 'original' }));
+                Object.assign(next, applyOfferTypeAuto(next, {}));
+            } else if (field === 'currentPrice') {
+                Object.assign(next, applyOfferTypeAuto(next, {}));
+            }
+            return next;
+        });
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,9 +257,11 @@ export default function QuickPromotionPage() {
                 images: newFiles
             }));
 
-            // Crear previews
             const newPreviews = fileArray.map(file => URL.createObjectURL(file));
             setImagePreviews(prev => [...prev, ...newPreviews].slice(0, 5));
+            e.target.value = '';
+            // Prioridad foto: analizar con Gemini en cuanto haya imágenes y rellenar el formulario
+            handleAnalyzeWithGemini(newFiles);
         }
     };
 
@@ -169,12 +283,46 @@ export default function QuickPromotionPage() {
         return 0;
     };
 
+    /** Valor promocional en USD = tokens (X tokens = X USD). Para vista previa en el formulario. */
+    const calculatePromotionalValueUsd = (): number | null => {
+        const { offerType, originalPrice, currentPrice, cashbackValue } = formData;
+        const price = Number(originalPrice) || 0;
+        if (price < 0) return null;
+        switch (offerType) {
+            case 'percentage': {
+                const pct = price > 0 && currentPrice >= 0
+                    ? ((price - Number(currentPrice) || 0) / price) * 100
+                    : 0;
+                if (pct < 0 || pct > 100) return null;
+                return Math.round((price * pct / 100) * 100) / 100;
+            }
+            case 'bogo':
+                return price <= 0 ? null : Math.round((price / 2) * 100) / 100;
+            case 'cashback_fixed': {
+                const v = Number(cashbackValue);
+                return Number.isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null;
+            }
+            case 'cashback_percentage': {
+                const pct = Number(cashbackValue) || 0;
+                if (pct < 0 || pct > 100) return null;
+                return Math.round((price * pct / 100) * 100) / 100;
+            }
+            default:
+                return null;
+        }
+    };
+
+    const promotionalValueUsd = calculatePromotionalValueUsd();
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Solo el título es obligatorio (el API acepta el resto opcional)
+        if (!formData.images.length) {
+            setSubmitError('Sube al menos una foto de la promoción.');
+            return;
+        }
         if (!formData.title.trim()) {
-            setSubmitError('El título es requerido');
+            setSubmitError('El título es requerido. Sube una foto para extraerlo con Gemini o escríbelo tú.');
             return;
         }
         if (formData.originalPrice < 0 || formData.currentPrice < 0) {
@@ -194,7 +342,7 @@ export default function QuickPromotionPage() {
             
             // Información básica
             formDataToSend.append('title', formData.title);
-            formDataToSend.append('description', formData.description || 'Promoción especial');
+            formDataToSend.append('description', [formData.title.trim(), (formData.description || '').trim()].filter(Boolean).join(' ') || 'Promoción especial');
             formDataToSend.append('productName', formData.title);
             formDataToSend.append('brand', formData.brand);
             formDataToSend.append('category', formData.category);
@@ -208,12 +356,16 @@ export default function QuickPromotionPage() {
             // Ubicación y fechas
             formDataToSend.append('storeCity', formData.storeCity);
             formDataToSend.append('storeState', formData.storeCity);
-            formDataToSend.append('validFrom', new Date().toISOString().split('T')[0]);
+            formDataToSend.append('validFrom', formData.validFrom);
             formDataToSend.append('validUntil', formData.validUntil);
-            
-            // Inventario por defecto
-            formDataToSend.append('stock', '100');
-            formDataToSend.append('totalQuantity', '100');
+            formDataToSend.append('totalQuantity', String(formData.totalQuantity > 0 ? formData.totalQuantity : 100));
+            formDataToSend.append('offerType', formData.offerType);
+            if (formData.offerType === 'cashback_fixed' || formData.offerType === 'cashback_percentage') {
+                formDataToSend.append('cashbackValue', String(formData.cashbackValue));
+            }
+            if (formData.termsAndConditions?.trim()) {
+                formDataToSend.append('termsAndConditions', formData.termsAndConditions.trim());
+            }
             
             // Imágenes
             formData.images.forEach((file) => {
@@ -229,9 +381,13 @@ export default function QuickPromotionPage() {
 
             if (response.ok && data.success) {
                 const id = data.data?.id ?? null;
-                if (id) setCreatedPromotionId(id);
                 setSubmitSuccess(true);
-                setShowReward(true);
+                if (id) {
+                    navigate(`/promotion-details/${id}`);
+                } else {
+                    setCreatedPromotionId(id);
+                    setShowReward(true);
+                }
             } else {
                 throw new Error(data.message || 'Error al crear la promoción');
             }
@@ -303,7 +459,7 @@ export default function QuickPromotionPage() {
                             const id = createdPromotionId;
                             setShowReward(false);
                             setSubmitSuccess(false);
-                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                             setImagePreviews([]);
                             setCreatedPromotionId(null);
                             if (id) navigate(`/promotion-details/${id}`);
@@ -345,10 +501,15 @@ export default function QuickPromotionPage() {
                                                         category: 'electronics',
                                                         originalPrice: 0,
                                                         currentPrice: 0,
-                                                        currency: 'MXN',
+                                                        currency: 'USD',
                                                         storeCity: 'Ciudad de México',
-                                                        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                                                        images: []
+                                                        validFrom: defaultValidFrom,
+                                                        validUntil: defaultValidUntil,
+                                                        totalQuantity: 100,
+                                                        offerType: 'percentage',
+                                                        cashbackValue: 0,
+                                                        images: [],
+                                                        termsAndConditions: ''
                                                     });
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
@@ -365,7 +526,7 @@ export default function QuickPromotionPage() {
                                                 onClick={() => {
                                                     setShowReward(false);
                                                     setSubmitSuccess(false);
-                                                    setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                                                    setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
                                                 }}
@@ -379,7 +540,7 @@ export default function QuickPromotionPage() {
                                             const id = createdPromotionId;
                                             setShowReward(false);
                                             setSubmitSuccess(false);
-                                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'MXN', storeCity: 'Ciudad de México', validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], images: [] });
+                                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                                             setImagePreviews([]);
                                             setCreatedPromotionId(null);
                                             if (id) navigate(`/promotion-details/${id}`);
@@ -395,9 +556,13 @@ export default function QuickPromotionPage() {
                     </div>
                 )}
 
+                {/* Guía BizneAI / definición legal y tokenización */}
+                <div className="mb-6">
+                    <PromotionLegalInfo />
+                </div>
+
                 {/* Formulario */}
                 <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    {/* Mensajes de Error */}
                     {submitError && (
                         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
                             <div className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5">⚠️</div>
@@ -405,6 +570,7 @@ export default function QuickPromotionPage() {
                                 <p className="text-sm text-red-800">{submitError}</p>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setSubmitError(null)}
                                 className="text-red-600 hover:text-red-800"
                             >
@@ -413,7 +579,84 @@ export default function QuickPromotionPage() {
                         </div>
                     )}
 
-                    {/* Información Básica */}
+                    {/* 1. Prioridad: foto de la promoción → Gemini extrae datos */}
+                    <div className="mb-8 pb-8 border-b border-gray-200">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">1</span>
+                            Sube la foto de la promoción
+                        </h2>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Con Gemini extraemos título, precios, marca y términos si aparecen. Luego solo completa lo que falte.
+                        </p>
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleImageUpload}
+                                className="hidden"
+                                id="image-upload"
+                            />
+                            <label htmlFor="image-upload" className="cursor-pointer">
+                                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-600">Haz clic o arrastra aquí la foto (máx. 5)</p>
+                                <p className="text-xs text-gray-500 mt-1">Se analizará automáticamente con Gemini</p>
+                            </label>
+                        </div>
+                        {imagePreviews.length > 0 && (
+                            <>
+                                <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
+                                    {imagePreviews.map((preview, index) => (
+                                        <div key={index} className="relative group">
+                                            <img
+                                                src={preview}
+                                                alt={`Preview ${index + 1}`}
+                                                className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeImage(index)}
+                                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-4 flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAnalyzeWithGemini()}
+                                        disabled={isAnalyzing}
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {isAnalyzing ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                                Analizando con Gemini...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="h-5 w-5" />
+                                                Volver a analizar
+                                            </>
+                                        )}
+                                    </button>
+                                    <span className="text-xs text-gray-500">Reanaliza si cambiaste la imagen.</span>
+                                </div>
+                                {analyzeError && <p className="mt-2 text-sm text-red-600">{analyzeError}</p>}
+                            </>
+                        )}
+                    </div>
+
+                    {/* 2. Completa solo lo que no se haya detectado */}
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">2</span>
+                        Completa lo que falte
+                    </h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                        Revisa y rellena solo los datos que Gemini no pudo obtener (por ejemplo fechas, ciudad, cantidad de cupones).
+                    </p>
                     <div className="space-y-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -431,15 +674,18 @@ export default function QuickPromotionPage() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Descripción
+                                Descripción adicional
                             </label>
                             <textarea
                                 value={formData.description}
                                 onChange={(e) => handleInputChange('description', e.target.value)}
                                 rows={3}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                placeholder="Describe tu promoción..."
+                                placeholder="Texto extra que se sumará al título (ej: condiciones, beneficios...)"
                             />
+                            <p className="mt-1 text-xs text-gray-500">
+                                La descripción final será: <strong>«{formData.title.trim() || 'Título'}</strong>{formData.description?.trim() ? ` ${formData.description.trim()}` : ''}».
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -532,9 +778,121 @@ export default function QuickPromotionPage() {
                                     </div>
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Moneda
+                                </label>
+                                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                    <span className="font-medium text-gray-700">USD</span>
+                                    <p className="mt-1 text-xs text-gray-500">Los cálculos y tokens son solo en dólares (USD).</p>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Ubicación y Fecha */}
+                        {/* Tipo de promoción (cálculo de tokens) */}
+                        <div className="border-t border-gray-200 pt-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Tag className="h-5 w-5 text-indigo-600" />
+                                <h3 className="text-lg font-semibold text-gray-900">Tipo de promoción y valor en tokens</h3>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-4">
+                                El tipo define cómo se calcula el valor promocional en USD. <strong>X tokens = X USD</strong> (pasivo financiero medible).
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Tipo de promoción
+                                    </label>
+                                    <select
+                                        value={formData.offerType}
+                                        onChange={(e) => handleInputChange('offerType', e.target.value as OfferType)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    >
+                                        {OFFER_TYPES.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label} – {opt.description}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {(formData.offerType === 'cashback_fixed' || formData.offerType === 'cashback_percentage') && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {formData.offerType === 'cashback_fixed' ? 'Monto cashback (USD)' : 'Porcentaje cashback (0-100)'}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={formData.offerType === 'cashback_percentage' ? 100 : undefined}
+                                            step={formData.offerType === 'cashback_fixed' ? 0.01 : 1}
+                                            value={formData.cashbackValue ?? ''}
+                                            onChange={(e) => handleInputChange('cashbackValue', parseFloat(e.target.value) || 0)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            placeholder={formData.offerType === 'cashback_fixed' ? '10' : '10'}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                            {promotionalValueUsd != null && (
+                                <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                    <p className="text-sm font-medium text-indigo-900">
+                                        Valor en tokens (USD): <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd} USD</span>
+                                        <span className="text-indigo-700 font-normal"> = {promotionalValueUsd} tokens</span>
+                                    </p>
+                                    <p className="text-xs text-indigo-600 mt-1">Unidad calculable del contrato (pasivo financiero medible).</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Vigencia y límite de redenciones */}
+                        <div className="border-t border-gray-200 pt-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Calendar className="h-5 w-5 text-gray-600" />
+                                <h3 className="text-lg font-semibold text-gray-900">Vigencia y disponibilidad</h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Fecha de inicio *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formData.validFrom}
+                                        onChange={(e) => handleInputChange('validFrom', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Fecha de fin *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={formData.validUntil}
+                                        onChange={(e) => handleInputChange('validUntil', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Máximo de cupones redimibles
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={formData.totalQuantity || ''}
+                                        onChange={(e) => handleInputChange('totalQuantity', parseInt(e.target.value, 10) || 0)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="100"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Límite legal y financiero de redenciones.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Ubicación */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-200 pt-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -550,64 +908,20 @@ export default function QuickPromotionPage() {
                                     required
                                 />
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Calendar className="h-4 w-4 inline mr-1" />
-                                    Válido Hasta *
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.validUntil}
-                                    onChange={(e) => handleInputChange('validUntil', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    required
-                                />
-                            </div>
                         </div>
 
-                        {/* Imágenes */}
+                        {/* Términos y condiciones (opcional; se puede rellenar con Gemini) */}
                         <div className="border-t border-gray-200 pt-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                <Upload className="h-4 w-4 inline mr-1" />
-                                Imágenes * (mínimo 1, máximo 5)
+                                Términos y condiciones
                             </label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleImageUpload}
-                                    className="hidden"
-                                    id="image-upload"
-                                />
-                                <label htmlFor="image-upload" className="cursor-pointer">
-                                    <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-                                    <p className="text-sm text-gray-600">Haz clic para seleccionar imágenes</p>
-                                    <p className="text-xs text-gray-500 mt-1">Máximo 5 imágenes</p>
-                                </label>
-                            </div>
-                            
-                            {imagePreviews.length > 0 && (
-                                <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    {imagePreviews.map((preview, index) => (
-                                        <div key={index} className="relative group">
-                                            <img
-                                                src={preview}
-                                                alt={`Preview ${index + 1}`}
-                                                className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeImage(index)}
-                                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <textarea
+                                value={formData.termsAndConditions}
+                                onChange={(e) => handleInputChange('termsAndConditions', e.target.value)}
+                                rows={4}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                placeholder="Opcional. Si en la foto aparecen términos y condiciones, Gemini los habrá rellenado aquí."
+                            />
                         </div>
 
                         {/* Botones */}

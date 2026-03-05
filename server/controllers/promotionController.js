@@ -1,8 +1,10 @@
 const Promotion = require('../models/Promotion');
 const cloudinaryConfig = require('../config/cloudinary');
 const ocrService = require('../services/ocrService');
+const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
 const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
+const { getPromotionalValueUsd } = require('../utils/promotionValueUsd');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -103,9 +105,13 @@ class PromotionController {
                 isPhysicalStore,
                 validFrom,
                 validUntil,
+                totalQuantity,
+                offerType,
+                cashbackValue,
                 tags,
                 features,
                 specifications,
+                termsAndConditions,
                 isHotOffer,
                 hotness
             } = req.body;
@@ -328,7 +334,7 @@ class PromotionController {
                 category: category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(category) ? category : 'other',
                 originalPrice: Number.isFinite(numOriginal) ? numOriginal : 0,
                 currentPrice: Number.isFinite(numCurrent) ? numCurrent : 0,
-                currency: currency || 'MXN',
+                currency: currency || 'USD',
                 discountPercentage: discountPercentage || 0,
                 storeName: storeName ? String(storeName).trim() : '',
                 storeLocation: {
@@ -343,10 +349,20 @@ class PromotionController {
                 tags: parsedTags,
                 features: parsedFeatures,
                 specifications: parsedSpecifications,
+                termsAndConditions: (termsAndConditions && String(termsAndConditions).trim()) ? String(termsAndConditions).trim() : '',
                 isHotOffer: isHotOffer === 'true' || isHotOffer === true,
                 hotness: hotness || 'warm',
                 validFrom: dateValidation.validFrom,
                 validUntil: dateValidation.validUntil,
+                totalQuantity: totalQuantity !== undefined && totalQuantity !== '' ? parseInt(totalQuantity, 10) : undefined,
+                offerType: (() => {
+                    const t = offerType && String(offerType).toLowerCase();
+                    if (['percentage', 'bogo', 'cashback_fixed', 'cashback_percentage'].includes(t)) return t;
+                    if (t === 'fixed') return 'cashback_fixed';
+                    return 'percentage';
+                })(),
+                cashbackValue: cashbackValue !== undefined && cashbackValue !== '' ? parseFloat(cashbackValue) : null,
+                promotionalValueUsd: null,
                 status: 'active',
                 seller: {
                     name: 'Usuario del sistema',
@@ -368,6 +384,17 @@ class PromotionController {
                     message: 'El precio actual no puede ser mayor al precio original'
                 });
             }
+
+            // Unidad calculable del contrato: valor promocional en USD (X tokens = X USD; pasivo financiero medible)
+            const valueUsd = getPromotionalValueUsd({
+                offerType: promotionData.offerType,
+                originalPrice: promotionData.originalPrice,
+                currentPrice: promotionData.currentPrice,
+                discountPercentage: promotionData.discountPercentage,
+                cashbackValue: promotionData.cashbackValue,
+                purchaseAmount: promotionData.originalPrice
+            });
+            if (valueUsd != null) promotionData.promotionalValueUsd = valueUsd;
 
             // Verificar si MongoDB está conectado
             const isConnected = this.isMongoConnected();
@@ -641,7 +668,7 @@ class PromotionController {
                 originalPrice: promotion.originalPrice,
                 currentPrice: promotion.currentPrice,
                 discountPercentage: currentDiscount,
-                currency: promotion.currency || 'MXN',
+                currency: promotion.currency || 'USD',
                 event: 'promotion_created',
                 description: `Promoción creada para ${promotion.productName || promotion.title}`
             });
@@ -663,7 +690,7 @@ class PromotionController {
                         originalPrice: promotion.originalPrice,
                         currentPrice: previousPrice,
                         discountPercentage: previousDiscount,
-                        currency: promotion.currency || 'MXN',
+                        currency: promotion.currency || 'USD',
                         event: 'price_decrease',
                         description: `Precio reducido para mejorar la oferta`
                     });
@@ -690,6 +717,40 @@ class PromotionController {
                 success: false,
                 message: 'Error interno del servidor',
                 error: error.message
+            });
+        }
+    }
+
+    /**
+     * Analiza imágenes de promoción con Gemini y devuelve datos extraídos
+     * (título, precios, descuento, términos y condiciones si aparecen).
+     */
+    async analyzePromotionImage(req, res) {
+        try {
+            const files = req.files;
+            if (!files || files.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Sube al menos una imagen para analizar'
+                });
+            }
+            const result = await analyzePromotionImages(files);
+            if (!result.success) {
+                return res.status(400).json({
+                    success: false,
+                    message: result.message || 'Error al analizar las imágenes'
+                });
+            }
+            return res.json({
+                success: true,
+                data: result.data,
+                message: 'Análisis completado'
+            });
+        } catch (error) {
+            console.error('❌ Error en analyzePromotionImage:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Error al analizar las imágenes'
             });
         }
     }
@@ -744,8 +805,8 @@ class PromotionController {
                 'title', 'description', 'productName', 'brand', 'category',
                 'originalPrice', 'currentPrice', 'currency', 'discountPercentage',
                 'storeName', 'storeLocation', 'isPhysicalStore', 'tags',
-                'features', 'specifications', 'isHotOffer', 'hotness',
-                'validFrom', 'validUntil', 'status'
+                'features', 'specifications', 'termsAndConditions', 'isHotOffer', 'hotness',
+                'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status'
             ];
 
             const filteredData = {};
@@ -775,6 +836,19 @@ class PromotionController {
                     ((filteredData.originalPrice - filteredData.currentPrice) / filteredData.originalPrice) * 100
                 );
             }
+
+            // Recalcular valor promocional en USD (unidad calculable del contrato) si aplica
+            const existing = await Promotion.findById(id).lean();
+            const promoForValue = { ...existing, ...filteredData };
+            const valueUsd = getPromotionalValueUsd({
+                offerType: promoForValue.offerType || 'percentage',
+                originalPrice: promoForValue.originalPrice,
+                currentPrice: promoForValue.currentPrice,
+                discountPercentage: promoForValue.discountPercentage,
+                cashbackValue: promoForValue.cashbackValue,
+                purchaseAmount: promoForValue.originalPrice
+            });
+            if (valueUsd != null) filteredData.promotionalValueUsd = valueUsd;
 
             const updatedPromotion = await Promotion.findByIdAndUpdate(
                 id,

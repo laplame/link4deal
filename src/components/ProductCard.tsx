@@ -362,6 +362,7 @@ export default function ProductCard({
                     productPrice={product.price}
                     productCurrency={product.currency}
                     productImage={product.image}
+                    discountPercentage={product.originalPrice ? discountPercentage : undefined}
                     autoGenerateOnOpen={true}
                     onClose={() => setShowCouponForm(false)}
                 />

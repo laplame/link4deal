@@ -83,6 +83,12 @@ router.get('/:id', (req, res) => promotionController.getPromotionById(req, res))
 
 // ===== RUTAS PROTEGIDAS =====
 
+// POST /api/promotions/analyze-image - Analizar imágenes con Gemini (extraer datos + términos)
+router.post('/analyze-image',
+    memoryUpload.array('images', 5),
+    (req, res) => promotionController.analyzePromotionImage(req, res)
+);
+
 // POST /api/promotions - Crear nueva promoción
 router.post('/', 
     createPromotionLimiter,

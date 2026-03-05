@@ -491,7 +491,7 @@ export default function LandingPage() {
                             name: promo.title || promo.productName || 'Sin título',
                             price: currentPrice,
                             originalPrice: originalPrice > 0 ? originalPrice : undefined,
-                            currency: promo.currency || 'MXN',
+                            currency: promo.currency || 'USD',
                             image: getPromotionImageUrl(promo.images),
                             offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
                             category: categoryMap[promo.category] || promo.category || 'otros',
