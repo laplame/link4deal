@@ -30,8 +30,8 @@ export default function SignInPage() {
         setError(null);
         setIsLoading(true);
         try {
-            await login({ login: formData.login, password: formData.password });
-            navigate('/dashboard', { replace: true });
+            const data = await login({ login: formData.login, password: formData.password });
+            navigate(data?.user?.isSuperAdmin ? '/admin' : '/dashboard', { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
         } finally {

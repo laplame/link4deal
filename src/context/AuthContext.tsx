@@ -12,7 +12,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<AuthResponse>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -81,10 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadUserFromStorage]);
 
   const login = useCallback(
-    async (credentials: LoginCredentials) => {
+    async (credentials: LoginCredentials): Promise<AuthResponse> => {
       setError(null);
       const data = await authApi.login(credentials);
       persistAuth(data.token, data.refreshToken, data.user);
+      return data;
     },
     [persistAuth]
   );

@@ -1,5 +1,6 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { 
     ArrowLeft, 
     Users, 
@@ -51,6 +52,23 @@ interface AdminSection {
 }
 
 export default function AdminPage() {
+    const { user, isAuthenticated, isLoading } = useAuth();
+    const isSuperAdmin = user?.isSuperAdmin === true;
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+            </div>
+        );
+    }
+    if (!isAuthenticated) {
+        return <Navigate to="/signin" replace />;
+    }
+    if (!isSuperAdmin) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
     const adminSections: AdminSection[] = [
         {
             title: "Super Admin",
@@ -129,6 +147,12 @@ export default function AdminPage() {
                     path: "/kyc-form",
                     description: "Verificación de identidad y wallet blockchain",
                     icon: <Shield className="w-5 h-5" />
+                },
+                {
+                    name: "KYC Éxito",
+                    path: "/kyc-success",
+                    description: "Página de confirmación tras completar KYC",
+                    icon: <CheckCircle className="w-5 h-5" />
                 }
             ]
         },
@@ -151,6 +175,24 @@ export default function AdminPage() {
                     icon: <Plus className="w-5 h-5" />
                 },
                 {
+                    name: "Promoción Rápida (con IA)",
+                    path: "/quick-promotion",
+                    description: "Crear promoción con foto y análisis Gemini",
+                    icon: <Zap className="w-5 h-5" />
+                },
+                {
+                    name: "Marketplace de Ofertas",
+                    path: "/marketplace",
+                    description: "Vista pública del marketplace de promociones",
+                    icon: <ShoppingBag className="w-5 h-5" />
+                },
+                {
+                    name: "Marketplace de Influencers",
+                    path: "/influencers",
+                    description: "Vista pública del listado de influencers",
+                    icon: <Camera className="w-5 h-5" />
+                },
+                {
                     name: "Sistema de Referencias",
                     path: "/referral-system",
                     description: "Gestión del sistema de referencias para influencers",
@@ -169,6 +211,12 @@ export default function AdminPage() {
                     path: "/create-coupon",
                     description: "Crear nuevos cupones y descuentos",
                     icon: <Plus className="w-5 h-5" />
+                },
+                {
+                    name: "Página de Cupón",
+                    path: "/coupon/ejemplo",
+                    description: "Vista de canje de cupón (reemplazar ID en URL)",
+                    icon: <Ticket className="w-5 h-5" />
                 }
             ]
         },
@@ -178,7 +226,12 @@ export default function AdminPage() {
             icon: <MapPin className="w-6 h-6" />,
             color: "from-red-500 to-red-600",
             links: [
-
+                {
+                    name: "Marketplace (ofertas)",
+                    path: "/marketplace",
+                    description: "Ofertas con filtros y ubicación",
+                    icon: <MapPin className="w-5 h-5" />
+                }
             ]
         },
         {
@@ -262,16 +315,28 @@ export default function AdminPage() {
             color: "from-orange-500 to-orange-600",
             links: [
                 {
-                    name: "Acerca de Nosotros",
-                    path: "/about",
-                    description: "Información sobre la empresa y cómo funciona",
-                    icon: <Building2 className="w-5 h-5" />
+                    name: "Landing Principal",
+                    path: "/",
+                    description: "Página de inicio con ofertas destacadas",
+                    icon: <Home className="w-5 h-5" />
                 },
                 {
-                    name: "Página Principal",
-                    path: "/",
-                    description: "Landing page principal con ofertas destacadas",
-                    icon: <Home className="w-5 h-5" />
+                    name: "Landing Negocios",
+                    path: "/landing",
+                    description: "Página de venta paquete inauguración",
+                    icon: <Store className="w-5 h-5" />
+                },
+                {
+                    name: "Comisionista Digital",
+                    path: "/comisionista-digital",
+                    description: "Landing para comisionistas",
+                    icon: <Target className="w-5 h-5" />
+                },
+                {
+                    name: "Acerca de Nosotros",
+                    path: "/about",
+                    description: "Información sobre la empresa",
+                    icon: <Building2 className="w-5 h-5" />
                 }
             ]
         },
@@ -282,12 +347,23 @@ export default function AdminPage() {
             color: "from-emerald-500 to-emerald-600",
             links: [
                 {
-                    name: "Vista del Carrito",
+                    name: "Carrito",
                     path: "/cart",
                     description: "Página del carrito de compras",
                     icon: <ShoppingCart className="w-5 h-5" />
                 },
-
+                {
+                    name: "Checkout",
+                    path: "/checkout",
+                    description: "Formulario de pago (Stripe)",
+                    icon: <CreditCard className="w-5 h-5" />
+                },
+                {
+                    name: "Checkout Éxito",
+                    path: "/checkout/success",
+                    description: "Confirmación tras el pago",
+                    icon: <CheckCircle className="w-5 h-5" />
+                }
             ]
         },
         {
@@ -314,7 +390,12 @@ export default function AdminPage() {
                     description: "Control de agencias y sus servicios",
                     icon: <Globe className="w-5 h-5" />
                 },
-
+                {
+                    name: "Perfil OCR (Influencer)",
+                    path: "/admin/ocr-profile",
+                    description: "Extracción de perfil desde screenshot con IA",
+                    icon: <Camera className="w-5 h-5" />
+                }
             ]
         },
         {
@@ -323,7 +404,18 @@ export default function AdminPage() {
             icon: <BarChart3 className="w-6 h-6" />,
             color: "from-red-500 to-red-600",
             links: [
-
+                {
+                    name: "Dashboard Usuario",
+                    path: "/dashboard",
+                    description: "Panel principal del usuario logueado",
+                    icon: <BarChart3 className="w-5 h-5" />
+                },
+                {
+                    name: "Panel por Rol (Brand/Influencer)",
+                    path: "/dashboard/panel",
+                    description: "Vista según rol: marca o influencer",
+                    icon: <Users className="w-5 h-5" />
+                }
             ]
         },
         {
@@ -332,7 +424,12 @@ export default function AdminPage() {
             icon: <Settings className="w-6 h-6" />,
             color: "from-gray-500 to-gray-600",
             links: [
-
+                {
+                    name: "Perfil OCR (screenshot → IA)",
+                    path: "/admin/ocr-profile",
+                    description: "Extraer datos de perfil desde imagen",
+                    icon: <Camera className="w-5 h-5" />
+                }
             ]
         },
         {
@@ -396,6 +493,70 @@ export default function AdminPage() {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 py-8">
+                {/* Acceso rápido: trabajar en Marcas e Influencers */}
+                <div className="mb-10">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Trabajar en</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Link
+                            to="/admin/brands"
+                            className="group flex flex-col rounded-xl border-2 border-gray-200 bg-white p-6 shadow-sm hover:border-blue-400 hover:shadow-md transition-all"
+                        >
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
+                                    <Building2 className="w-7 h-7" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-700">Marcas</h3>
+                                    <p className="text-sm text-gray-600">Panel de administración de marcas</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-600 flex-1">Ver marcas, campañas y métricas. Gestionar empresas y ofertas.</p>
+                            <span className="mt-4 inline-flex items-center text-blue-600 font-medium group-hover:text-blue-700">
+                                Abrir vista de Marcas
+                                <ExternalLink className="w-4 h-4 ml-1" />
+                            </span>
+                        </Link>
+                        <Link
+                            to="/admin/influencers"
+                            className="group flex flex-col rounded-xl border-2 border-gray-200 bg-white p-6 shadow-sm hover:border-purple-400 hover:shadow-md transition-all"
+                        >
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
+                                    <Camera className="w-7 h-7" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-purple-700">Influencers</h3>
+                                    <p className="text-sm text-gray-600">Panel de administración de influencers</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-600 flex-1">Ver influencers, campañas y rendimiento. Gestionar creadores de contenido.</p>
+                            <span className="mt-4 inline-flex items-center text-purple-600 font-medium group-hover:text-purple-700">
+                                Abrir vista de Influencers
+                                <ExternalLink className="w-4 h-4 ml-1" />
+                            </span>
+                        </Link>
+                        <Link
+                            to="/admin/agencies"
+                            className="group flex flex-col rounded-xl border-2 border-gray-200 bg-white p-6 shadow-sm hover:border-teal-400 hover:shadow-md transition-all"
+                        >
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white shadow-lg">
+                                    <Globe className="w-7 h-7" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-teal-700">Agencias</h3>
+                                    <p className="text-sm text-gray-600">Panel de administración de agencias</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-600 flex-1">Ver agencias y sus servicios. Gestionar partners.</p>
+                            <span className="mt-4 inline-flex items-center text-teal-600 font-medium group-hover:text-teal-700">
+                                Abrir vista de Agencias
+                                <ExternalLink className="w-4 h-4 ml-1" />
+                            </span>
+                        </Link>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {adminSections.map((section, sectionIndex) => (
                         <div key={sectionIndex} className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -493,7 +654,14 @@ export default function AdminPage() {
                                 <p>• Portfolio y métricas de audiencia</p>
                                 <p>• Sistema de referencias</p>
                             </div>
-                            <div className="mt-4">
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <Link 
+                                    to="/admin/influencers"
+                                    className="inline-flex items-center text-purple-600 hover:text-purple-700 font-medium"
+                                >
+                                    Ir al panel de trabajo
+                                    <ExternalLink className="w-4 h-4 ml-1" />
+                                </Link>
                                 <Link 
                                     to="/influencer-setup"
                                     className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
@@ -521,10 +689,17 @@ export default function AdminPage() {
                                 <p>• Audiencia objetivo</p>
                                 <p>• Presupuesto de marketing</p>
                             </div>
-                            <div className="mt-4">
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <Link 
+                                    to="/admin/brands"
+                                    className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+                                >
+                                    Ir al panel de trabajo
+                                    <ExternalLink className="w-4 h-4 ml-1" />
+                                </Link>
                                 <Link 
                                     to="/brand-setup"
-                                    className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+                                    className="inline-flex items-center text-gray-600 hover:text-gray-700 font-medium"
                                 >
                                     Configurar Perfil
                                     <ArrowLeft className="w-4 h-4 ml-1 rotate-180" />
@@ -549,10 +724,17 @@ export default function AdminPage() {
                                 <p>• Portfolio de clientes</p>
                                 <p>• Gestión de marcas e influencers</p>
                             </div>
-                            <div className="mt-4">
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <Link 
+                                    to="/admin/agencies"
+                                    className="inline-flex items-center text-teal-600 hover:text-teal-700 font-medium"
+                                >
+                                    Ir al panel de trabajo
+                                    <ExternalLink className="w-4 h-4 ml-1" />
+                                </Link>
                                 <Link 
                                     to="/agency-setup"
-                                    className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+                                    className="inline-flex items-center text-gray-600 hover:text-gray-700 font-medium"
                                 >
                                     Configurar Perfil
                                     <ArrowLeft className="w-4 h-4 ml-1 rotate-180" />
