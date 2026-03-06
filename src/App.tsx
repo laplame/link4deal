@@ -37,6 +37,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerDashboard from './pages/dashboards/InfluencerDashboard';
 import BrandDashboard from './pages/dashboards/BrandDashboard';
+import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
@@ -136,6 +137,7 @@ function App() {
               <Route path="/login" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/panel" element={<ProfileDashboardByRole />} />
               <Route path="/cart" element={<CartPage />} />
               {/* Ruta catch-all para rutas no encontradas */}
               <Route path="*" element={<NotFoundPage />} />

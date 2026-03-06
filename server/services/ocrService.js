@@ -1,5 +1,6 @@
 const axios = require('axios');
-require('dotenv').config();
+const { envPath } = require('../config/envPath');
+require('dotenv').config({ path: envPath });
 
 class OCRService {
     constructor() {

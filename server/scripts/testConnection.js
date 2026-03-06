@@ -1,4 +1,5 @@
-require('dotenv').config();
+const { envPath } = require('../config/envPath');
+require('dotenv').config({ path: envPath });
 const mongoose = require('mongoose');
 
 async function testConnection() {

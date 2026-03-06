@@ -10,7 +10,8 @@ import {
     Tiktok,
     Youtube,
     Twitter,
-    CheckCircle
+    CheckCircle,
+    Sparkles
 } from 'lucide-react';
 
 interface SocialMediaAccount {
@@ -30,6 +31,10 @@ const InfluencerSetup: React.FC = () => {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [influencerScreenshotPreview, setInfluencerScreenshotPreview] = useState<string | null>(null);
+    const [influencerScreenshotFile, setInfluencerScreenshotFile] = useState<File | null>(null);
+    const [isAnalyzingInfluencer, setIsAnalyzingInfluencer] = useState(false);
+    const [analyzeInfluencerError, setAnalyzeInfluencerError] = useState<string | null>(null);
     
     // Form data
     const [formData, setFormData] = useState({
@@ -138,6 +143,61 @@ const InfluencerSetup: React.FC = () => {
             ...prev,
             portfolio: prev.portfolio.filter((_, i) => i !== index)
         }));
+    };
+
+    const handleInfluencerScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (influencerScreenshotPreview) URL.revokeObjectURL(influencerScreenshotPreview);
+        setInfluencerScreenshotFile(file);
+        setInfluencerScreenshotPreview(URL.createObjectURL(file));
+        setAnalyzeInfluencerError(null);
+        e.target.value = '';
+    };
+
+    const handleAnalyzeInfluencerWithIA = async () => {
+        if (!influencerScreenshotFile) {
+            setAnalyzeInfluencerError('Sube una imagen primero.');
+            return;
+        }
+        setIsAnalyzingInfluencer(true);
+        setAnalyzeInfluencerError(null);
+        try {
+            const fd = new FormData();
+            fd.append('image', influencerScreenshotFile);
+            fd.append('type', 'influencer');
+            const res = await fetch('/api/analyze-profile-image', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Error al analizar');
+            const d = json.data || {};
+            const social = Array.isArray(d.socialMedia)
+                ? d.socialMedia.map((s: { platform?: string; username?: string; followers?: number }) => ({
+                    platform: s.platform || '',
+                    username: s.username || '',
+                    followers: typeof s.followers === 'number' ? s.followers : 0,
+                    verified: false
+                }))
+                : formData.socialMedia;
+            setFormData(prev => ({
+                ...prev,
+                displayName: d.displayName ?? prev.displayName,
+                bio: d.bio ?? prev.bio,
+                location: d.location ?? prev.location,
+                collaborationPreferences: Array.isArray(d.categories) ? d.categories : prev.collaborationPreferences,
+                socialMedia: social.length ? social : prev.socialMedia
+            }));
+        } catch (err: any) {
+            setAnalyzeInfluencerError(err.message || 'Error al analizar la imagen.');
+        } finally {
+            setIsAnalyzingInfluencer(false);
+        }
+    };
+
+    const removeInfluencerScreenshot = () => {
+        if (influencerScreenshotPreview) URL.revokeObjectURL(influencerScreenshotPreview);
+        setInfluencerScreenshotPreview(null);
+        setInfluencerScreenshotFile(null);
+        setAnalyzeInfluencerError(null);
     };
 
     const handleNext = () => {
@@ -517,6 +577,56 @@ const InfluencerSetup: React.FC = () => {
                     <p className="text-gray-600">
                         Completa la información para crear tu perfil profesional
                     </p>
+                </div>
+
+                {/* Sube screenshot de perfil → IA rellena datos */}
+                <div className="bg-white rounded-2xl shadow-lg p-8 mb-6 border-2 border-dashed border-purple-200">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-amber-500" />
+                        Sube screenshot de tu perfil
+                    </h2>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Con IA extraemos nombre, bio, redes y categorías. Luego completa lo que falte en los pasos.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4">
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleInfluencerScreenshotUpload}
+                            className="hidden"
+                            id="influencer-screenshot-upload"
+                        />
+                        <label
+                            htmlFor="influencer-screenshot-upload"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-200 rounded-lg cursor-pointer hover:bg-purple-100 text-purple-700 font-medium"
+                        >
+                            <Upload className="h-5 w-5" />
+                            Elegir imagen
+                        </label>
+                        {influencerScreenshotPreview && (
+                            <>
+                                <div className="flex items-center gap-3">
+                                    <img src={influencerScreenshotPreview} alt="Vista previa" className="h-20 w-20 object-cover rounded-lg border border-gray-200" />
+                                    <button type="button" onClick={removeInfluencerScreenshot} className="text-red-500 hover:text-red-700 p-1" aria-label="Quitar">
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleAnalyzeInfluencerWithIA}
+                                    disabled={isAnalyzingInfluencer}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 disabled:opacity-60"
+                                >
+                                    {isAnalyzingInfluencer ? (
+                                        <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Analizando...</>
+                                    ) : (
+                                        <><Sparkles className="h-5 w-5" /> Analizar con IA</>
+                                    )}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                    {analyzeInfluencerError && <p className="mt-2 text-sm text-red-600">{analyzeInfluencerError}</p>}
                 </div>
 
                 {/* Step Content */}

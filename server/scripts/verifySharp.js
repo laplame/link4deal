@@ -4,7 +4,8 @@
  */
 
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const { envPath } = require('../config/envPath');
+require('dotenv').config({ path: envPath });
 
 async function verifySharp() {
     console.log('🔍 Verificando Sharp para edición de imágenes...\n');

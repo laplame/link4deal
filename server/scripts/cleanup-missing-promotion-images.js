@@ -6,7 +6,8 @@
  */
 const path = require('path');
 const fs = require('fs').promises;
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const { envPath } = require('../config/envPath');
+require('dotenv').config({ path: envPath });
 const mongoose = require('mongoose');
 const database = require('../config/database');
 const Promotion = require('../models/Promotion');

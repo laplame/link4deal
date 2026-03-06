@@ -5,8 +5,9 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const path = require('path');
-// Cargar .env desde server/ para que funcione con PM2 (cwd = raíz del proyecto)
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Cargar .env desde el directorio raíz del proyecto
+const { envPath } = require('./config/envPath');
+require('dotenv').config({ path: envPath });
 
 // Import database connection
 const database = require('./config/database');
@@ -19,6 +20,7 @@ const agencyRoutes = require('./routes/agencies');
 const promotionRoutes = require('./routes/promotions');
 const influencerRoutes = require('./routes/influencers');
 const discountQrRoutes = require('./routes/discountQr');
+const analyzeProfileRoutes = require('./routes/analyzeProfile');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -228,6 +230,7 @@ app.use('/api/influencers', influencerRoutes);
 
 // Discount QR routes (issuer + scanner verifier)
 app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
+app.use('/api/analyze-profile-image', analyzeProfileRoutes);
 
 app.use('/api/brands', (req, res) => {
     res.status(501).json({

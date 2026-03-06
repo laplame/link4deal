@@ -11,7 +11,8 @@ import {
     Users,
     DollarSign,
     CheckCircle,
-    FileText
+    FileText,
+    Sparkles
 } from 'lucide-react';
 
 interface BrandCategory {
@@ -35,6 +36,10 @@ const BrandSetup: React.FC = () => {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [brandScreenshotFile, setBrandScreenshotFile] = useState<File | null>(null);
+    const [brandScreenshotPreview, setBrandScreenshotPreview] = useState<string | null>(null);
+    const [isAnalyzingBrand, setIsAnalyzingBrand] = useState(false);
+    const [analyzeBrandError, setAnalyzeBrandError] = useState<string | null>(null);
     
     // Form data
     const [formData, setFormData] = useState({
@@ -176,6 +181,54 @@ const BrandSetup: React.FC = () => {
                 documents: [...prev.documents, ...files]
             }));
         }
+    };
+
+    const handleBrandScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (brandScreenshotPreview) URL.revokeObjectURL(brandScreenshotPreview);
+        setBrandScreenshotFile(file);
+        setBrandScreenshotPreview(URL.createObjectURL(file));
+        setAnalyzeBrandError(null);
+        e.target.value = '';
+    };
+
+    const handleAnalyzeBrandWithIA = async () => {
+        if (!brandScreenshotFile) {
+            setAnalyzeBrandError('Sube una imagen primero.');
+            return;
+        }
+        setIsAnalyzingBrand(true);
+        setAnalyzeBrandError(null);
+        try {
+            const fd = new FormData();
+            fd.append('image', brandScreenshotFile);
+            fd.append('type', 'brand');
+            const res = await fetch('/api/analyze-profile-image', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Error al analizar');
+            const d = json.data || {};
+            setFormData(prev => ({
+                ...prev,
+                companyName: d.companyName ?? prev.companyName,
+                industry: d.industry ?? prev.industry,
+                website: d.website ?? prev.website,
+                description: d.description ?? prev.description,
+                headquarters: d.headquarters ?? prev.headquarters,
+                categories: Array.isArray(d.categories) ? d.categories : prev.categories
+            }));
+        } catch (err: any) {
+            setAnalyzeBrandError(err.message || 'Error al analizar la imagen.');
+        } finally {
+            setIsAnalyzingBrand(false);
+        }
+    };
+
+    const removeBrandScreenshot = () => {
+        if (brandScreenshotPreview) URL.revokeObjectURL(brandScreenshotPreview);
+        setBrandScreenshotPreview(null);
+        setBrandScreenshotFile(null);
+        setAnalyzeBrandError(null);
     };
 
     const handleRemoveFile = (index: number) => {
@@ -746,6 +799,56 @@ const BrandSetup: React.FC = () => {
                     <p className="text-gray-600">
                         Completa la información para crear tu perfil de marca profesional
                     </p>
+                </div>
+
+                {/* Sube menú o screenshot del negocio → IA rellena datos */}
+                <div className="bg-white rounded-2xl shadow-lg p-8 mb-6 border-2 border-dashed border-blue-200">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-amber-500" />
+                        Sube menú o screenshot de tu negocio
+                    </h2>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Con IA extraemos nombre, industria, descripción y más. Luego completa lo que falte en los pasos.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4">
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBrandScreenshotUpload}
+                            className="hidden"
+                            id="brand-screenshot-upload"
+                        />
+                        <label
+                            htmlFor="brand-screenshot-upload"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 text-blue-700 font-medium"
+                        >
+                            <Upload className="h-5 w-5" />
+                            Elegir imagen
+                        </label>
+                        {brandScreenshotPreview && (
+                            <>
+                                <div className="flex items-center gap-3">
+                                    <img src={brandScreenshotPreview} alt="Vista previa" className="h-20 w-20 object-cover rounded-lg border border-gray-200" />
+                                    <button type="button" onClick={removeBrandScreenshot} className="text-red-500 hover:text-red-700 p-1" aria-label="Quitar">
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleAnalyzeBrandWithIA}
+                                    disabled={isAnalyzingBrand}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 disabled:opacity-60"
+                                >
+                                    {isAnalyzingBrand ? (
+                                        <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Analizando...</>
+                                    ) : (
+                                        <><Sparkles className="h-5 w-5" /> Analizar con IA</>
+                                    )}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                    {analyzeBrandError && <p className="mt-2 text-sm text-red-600">{analyzeBrandError}</p>}
                 </div>
 
                 {/* Step Content */}

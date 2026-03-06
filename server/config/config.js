@@ -1,4 +1,5 @@
-require('dotenv').config();
+const { envPath } = require('./envPath');
+require('dotenv').config({ path: envPath });
 
 module.exports = {
     // Server Configuration

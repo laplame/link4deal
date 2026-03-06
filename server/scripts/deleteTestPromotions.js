@@ -3,7 +3,8 @@
  * Elimina promociones que coinciden con los títulos de las promociones de ejemplo
  */
 
-require('dotenv').config();
+const { envPath } = require('../config/envPath');
+require('dotenv').config({ path: envPath });
 const mongoose = require('mongoose');
 const Promotion = require('../models/Promotion');
 
