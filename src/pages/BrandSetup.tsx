@@ -61,7 +61,7 @@ const BrandSetup: React.FC = () => {
         marketingBudget: {
             min: 0,
             max: 0,
-            currency: 'MXN'
+            currency: 'USD'
         },
         preferredChannels: [] as string[],
         campaignTypes: [] as string[],
@@ -595,12 +595,12 @@ const BrandSetup: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                     Presupuesto Mensual de Marketing
                 </label>
-                <p className="text-sm text-gray-600 mb-4">Define tu rango de presupuesto para campañas</p>
+                <p className="text-sm text-gray-600 mb-4">Define tu rango de presupuesto para campañas. Todos los cálculos de campaña son en dólares americanos (USD).</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Mínimo
+                            Mínimo (USD)
                         </label>
                         <div className="relative">
                             <input
@@ -619,7 +619,7 @@ const BrandSetup: React.FC = () => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Máximo
+                            Máximo (USD)
                         </label>
                         <div className="relative">
                             <input
@@ -640,27 +640,19 @@ const BrandSetup: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Moneda
                         </label>
-                        <select
-                            value={formData.marketingBudget.currency}
-                            onChange={(e) => handleInputChange('marketingBudget', {
-                                ...formData.marketingBudget,
-                                currency: e.target.value
-                            })}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                            <option value="MXN">MXN (Peso Mexicano)</option>
-                            <option value="USD">USD (Dólar Americano)</option>
-                            <option value="EUR">EUR (Euro)</option>
-                        </select>
+                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <span className="font-medium text-gray-700">USD (Dólar Americano)</span>
+                            <p className="mt-1 text-xs text-gray-500">Los cálculos de campaña son solo en USD.</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Documentos de Verificación
+                    Documentos de Verificación (opcional)
                 </label>
-                <p className="text-sm text-gray-600 mb-4">Sube los documentos necesarios para verificar tu empresa</p>
+                <p className="text-sm text-gray-600 mb-4">No es necesario subir documentos para continuar. Si más adelante deseas verificar tu empresa, podrás subirlos aquí.</p>
                 
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                     <FileText className="mx-auto h-12 w-12 text-gray-400" />
@@ -669,7 +661,7 @@ const BrandSetup: React.FC = () => {
                             <span className="text-blue-600 hover:text-blue-500 font-medium">
                                 Haz clic para subir documentos
                             </span>
-                            <span className="text-gray-500"> o arrastra y suelta</span>
+                            <span className="text-gray-500"> o arrastra y suelta (opcional)</span>
                         </label>
                         <input
                             id="documents-upload"
@@ -714,7 +706,7 @@ const BrandSetup: React.FC = () => {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-medium text-blue-900 mb-2">Documentos Requeridos</h3>
+                <h3 className="font-medium text-blue-900 mb-2">Si deseas verificación, puedes subir (opcional):</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                     <li>• Registro de empresa o acta constitutiva</li>
                     <li>• Identificación fiscal (RFC)</li>
@@ -755,7 +747,7 @@ const BrandSetup: React.FC = () => {
             case 2:
                 return formData.categories.length > 0 && formData.preferredChannels.length > 0;
             case 3:
-                return formData.documents.length > 0;
+                return true;
             default:
                 return false;
         }
