@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Building2, User, LogOut } from 'lucide-react';
+import { Users, Building2, User, LogOut, Home, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MobileMenu } from './MobileMenu';
 import { SITE_CONFIG } from '../../config/site';
@@ -18,14 +18,16 @@ export function NavigationHeader({ title }: Props) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Users className="h-6 w-6 text-purple-400" />
-            <h1 className="text-xl font-bold text-white">
-              {title || SITE_CONFIG.name}
-            </h1>
+            <Link to="/" className="flex items-center gap-2 text-white hover:text-white/90 transition-colors">
+              <Users className="h-6 w-6 text-purple-400" />
+              <h1 className="text-xl font-bold">
+                {title || SITE_CONFIG.name}
+              </h1>
+            </Link>
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Estado usuario logueado: acceso a cupones y promociones */}
+            {/* Estado usuario logueado */}
             {isAuthenticated && user ? (
               <div className="hidden lg:flex lg:items-center lg:gap-3">
                 <span className="text-gray-300 text-sm">Hola, {user.firstName}</span>
@@ -56,28 +58,47 @@ export function NavigationHeader({ title }: Props) {
               </div>
             )}
 
-            {/* Desktop Navigation */}
-            <div className="hidden lg:flex lg:items-center lg:space-x-4">
-              <Link 
+            {/* Desktop Navigation: Inicio, Marcas, Influencers, Ofertas */}
+            <div className="hidden lg:flex lg:items-center lg:gap-2">
+              <Link
+                to="/"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                <span>Inicio</span>
+              </Link>
+              <Link
                 to="/brands"
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                className="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
               >
                 <Building2 className="h-4 w-4" />
-                <span>View Brand Opportunities</span>
+                <span>Marcas</span>
               </Link>
-              
-              <Link 
-                to="/add-influencer"
-                className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              <Link
+                to="/influencers"
+                className="flex items-center gap-1.5 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
               >
-                Become an Influencer
+                <Users className="h-4 w-4" />
+                <span>Influencers</span>
               </Link>
-              
-              <Link 
-                to="/add-influencer-quick"
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              <Link
+                to="/marketplace"
+                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
               >
-                Add Influencer
+                <Tag className="h-4 w-4" />
+                <span>Ofertas</span>
+              </Link>
+              <Link
+                to="/brand-setup"
+                className="text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm"
+              >
+                Registrar marca
+              </Link>
+              <Link
+                to="/influencer-setup"
+                className="text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm"
+              >
+                Ser influencer
               </Link>
             </div>
             

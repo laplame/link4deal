@@ -24,7 +24,6 @@ import {
   TrendingUp as TrendingUpIcon,
   AlertCircle
 } from 'lucide-react';
-import { NavigationHeader } from '../components/navigation/NavigationHeader';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 
@@ -283,8 +282,6 @@ export default function PromotionsMarketplace() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavigationHeader />
-      
       {/* Header del Marketplace */}
       <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-700 text-white">
         <div className="container mx-auto px-4 py-12">

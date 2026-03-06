@@ -21,6 +21,7 @@ const promotionRoutes = require('./routes/promotions');
 const influencerRoutes = require('./routes/influencers');
 const discountQrRoutes = require('./routes/discountQr');
 const analyzeProfileRoutes = require('./routes/analyzeProfile');
+const brandRoutes = require('./routes/brands');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -232,13 +233,7 @@ app.use('/api/influencers', influencerRoutes);
 app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
 app.use('/api/analyze-profile-image', analyzeProfileRoutes);
 
-app.use('/api/brands', (req, res) => {
-    res.status(501).json({
-        success: false,
-        message: 'Brand routes coming soon',
-        endpoint: '/api/brands'
-    });
-});
+app.use('/api/brands', brandRoutes);
 
 // ===== MANEJO DE ERRORES =====
 

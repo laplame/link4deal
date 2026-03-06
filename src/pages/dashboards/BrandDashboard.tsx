@@ -337,17 +337,17 @@ export default function BrandDashboard() {
                             </Link>
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-900">
-                                    Panel de Marcas
+                                    Panel de Marcas o Negocios
                                 </h1>
                                 <p className="text-gray-600 mt-1">
-                                    Gestión completa de marcas, métricas de ventas y ROI
+                                    Gestión de marcas y negocios, métricas de ventas y ROI
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center space-x-3">
                             <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
                                 <Plus className="w-4 h-4" />
-                                Nueva Marca
+                                Nueva Marca o Negocio
                             </button>
                             <button className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors">
                                 <Settings className="w-5 h-5" />
@@ -363,7 +363,7 @@ export default function BrandDashboard() {
                     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total Marcas</p>
+                                <p className="text-sm font-medium text-gray-600">Total Marcas / Negocios</p>
                                 <p className="text-2xl font-bold text-gray-900">{totalBrands}</p>
                             </div>
                             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -469,7 +469,7 @@ export default function BrandDashboard() {
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
                                     type="text"
-                                    placeholder="Buscar marcas..."
+                                    placeholder="Buscar marcas o negocios..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -518,8 +518,8 @@ export default function BrandDashboard() {
                 {/* Brands List */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
                     <div className="p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-900">Lista de Marcas</h2>
-                        <p className="text-gray-600 mt-1">Gestiona todas las marcas registradas en la plataforma</p>
+                        <h2 className="text-xl font-semibold text-gray-900">Lista de Marcas y Negocios</h2>
+                        <p className="text-gray-600 mt-1">Gestiona todas las marcas y negocios registrados en la plataforma</p>
                     </div>
                     
                     <div className="overflow-x-auto">
@@ -725,7 +725,7 @@ export default function BrandDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                             <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all duration-200">
                                 <Plus className="w-8 h-8 text-blue-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Nueva Marca</span>
+                                <span className="text-sm font-medium text-gray-900">Nueva Marca o Negocio</span>
                             </button>
                             
                             <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all duration-200">

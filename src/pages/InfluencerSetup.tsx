@@ -214,15 +214,39 @@ const InfluencerSetup: React.FC = () => {
 
     const handleSubmit = async () => {
         setIsLoading(true);
-        
+
         try {
-            // Aquí se haría la llamada a la API para crear el perfil de influencer
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Redirigir al dashboard
-            navigate('/dashboard');
+            const payload = {
+                displayName: formData.displayName.trim(),
+                bio: formData.bio.trim() || undefined,
+                location: formData.location.trim() || undefined,
+                languages: formData.languages,
+                experience: formData.experience,
+                collaborationPreferences: formData.collaborationPreferences,
+                socialMedia: formData.socialMedia.map(acc => ({
+                    platform: acc.platform,
+                    username: acc.username,
+                    followers: acc.followers || 0,
+                    verified: acc.verified
+                }))
+            };
+
+            const res = await fetch('/api/influencers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(data?.message || 'Error al registrar el perfil de influencer');
+            }
+
+            navigate('/influencers');
         } catch (error) {
             console.error('Error al crear perfil de influencer:', error);
+            alert(error instanceof Error ? error.message : 'Error al registrar. Intenta de nuevo.');
         } finally {
             setIsLoading(false);
         }

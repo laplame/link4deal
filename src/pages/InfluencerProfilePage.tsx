@@ -32,7 +32,6 @@ import {
   TrendingUp as TrendingUpIcon,
   DollarSign as DollarSignIcon
 } from 'lucide-react';
-import { NavigationHeader } from '../components/navigation/NavigationHeader';
 
 interface Influencer {
   id: string;
@@ -576,8 +575,6 @@ export default function InfluencerProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavigationHeader title="Perfil de Influencer" />
-      
       {/* Header del Perfil */}
       <div className="bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-700 text-white">
         <div className="container mx-auto px-4 py-8">

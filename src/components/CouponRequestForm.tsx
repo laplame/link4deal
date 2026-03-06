@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { 
     MessageCircle, 
     User, 
@@ -6,7 +7,8 @@ import {
     QrCode, 
     CheckCircle, 
     Info,
-    Ticket
+    Ticket,
+    ExternalLink
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -229,7 +231,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     </div>
 
                     {/* Coupon Code */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
                         <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
                         <p className="text-lg font-mono font-bold text-blue-600">{couponCode}</p>
                         {qrValue && (
@@ -237,6 +239,27 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                                 Token QR: {qrValue}
                             </p>
                         )}
+                    </div>
+
+                    {/* Smart contract mockup */}
+                    <div className="bg-slate-100 rounded-lg p-4 mb-6 border border-slate-200">
+                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Smart contract</p>
+                        <p className="text-[11px] font-mono text-slate-600 break-all mb-3">
+                            {qrValue ? `0x${Array.from(qrValue.slice(0, 20)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(40, '0').slice(0, 42)}` : '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1'}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">Solana</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800">XRP</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">Ethereum</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Avalanche</span>
+                        </div>
+                        <Link
+                            to={`/promocion/${productId}/smart-contract`}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Ver smart contract
+                        </Link>
                     </div>
 
                     {/* Action Buttons */}

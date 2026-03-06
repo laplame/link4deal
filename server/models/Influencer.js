@@ -2,16 +2,19 @@ const mongoose = require('mongoose');
 
 /**
  * Modelo de Influencer.
- * El JSON que renderiza el frontend (y que puede rellenarse por OCR del perfil) está documentado en
- * docs/API_JSON_FOR_OCR.md
+ * Colección: influencers. Campos alineados con InfluencerSetup y OCR.
  */
 const influencerSchema = new mongoose.Schema({
-    // Identificación (puede venir de OCR: nombre de usuario, handle)
+    // Identificación (formulario: displayName -> name; OCR: username, handle)
     name: { type: String, trim: true },
     username: { type: String, trim: true },
     avatar: { type: String, trim: true },
 
-    // Seguidores por red (OCR: extraer de pantalla de perfil)
+    // Formulario: idiomas y años de experiencia
+    languages: [{ type: String, trim: true }],
+    experience: { type: Number, default: 0 },
+
+    // Seguidores por red (form: socialMedia[].followers; OCR: extraer de perfil)
     followers: {
         instagram: { type: Number, default: 0 },
         tiktok: { type: Number, default: 0 },
@@ -87,7 +90,7 @@ const influencerSchema = new mongoose.Schema({
     },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+}, { timestamps: true, collection: 'influencers' });
 
 influencerSchema.index({ username: 1 });
 influencerSchema.index({ status: 1 });

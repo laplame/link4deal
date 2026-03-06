@@ -379,7 +379,7 @@ export default function AdminPage() {
                     icon: <Camera className="w-5 h-5" />
                 },
                 {
-                    name: "Panel de Marcas",
+                    name: "Panel de Marcas o Negocios",
                     path: "/admin/brands",
                     description: "Administración de marcas y empresas",
                     icon: <Building2 className="w-5 h-5" />
@@ -493,7 +493,7 @@ export default function AdminPage() {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Acceso rápido: trabajar en Marcas e Influencers */}
+                {/* Acceso rápido: trabajar en Marcas/Negocios e Influencers */}
                 <div className="mb-10">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Trabajar en</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -506,13 +506,13 @@ export default function AdminPage() {
                                     <Building2 className="w-7 h-7" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-700">Marcas</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-700">Marcas o Negocios</h3>
                                     <p className="text-sm text-gray-600">Panel de administración de marcas</p>
                                 </div>
                             </div>
                             <p className="text-sm text-gray-600 flex-1">Ver marcas, campañas y métricas. Gestionar empresas y ofertas.</p>
                             <span className="mt-4 inline-flex items-center text-blue-600 font-medium group-hover:text-blue-700">
-                                Abrir vista de Marcas
+                                Abrir vista de Marcas o Negocios
                                 <ExternalLink className="w-4 h-4 ml-1" />
                             </span>
                         </Link>

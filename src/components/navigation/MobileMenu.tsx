@@ -82,16 +82,23 @@ export function MobileMenu({ isOpen, onClose }: Props) {
                 <Link to="/signup" onClick={onClose} className="block px-4 py-3 text-green-400 hover:text-green-300 hover:bg-gray-700 rounded-lg font-medium">Registrarse</Link>
               </>
             )}
+            <MobileMenuButton to="/" onClick={onClose}>
+              Inicio
+            </MobileMenuButton>
             <MobileMenuButton to="/brands" onClick={onClose}>
-              View Brand Opportunities
+              Marcas y Negocios
             </MobileMenuButton>
-            
-            <MobileMenuButton to="/add-influencer" onClick={onClose}>
-              Become an Influencer
+            <MobileMenuButton to="/influencers" onClick={onClose}>
+              Influencers
             </MobileMenuButton>
-            
-            <MobileMenuButton to="/add-influencer-quick" onClick={onClose}>
-              Add Influencer
+            <MobileMenuButton to="/marketplace" onClick={onClose}>
+              Ofertas
+            </MobileMenuButton>
+            <MobileMenuButton to="/brand-setup" onClick={onClose}>
+              Registrar marca
+            </MobileMenuButton>
+            <MobileMenuButton to="/influencer-setup" onClick={onClose}>
+              Ser influencer
             </MobileMenuButton>
           </nav>
         </div>

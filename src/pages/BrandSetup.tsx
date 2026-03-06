@@ -252,15 +252,44 @@ const BrandSetup: React.FC = () => {
 
     const handleSubmit = async () => {
         setIsLoading(true);
-        
+
         try {
-            // Aquí se haría la llamada a la API para crear el perfil de marca
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Redirigir al dashboard
-            navigate('/dashboard');
+            const payload = {
+                companyName: formData.companyName.trim(),
+                industry: formData.industry.trim() || undefined,
+                website: formData.website.trim() || undefined,
+                description: formData.description.trim() || undefined,
+                headquarters: formData.headquarters.trim() || undefined,
+                founded: formData.founded || undefined,
+                employees: formData.employees.trim() || undefined,
+                categories: formData.categories,
+                targetAudience: formData.targetAudience,
+                marketingBudget: {
+                    min: formData.marketingBudget.min,
+                    max: formData.marketingBudget.max,
+                    currency: formData.marketingBudget.currency || 'USD'
+                },
+                preferredChannels: formData.preferredChannels,
+                campaignTypes: formData.campaignTypes
+            };
+
+            const res = await fetch('/api/brands', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(data?.message || 'Error al registrar la marca o negocio');
+            }
+
+            // Redirigir al listado de marcas para que vea su marca registrada
+            navigate('/brands');
         } catch (error) {
             console.error('Error al crear perfil de marca:', error);
+            alert(error instanceof Error ? error.message : 'Error al registrar. Intenta de nuevo.');
         } finally {
             setIsLoading(false);
         }
@@ -597,6 +626,31 @@ const BrandSetup: React.FC = () => {
                 </label>
                 <p className="text-sm text-gray-600 mb-4">Define tu rango de presupuesto para campañas. Todos los cálculos de campaña son en dólares americanos (USD).</p>
                 
+                <p className="text-xs font-medium text-gray-500 mb-2">Sugerencias rápidas</p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                    {[
+                        { min: 10, max: 50, label: '10 - 50 USD' },
+                        { min: 50, max: 200, label: '50 - 200 USD' },
+                        { min: 200, max: 1000, label: '200 - 1,000 USD' },
+                        { min: 1000, max: 5000, label: '1,000 - 5,000 USD' },
+                        { min: 5000, max: 20000, label: '5,000 - 20,000 USD' },
+                        { min: 20000, max: 100000, label: '20,000+ USD' }
+                    ].map((preset) => (
+                        <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => handleInputChange('marketingBudget', {
+                                ...formData.marketingBudget,
+                                min: preset.min,
+                                max: preset.max
+                            })}
+                            className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                        >
+                            {preset.label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -605,13 +659,19 @@ const BrandSetup: React.FC = () => {
                         <div className="relative">
                             <input
                                 type="number"
-                                value={formData.marketingBudget.min}
-                                onChange={(e) => handleInputChange('marketingBudget', {
-                                    ...formData.marketingBudget,
-                                    min: parseInt(e.target.value) || 0
-                                })}
+                                min={0}
+                                step={10}
+                                value={formData.marketingBudget.min === 0 ? '' : formData.marketingBudget.min}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const num = raw === '' ? 0 : parseInt(raw, 10);
+                                    handleInputChange('marketingBudget', {
+                                        ...formData.marketingBudget,
+                                        min: Number.isNaN(num) ? 0 : Math.max(0, num)
+                                    });
+                                }}
                                 className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="0"
+                                placeholder="Ej: 10"
                             />
                             <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         </div>
@@ -624,13 +684,19 @@ const BrandSetup: React.FC = () => {
                         <div className="relative">
                             <input
                                 type="number"
-                                value={formData.marketingBudget.max}
-                                onChange={(e) => handleInputChange('marketingBudget', {
-                                    ...formData.marketingBudget,
-                                    max: parseInt(e.target.value) || 0
-                                })}
+                                min={0}
+                                step={10}
+                                value={formData.marketingBudget.max === 0 ? '' : formData.marketingBudget.max}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const num = raw === '' ? 0 : parseInt(raw, 10);
+                                    handleInputChange('marketingBudget', {
+                                        ...formData.marketingBudget,
+                                        max: Number.isNaN(num) ? 0 : Math.max(0, num)
+                                    });
+                                }}
                                 className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="0"
+                                placeholder="Ej: 50"
                             />
                             <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         </div>

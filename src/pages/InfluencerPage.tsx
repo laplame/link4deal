@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Globe, Users, Plus, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { InfluencerCard } from '../components/InfluencerCard';
-import { NavigationHeader } from '../components/navigation/NavigationHeader';
 import { influencers } from '../data/influencers';
 import { fetchChannels } from '../services/channels';
 import { Channel, Influencer } from '../types';
@@ -75,8 +74,6 @@ export function InfluencerPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <NavigationHeader title="Top Influencers" />
-
       <div className="container mx-auto px-4 py-4">
         {error && (
           <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400 flex items-center space-x-2">

@@ -2,6 +2,24 @@ const Influencer = require('../models/Influencer');
 const database = require('../config/database');
 const mongoose = require('mongoose');
 
+function buildFollowersAndSocial(socialMediaArray) {
+    const followers = { instagram: 0, tiktok: 0, youtube: 0, twitter: 0 };
+    const socialMedia = { instagram: '', tiktok: '', youtube: '', twitter: '' };
+    let totalFollowers = 0;
+    if (!Array.isArray(socialMediaArray)) return { followers, socialMedia, totalFollowers };
+    const platformKey = (p) => (p || '').toLowerCase().replace(/^@/, '');
+    socialMediaArray.forEach(acc => {
+        const platform = platformKey(acc.platform);
+        const count = Number(acc.followers) || 0;
+        const handle = (acc.username || '').trim() || '';
+        if (platform === 'instagram') { followers.instagram = count; socialMedia.instagram = handle; totalFollowers += count; }
+        else if (platform === 'tiktok') { followers.tiktok = count; socialMedia.tiktok = handle; totalFollowers += count; }
+        else if (platform === 'youtube') { followers.youtube = count; socialMedia.youtube = handle; totalFollowers += count; }
+        else if (platform === 'twitter' || platform === 'x') { followers.twitter = count; socialMedia.twitter = handle; totalFollowers += count; }
+    });
+    return { followers, socialMedia, totalFollowers };
+}
+
 class InfluencerController {
     isMongoConnected() {
         return database.isConnected && mongoose.connection.readyState === 1;
@@ -119,6 +137,56 @@ class InfluencerController {
                 success: false,
                 message: 'Error interno del servidor',
                 error: error.message
+            });
+        }
+    }
+
+    async create(req, res) {
+        try {
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'Base de datos no disponible'
+                });
+            }
+            const body = req.body || {};
+            const name = (body.name || body.displayName || '').trim();
+            if (!name) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'name o displayName es requerido'
+                });
+            }
+            const { followers, socialMedia, totalFollowers } = buildFollowersAndSocial(body.socialMedia);
+            const categories = Array.isArray(body.categories) ? body.categories : (Array.isArray(body.collaborationPreferences) ? body.collaborationPreferences : []);
+            const influencer = new Influencer({
+                name,
+                username: body.username ? String(body.username).trim() : '',
+                avatar: body.avatar || '',
+                languages: Array.isArray(body.languages) ? body.languages : [],
+                experience: body.experience != null ? Number(body.experience) : 0,
+                followers,
+                totalFollowers,
+                engagement: body.engagement != null ? Number(body.engagement) : 0,
+                categories,
+                status: 'pending',
+                location: (body.location || '').trim(),
+                bio: (body.bio || '').trim(),
+                socialMedia,
+                userId: body.userId || null
+            });
+            await influencer.save();
+            const doc = influencer.toObject();
+            return res.status(201).json({
+                success: true,
+                data: this.toFrontendFormat({ toObject: () => doc }),
+                message: 'Influencer registrado'
+            });
+        } catch (err) {
+            console.error('Error creando influencer:', err);
+            res.status(500).json({
+                success: false,
+                message: err.message || 'Error al crear'
             });
         }
     }
