@@ -36,6 +36,7 @@ import DashboardPage from './pages/DashboardPage';
 import CartPage from './pages/CartPage';
 import BusinessLanding from './pages/BusinessLanding';
 import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
+import Link4DealEconomyLanding from './pages/Link4DealEconomyLanding';
 import CheckoutPage from './pages/CheckoutPage';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerDashboard from './pages/dashboards/InfluencerDashboard';
@@ -109,6 +110,7 @@ function App() {
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/landing" element={<BusinessLanding />} />
                   <Route path="/comisionista-digital" element={<DigitalCommissionerLanding />} />
+                  <Route path="/economia" element={<Link4DealEconomyLanding />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
                   <Route path="/checkout/success" element={<CheckoutSuccess />} />
                   <Route path="/about" element={<AboutPage />} />
