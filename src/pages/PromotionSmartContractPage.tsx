@@ -54,6 +54,7 @@ interface PromotionData {
   originalPrice?: number;
   currentPrice?: number;
   currency?: string;
+  currencyDisplay?: string;
   discountPercentage?: number;
   promotionalValueUsd?: number;
   totalQuantity?: number | null;
@@ -66,6 +67,12 @@ interface PromotionData {
   images?: Array<{ url?: string; cloudinaryUrl?: string }>;
   storeLocation?: { country?: string };
   smartContract?: { address?: string; network?: string; tokenStandard?: string; blockchainExplorer?: string };
+  /** Valor por cupón en USD = tokens LUXAE por cupón (calculado en backend, puede incluir FX MXN→USD) */
+  valuePerCouponUsd?: number | null;
+  /** Emisión máxima del contrato en USD = MaxEmission (PSCS-1) */
+  maxEmissionUsd?: number | null;
+  /** Tipo de cambio usado si currency era MXN */
+  fxRateUsed?: number | null;
 }
 
 export default function PromotionSmartContractPage() {
@@ -135,17 +142,19 @@ export default function PromotionSmartContractPage() {
   const validUntil = promotion.validUntil ? new Date(promotion.validUntil) : null;
   const validFrom = promotion.validFrom ? new Date(promotion.validFrom) : null;
   const totalCupones = promotion.totalQuantity ?? null;
-  const emisionUsd = promotion.promotionalValueUsd ?? (promotion.totalQuantity && promotion.currentPrice
-    ? promotion.totalQuantity * promotion.currentPrice
-    : null);
   const redenciones = promotion.conversions ?? 0;
-  // LUXAE es stablecoin 1:1 con USD; los LUXAE creados = emisión en USD
-  const luxaeCreados = emisionUsd;
+  // Backend calcula valuePerCouponUsd y maxEmissionUsd (incluye conversión MXN→USD si aplica)
+  const valuePerCouponUsd = promotion.valuePerCouponUsd ?? promotion.promotionalValueUsd ?? (totalCupones && totalCupones > 0 && promotion.maxEmissionUsd ? promotion.maxEmissionUsd / totalCupones : null);
+  const maxEmissionUsd = promotion.maxEmissionUsd ?? (valuePerCouponUsd != null && totalCupones != null && totalCupones > 0 ? valuePerCouponUsd * totalCupones : promotion.promotionalValueUsd ?? null);
+  const emisionUsd = maxEmissionUsd;
+  // LUXAE = USD (PSCS-1); emisión máxima en tokens = maxEmissionUsd
+  const luxaeCreados = maxEmissionUsd;
   const offerTypeLabel = OFFER_TYPE_LABELS[promotion.offerType || 'percentage'] || promotion.offerType || 'Descuento';
   const categoryLabel = CATEGORY_LABELS[promotion.category || ''] || promotion.category || 'Otros';
   const statusLabel = STATUS_LABELS[promotion.status || ''] || promotion.status || '—';
   const jurisdiction = promotion.storeLocation?.country || 'MX';
-  const valuePerCoupon = totalCupones && totalCupones > 0 && emisionUsd != null ? emisionUsd / totalCupones : promotion.promotionalValueUsd ?? promotion.currentPrice;
+  const isMxn = (promotion.currency || promotion.currencyDisplay || '').toUpperCase() === 'MXN';
+  const valuePerCoupon = valuePerCouponUsd;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -240,11 +249,14 @@ export default function PromotionSmartContractPage() {
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Emisión máxima (USD)</p>
                 <p className="font-medium text-slate-900 flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-green-500" />
-                  {emisionUsd != null ? `$${emisionUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD` : '—'}
+                  {maxEmissionUsd != null ? `$${Number(maxEmissionUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD` : '—'}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">MaxEmission = ValuePerCoupon × TotalCoupons (PSCS-1 §5)</p>
-                {valuePerCoupon != null && totalCupones != null && (
-                  <p className="text-xs text-slate-500 mt-0.5">Valor por cupón: ${Number(valuePerCoupon).toFixed(2)} USD</p>
+                {valuePerCoupon != null && (
+                  <p className="text-xs text-slate-500 mt-0.5">Valor por cupón: ${Number(valuePerCoupon).toFixed(2)} USD = {Number(valuePerCoupon).toFixed(2)} LUXAE/cupón</p>
+                )}
+                {isMxn && promotion.fxRateUsed != null && (
+                  <p className="text-xs text-amber-700 mt-1">Precios en MXN convertidos a USD (tipo de cambio: {Number(promotion.fxRateUsed).toFixed(4)} USD/MXN)</p>
                 )}
               </div>
 
@@ -263,13 +275,15 @@ export default function PromotionSmartContractPage() {
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Luxae creados</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Luxae (tokens) por cupón / Emisión máxima</p>
                 <p className="font-medium text-slate-900 flex items-center gap-2">
                   <Coins className="h-4 w-4 text-amber-500" />
-                  {luxaeCreados != null ? `${luxaeCreados.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} LUXAE` : '—'}
+                  {valuePerCoupon != null ? `${Number(valuePerCoupon).toFixed(2)} LUXAE/cupón` : '—'}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">1 LUXAE = 1 USD (PSCS-1 §6)</p>
-                <p className="text-xs text-slate-500 mt-0.5">Tokens se emiten bajo redención</p>
+                {luxaeCreados != null && (
+                  <p className="text-sm font-medium text-slate-700 mt-1">Máx. {luxaeCreados.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} LUXAE</p>
+                )}
+                <p className="text-xs text-slate-500 mt-1">1 LUXAE = 1 USD (PSCS-1 §6). Tokens se emiten bajo redención.</p>
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 sm:col-span-2">

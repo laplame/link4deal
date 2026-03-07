@@ -291,15 +291,35 @@ export default function CreatePromotionWizard() {
         </div>
     );
 
+    const isPricingMxn = (promotionData.pricing.currency || 'USD').toUpperCase() === 'MXN';
+
     const renderPricingStep = () => (
         <div className="space-y-6">
             <p className="text-sm text-gray-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
-                Precio en <strong>USD</strong> permite representar el valor promocional en tokens estables (BizneAI/DameCodigo). Descuento %, 2x1 y cashback fijo se convierten a monto exacto en USD.
+                El valor promocional se representa en tokens estables (BizneAI/DameCodigo). Si tu producto está en <strong>español / pesos (MXN)</strong>, elige MXN y los precios se convertirán a USD para el cálculo de tokens. Los tokens siempre son en <strong>USD</strong> (1 token = 1 USD).
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Precio Original (base) *
+                        Moneda del producto
+                    </label>
+                    <select
+                        value={promotionData.pricing.currency || 'USD'}
+                        onChange={(e) => updatePromotionData('pricing', { currency: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                        <option value="USD">USD (Dólares americanos)</option>
+                        <option value="MXN">MXN (Pesos – producto en español)</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                        {isPricingMxn ? 'Precios en pesos: el backend convierte a USD para los tokens.' : 'Los tokens se calculan en USD.'}
+                    </p>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Precio Original (base) * {isPricingMxn && <span className="text-gray-500">(MXN)</span>}
                     </label>
                     <div className="relative">
                         <span className="absolute left-3 top-3 text-gray-500">$</span>
@@ -308,14 +328,14 @@ export default function CreatePromotionWizard() {
                             value={promotionData.pricing.originalPrice}
                             onChange={(e) => updatePromotionData('pricing', { originalPrice: Number(e.target.value) })}
                             className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                            placeholder="0.00"
+                            placeholder={isPricingMxn ? 'Ej: 60' : '0.00'}
                         />
                     </div>
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Precio con Oferta *
+                        Precio con Oferta * {isPricingMxn && <span className="text-gray-500">(MXN)</span>}
                     </label>
                     <div className="relative">
                         <span className="absolute left-3 top-3 text-gray-500">$</span>
@@ -324,7 +344,7 @@ export default function CreatePromotionWizard() {
                             value={promotionData.pricing.offerPrice}
                             onChange={(e) => updatePromotionData('pricing', { offerPrice: Number(e.target.value) })}
                             className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                            placeholder="0.00"
+                            placeholder={isPricingMxn ? 'Ej: 29' : '0.00'}
                         />
                     </div>
                 </div>
@@ -332,13 +352,9 @@ export default function CreatePromotionWizard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Moneda
-                    </label>
-                    <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <span className="font-medium text-gray-700">USD</span>
-                        <p className="mt-1 text-xs text-gray-500">Los cálculos y tokens son solo en dólares (USD).</p>
-                    </div>
+                    <p className="text-xs text-gray-500">
+                        Los cálculos de tokens se normalizan siempre en <strong>USD</strong>. Si elegiste MXN, el servidor convierte a dólares al guardar.
+                    </p>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

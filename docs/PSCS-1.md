@@ -38,6 +38,16 @@ El modelo PSCS-1 se basa en cinco principios fundamentales.
 | 4 | **Límite de pasivo promocional** | Cada promoción define un límite máximo de emisión económica. |
 | 5 | **Trazabilidad completa** | Cada redención genera un registro auditable. |
 
+### 2.6 Normalización a USD cuando la promoción está en español (MXN)
+
+En la creación de promociones, cuando los precios están en **español / pesos (MXN)**:
+
+1. **Se calcula el precio en dólares**: se aplica el tipo de cambio MXN→USD (dinámico o `FX_MXN_USD` en `.env`).
+2. **Se normaliza en USD**: todos los cálculos de valor por cupón, emisión máxima y tokens se realizan en **dólares americanos (USD)**.
+3. **Unidad del stablecoin**: el stablecoin (LUXAE) está referenciado a USD; por tanto las unidades en pesos se transforman a USD y los tokens se expresan siempre en esa moneda.
+
+Así, una promoción con precios en MXN se convierte a USD y el valor por cupón (`valuePerCouponUsd`), la emisión máxima (`maxEmissionUsd`) y los LUXAE creados quedan en USD. La API puede devolver `normalizedCurrency: "USD"` para indicar que los valores numéricos ya están en la unidad de medida del contrato.
+
 ---
 
 ## 3. Estructura del contrato de promoción
@@ -248,6 +258,8 @@ Cuando el precio base no está en USD se requiere un oráculo de conversión.
   }
 }
 ```
+
+**Implementación:** El servidor obtiene el tipo de cambio MXN→USD **de forma dinámica** desde una API externa (`server/services/fxRate.js`). Se cachea 10 minutos. Si la API falla, se usa la variable de entorno `FX_MXN_USD` o un valor por defecto (~0.058). Los precios en MXN se multiplican por este factor para obtener valor por cupón y emisión máxima en USD (LUXAE).
 
 ---
 

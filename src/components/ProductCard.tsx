@@ -31,7 +31,7 @@ interface ProductCardProps {
             verified: boolean;
         };
         specifications: Record<string, string | undefined>;
-        smartContract: {
+        smartContract?: {
             address: string;
             network: string;
             tokenStandard: string;
@@ -230,29 +230,41 @@ export default function ProductCard({
                     {product.offer}
                 </div>
 
-                {/* Smart Contract Info */}
-                <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                        <FileText className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-purple-800">Smart Contract ERC-777</span>
-                    </div>
-                    <div className="text-xs text-purple-700 mb-2">
-                        <span className="font-medium">Red:</span> {product.smartContract.network}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <code className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-mono">
-                            {shortenAddress(product.smartContract.address)}
-                        </code>
-                        <a 
-                            href={product.smartContract.blockchainExplorer} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-purple-600 hover:text-purple-800 transition-colors"
-                        >
+                {/* Smart Contract: enlace dinámico a la página de detalles del contrato (PSCS-1) */}
+                <Link
+                    to={`/promocion/${product.id}/smart-contract`}
+                    className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg block hover:bg-purple-100 hover:border-purple-300 transition-colors"
+                >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                            <span className="text-sm font-medium text-purple-800">Smart Contract (PSCS-1)</span>
+                        </div>
+                        <span className="text-xs font-medium text-purple-600 flex items-center gap-1">
+                            Ver contrato
                             <ExternalLink className="h-3 w-3" />
-                        </a>
+                        </span>
                     </div>
-                </div>
+                    {product.smartContract && (
+                        <div className="text-xs text-purple-700 flex flex-wrap items-center gap-2">
+                            <span><span className="font-medium">Red:</span> {product.smartContract.network}</span>
+                            <code className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-mono">
+                                {shortenAddress(product.smartContract.address)}
+                            </code>
+                            {product.smartContract.blockchainExplorer && (
+                                <a
+                                    href={product.smartContract.blockchainExplorer}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-600 hover:text-purple-800 inline-flex"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <ExternalLink className="h-3 w-3" />
+                                </a>
+                            )}
+                        </div>
+                    )}
+                </Link>
 
                 {/* Features Preview */}
                 <div className="mb-4">

@@ -283,15 +283,20 @@ export default function QuickPromotionPage() {
         return 0;
     };
 
-    /** Valor promocional en USD = tokens (X tokens = X USD). Para vista previa en el formulario. */
+    /** Tipo de cambio MXN→USD aproximado para vista previa (el backend usa tipo de cambio real al guardar). */
+    const PREVIEW_FX_MXN_USD = 0.058;
+
+    /** Valor promocional en USD = tokens (X tokens = X USD). Si la moneda es MXN, convierte a USD para el cálculo. */
     const calculatePromotionalValueUsd = (): number | null => {
-        const { offerType, originalPrice, currentPrice, cashbackValue } = formData;
-        const price = Number(originalPrice) || 0;
+        const { offerType, originalPrice, currentPrice, cashbackValue, currency } = formData;
+        const rate = (currency || 'USD').toUpperCase() === 'MXN' ? PREVIEW_FX_MXN_USD : 1;
+        const price = (Number(originalPrice) || 0) * rate;
+        const current = (Number(currentPrice) ?? 0) * rate;
         if (price < 0) return null;
         switch (offerType) {
             case 'percentage': {
-                const pct = price > 0 && currentPrice >= 0
-                    ? ((price - Number(currentPrice) || 0) / price) * 100
+                const pct = price > 0 && current >= 0
+                    ? ((price - current) / price) * 100
                     : 0;
                 if (pct < 0 || pct > 100) return null;
                 return Math.round((price * pct / 100) * 100) / 100;
@@ -313,6 +318,7 @@ export default function QuickPromotionPage() {
     };
 
     const promotionalValueUsd = calculatePromotionalValueUsd();
+    const isMxn = (formData.currency || 'USD').toUpperCase() === 'MXN';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -728,10 +734,28 @@ export default function QuickPromotionPage() {
                                 <DollarSign className="h-5 w-5 text-gray-600" />
                                 <h3 className="text-lg font-semibold text-gray-900">Precios</h3>
                             </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Moneda del producto
+                                </label>
+                                <select
+                                    value={formData.currency || 'USD'}
+                                    onChange={(e) => handleInputChange('currency', e.target.value)}
+                                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                >
+                                    <option value="USD">USD (Dólares americanos)</option>
+                                    <option value="MXN">MXN (Pesos – producto en español)</option>
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {isMxn
+                                        ? 'Si tu producto está en pesos (español), elige MXN. Los tokens se calculan convirtiendo a USD.'
+                                        : 'Los tokens siempre se expresan en USD (1 token = 1 USD).'}
+                                </p>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Precio Original *
+                                        Precio Original * {isMxn && <span className="text-gray-500">(MXN)</span>}
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-3 text-gray-500">$</span>
@@ -740,7 +764,7 @@ export default function QuickPromotionPage() {
                                             value={formData.originalPrice || ''}
                                             onChange={(e) => handleInputChange('originalPrice', parseFloat(e.target.value) || 0)}
                                             className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                            placeholder="0.00"
+                                            placeholder={isMxn ? 'Ej: 60' : '0.00'}
                                             min="0"
                                             step="0.01"
                                             required
@@ -750,7 +774,7 @@ export default function QuickPromotionPage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Precio con Oferta *
+                                        Precio con Oferta * {isMxn && <span className="text-gray-500">(MXN)</span>}
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-3 text-gray-500">$</span>
@@ -759,7 +783,7 @@ export default function QuickPromotionPage() {
                                             value={formData.currentPrice || ''}
                                             onChange={(e) => handleInputChange('currentPrice', parseFloat(e.target.value) || 0)}
                                             className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                            placeholder="0.00"
+                                            placeholder={isMxn ? 'Ej: 29' : '0.00'}
                                             min="0"
                                             step="0.01"
                                             required
@@ -778,15 +802,9 @@ export default function QuickPromotionPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Moneda
-                                </label>
-                                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                    <span className="font-medium text-gray-700">USD</span>
-                                    <p className="mt-1 text-xs text-gray-500">Los cálculos y tokens son solo en dólares (USD).</p>
-                                </div>
-                            </div>
+                            <p className="mt-2 text-xs text-gray-500">
+                                Los cálculos de tokens se normalizan siempre en <strong>USD</strong> (unidad del stablecoin). Si elegiste MXN, el backend convierte a dólares al guardar.
+                            </p>
                         </div>
 
                         {/* Tipo de promoción (cálculo de tokens) */}
@@ -836,10 +854,15 @@ export default function QuickPromotionPage() {
                             {promotionalValueUsd != null && (
                                 <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
                                     <p className="text-sm font-medium text-indigo-900">
-                                        Valor en tokens (USD): <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd} USD</span>
-                                        <span className="text-indigo-700 font-normal"> = {promotionalValueUsd} tokens</span>
+                                        Valor en tokens (USD): <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd.toFixed(2)} USD</span>
+                                        <span className="text-indigo-700 font-normal"> = {promotionalValueUsd.toFixed(2)} tokens</span>
                                     </p>
-                                    <p className="text-xs text-indigo-600 mt-1">Unidad calculable del contrato (pasivo financiero medible).</p>
+                                    {isMxn && (
+                                        <p className="text-xs text-indigo-600 mt-1">
+                                            Equivalente en dólares (vista previa con tipo de cambio aproximado). Al guardar se usará el tipo de cambio actual del servidor.
+                                        </p>
+                                    )}
+                                    <p className="text-xs text-indigo-600 mt-1">Unidad calculable del contrato (pasivo financiero medible). Siempre en USD.</p>
                                 </div>
                             )}
                         </div>

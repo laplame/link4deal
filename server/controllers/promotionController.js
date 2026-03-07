@@ -4,7 +4,7 @@ const ocrService = require('../services/ocrService');
 const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
 const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
-const { getPromotionalValueUsd } = require('../utils/promotionValueUsd');
+const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -385,8 +385,21 @@ class PromotionController {
                 });
             }
 
-            // Unidad calculable del contrato: valor promocional en USD (X tokens = X USD; pasivo financiero medible)
+            // Unidad calculable del contrato (PSCS-1): valor en USD (stablecoin). Si la promoción está en español (MXN),
+            // se convierte a USD y se normaliza en dólares americanos para todos los cálculos de token.
+            const currencyCode = (promotionData.currency || currency || 'USD').toUpperCase();
+            let fxRateMxnToUsd;
+            if (currencyCode === 'MXN') {
+                try {
+                    const fxService = require('../services/fxRate');
+                    fxRateMxnToUsd = await fxService.getMxnToUsdRate();
+                } catch (e) {
+                    fxRateMxnToUsd = process.env.FX_MXN_USD ? Number(process.env.FX_MXN_USD) : 0.058;
+                }
+            }
             const valueUsd = getPromotionalValueUsd({
+                currency: promotionData.currency || currency || 'USD',
+                fxRateMxnToUsd: currencyCode === 'MXN' ? fxRateMxnToUsd : undefined,
                 offerType: promotionData.offerType,
                 originalPrice: promotionData.originalPrice,
                 currentPrice: promotionData.currentPrice,
@@ -610,9 +623,20 @@ class PromotionController {
             // Incrementar vistas
             await promotion.incrementViews();
 
+            const promoObj = promotion.toObject ? promotion.toObject() : promotion;
+            const contractValues = await getValuePerCouponAndMaxEmissionAsync(promoObj);
+            const enriched = {
+                ...promoObj,
+                valuePerCouponUsd: contractValues.valuePerCouponUsd,
+                maxEmissionUsd: contractValues.maxEmissionUsd,
+                fxRateUsed: contractValues.fxRateUsed,
+                currencyDisplay: promoObj.currency || 'USD',
+                normalizedCurrency: contractValues.normalizedCurrency || 'USD'
+            };
+
             res.json({
                 success: true,
-                data: promotion,
+                data: enriched,
                 message: 'Promoción obtenida exitosamente'
             });
 
