@@ -666,13 +666,14 @@ export default function LandingPage() {
                             >
                                 Para Negocios
                             </Link>
-                            <button
-                                onClick={() => window.open(SITE_CONFIG.playStoreUrl, '_blank')}
+                            <a
+                                href={SITE_CONFIG.apkDownloadUrl}
+                                download="damecodigo-link4deal.apk"
                                 className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
                             >
                                 <Download className="w-4 h-4" />
                                 Descargar App
-                            </button>
+                            </a>
                             {isAuthenticated && user ? (
                                 <>
                                     <span className="text-gray-600 font-medium">Hola, {user.firstName}</span>
@@ -760,16 +761,15 @@ export default function LandingPage() {
                                 >
                                     Para Negocios
                                 </Link>
-                                <button
-                                    onClick={() => {
-                                        window.open('https://play.google.com/store/apps/details?id=com.link4deal.app', '_blank');
-                                        setMobileMenuOpen(false);
-                                    }}
+                                <a
+                                    href={SITE_CONFIG.apkDownloadUrl}
+                                    download="damecodigo-link4deal.apk"
+                                    onClick={() => setMobileMenuOpen(false)}
                                     className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-medium text-center hover:from-green-600 hover:to-green-700 transition-all duration-300 flex items-center justify-center gap-2"
                                 >
                                     <Download className="w-4 h-4" />
                                     Descargar App
-                                </button>
+                                </a>
                                 {isAuthenticated && user ? (
                                     <>
                                         <div className="text-gray-600 font-medium text-center">Hola, {user.firstName}</div>
@@ -1086,8 +1086,9 @@ export default function LandingPage() {
             </footer>
             {/* Floating Download App Button */}
             <div className="fixed bottom-6 left-6 z-50">
-                <button
-                    onClick={() => window.open(SITE_CONFIG.playStoreUrl, '_blank')}
+                <a
+                    href={SITE_CONFIG.apkDownloadUrl}
+                    download="damecodigo-link4deal.apk"
                     className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-full shadow-2xl hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-110 flex items-center space-x-2 group"
                 >
                     <Download className="w-6 h-6" />
@@ -1095,7 +1096,7 @@ export default function LandingPage() {
                     <div className="w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
                         <span className="text-xs font-bold text-yellow-800">📱</span>
                     </div>
-                </button>
+                </a>
                 
                 {/* Tooltip */}
                 <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">

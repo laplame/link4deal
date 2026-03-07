@@ -4,11 +4,11 @@ import { SITE_CONFIG } from '../config/site';
 
 const DownloadApp: React.FC = () => {
   const handleDownload = (platform: 'ios' | 'android') => {
-    // Placeholder for actual download logic
     if (platform === 'ios') {
       window.open(SITE_CONFIG.appStoreUrl, '_blank');
     } else {
-      window.open(SITE_CONFIG.playStoreUrl, '_blank');
+      // Descarga directa del APK
+      window.open(SITE_CONFIG.apkDownloadUrl, '_blank');
     }
   };
 
