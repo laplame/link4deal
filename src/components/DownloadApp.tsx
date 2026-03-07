@@ -1,15 +1,24 @@
-import React from 'react';
-import { Download, Smartphone, QrCode, Star, Users, Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Download, Smartphone, Star, Users, Shield } from 'lucide-react';
+import QRCode from 'qrcode';
 import { SITE_CONFIG } from '../config/site';
 
+/** URL absoluta para descargar el APK (el QR debe apuntar a una URL completa para que al escanear funcione). */
+const getApkDownloadFullUrl = () => {
+  const base = typeof window !== 'undefined' ? window.location.origin : SITE_CONFIG.website;
+  return `${base}${SITE_CONFIG.apkDownloadUrl}`;
+};
+
 const DownloadApp: React.FC = () => {
-  const handleDownload = (platform: 'ios' | 'android') => {
-    if (platform === 'ios') {
-      window.open(SITE_CONFIG.appStoreUrl, '_blank');
-    } else {
-      // Descarga directa del APK
-      window.open(SITE_CONFIG.apkDownloadUrl, '_blank');
-    }
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    const url = getApkDownloadFullUrl();
+    QRCode.toDataURL(url, { width: 256, margin: 1 }).then(setQrDataUrl).catch(() => {});
+  }, []);
+
+  const handleDownloadAndroid = () => {
+    window.open(SITE_CONFIG.apkDownloadUrl, '_blank');
   };
 
   return (
@@ -61,12 +70,16 @@ const DownloadApp: React.FC = () => {
               </div>
             </div>
 
-            {/* QR Code section */}
+            {/* QR Code section: apunta a la descarga del APK */}
             <div className="bg-white rounded-2xl p-6 shadow-lg inline-block">
               <div className="text-center">
-                <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <QrCode className="w-20 h-20 text-gray-400" />
-                </div>
+                {qrDataUrl ? (
+                  <a href={SITE_CONFIG.apkDownloadUrl} download="damecodigo-link4deal.apk" className="inline-block">
+                    <img src={qrDataUrl} alt="QR para descargar la app" className="w-32 h-32 rounded-lg mx-auto mb-4" />
+                  </a>
+                ) : (
+                  <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4 animate-pulse" />
+                )}
                 <p className="text-sm text-gray-600 font-medium">Escanea para descargar</p>
               </div>
             </div>
@@ -133,24 +146,34 @@ const DownloadApp: React.FC = () => {
               </h4>
               
               <div className="flex flex-col sm:flex-row gap-4">
+                {/* App Store: próximamente */}
                 <button
-                  onClick={() => handleDownload('ios')}
-                  className="flex-1 bg-black text-white px-6 py-4 rounded-xl font-semibold hover:bg-gray-800 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3"
+                  type="button"
+                  disabled
+                  className="flex-1 bg-gray-300 text-gray-500 px-6 py-4 rounded-xl font-semibold cursor-not-allowed shadow-lg flex items-center justify-center gap-3"
                 >
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-6 h-6 opacity-70" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                   </svg>
                   App Store
+                  <span className="text-xs font-normal opacity-90">(Próximamente)</span>
                 </button>
                 
+                {/* Android: logo Link4Deal + Play Store → descarga APK */}
                 <button
-                  onClick={() => handleDownload('android')}
+                  onClick={handleDownloadAndroid}
                   className="flex-1 bg-green-600 text-white px-6 py-4 rounded-xl font-semibold hover:bg-green-700 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3"
                 >
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold">L</span>
+                  </div>
+                  <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4486.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4486.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.5036c-1.4497-.6582-3.1078-1.0536-4.8709-1.0536-1.7631 0-3.4212.3954-4.8709 1.0536L9.036 5.8541a.416.416 0 00-.5676-.1521.416.416 0 00-.1521.5676L10.313 9.3214C7.4007 10.1866 5.2 12.5686 5.2 15.4184v.1619c0 .5511.4482.9993.9993.9993h15.6014c.5511 0 .9993-.4482.9993-.9993v-.1619c0-2.8498-2.2007-5.2318-5.113-6.097"/>
                   </svg>
-                  Google Play
+                  <span className="text-left">
+                    <span className="block text-xs font-normal opacity-90 leading-tight">{SITE_CONFIG.name}</span>
+                    <span className="block text-sm font-semibold leading-tight">Google Play</span>
+                  </span>
                 </button>
               </div>
             </div>
