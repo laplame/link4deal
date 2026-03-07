@@ -231,9 +231,12 @@ const InfluencerSetup: React.FC = () => {
                 }))
             };
 
+            const token = localStorage.getItem('auth_token');
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
             const res = await fetch('/api/influencers', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload)
             });
 

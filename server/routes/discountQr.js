@@ -14,6 +14,33 @@ const {
 const router = express.Router();
 const STRICT_CREATE_VALIDATION = process.env.QR_STRICT_CREATE_VALIDATION === 'true';
 
+/** URL por defecto para redirección a Amazon (afiliado) cuando la promoción usa redirectInsteadOfQr y no tiene redirectToUrl. */
+const DEFAULT_AMAZON_AFFILIATE_URL = 'https://amzn.to/3NfsW8K';
+/** Tag de afiliado Amazon para construir URLs de producto (ej. jalme-20). Se usa al combinar URL de afiliado + URL del producto. */
+const AMAZON_AFFILIATE_TAG = process.env.AMAZON_AFFILIATE_TAG || 'jalme-20';
+
+/**
+ * Construye la URL de afiliado Amazon: si la URL es de Amazon, añade o reemplaza el parámetro tag con AMAZON_AFFILIATE_TAG.
+ * Si redirectToUrl está vacía, devuelve la URL por defecto (amzn.to).
+ * @param {string} redirectToUrl - URL del producto (ej. https://www.amazon.com.mx/dp/B0DMV3BMGP?th=1) o vacío
+ * @returns {string}
+ */
+function buildAmazonAffiliateUrl(redirectToUrl) {
+    const trimmed = (redirectToUrl && String(redirectToUrl).trim()) || '';
+    if (!trimmed) return DEFAULT_AMAZON_AFFILIATE_URL;
+    try {
+        const u = new URL(trimmed);
+        const host = (u.hostname || '').toLowerCase();
+        if (host.includes('amazon') || host.includes('amzn.to')) {
+            u.searchParams.set('tag', AMAZON_AFFILIATE_TAG);
+            return u.toString();
+        }
+        return trimmed;
+    } catch {
+        return trimmed || DEFAULT_AMAZON_AFFILIATE_URL;
+    }
+}
+
 /** Códigos y mensajes de error para la app (unificados) */
 const ERROR_CODES = {
     PROMO_NOT_FOR_SHOP: 'La promoción existe pero no está habilitada para esta tienda.',
@@ -92,11 +119,27 @@ async function validateBusinessRules(payload, context = {}) {
 }
 
 /**
+ * Si la promoción tiene redirectInsteadOfQr, devuelve { redirectToUrl, noQr: true }. Si no, null.
+ * @param {string} promotionId
+ * @returns {Promise<{ redirectToUrl: string, noQr: true } | null>}
+ */
+async function getRedirectInsteadOfQr(promotionId) {
+    if (!isValidObjectId(promotionId)) return null;
+    const promotion = await Promotion.findById(promotionId).select('redirectInsteadOfQr redirectToUrl').lean();
+    if (!promotion || !promotion.redirectInsteadOfQr) return null;
+    const url = buildAmazonAffiliateUrl(promotion.redirectToUrl);
+    return { redirectToUrl: url, noQr: true };
+}
+
+/**
  * Lógica compartida para crear un cupón QR. Usada por POST y GET /create.
  * @param {object} payloadInput - { deviceId, influencerId, promotionId, referralCode, discountPercentage, walletAddress }
- * @returns {Promise<{ qrValue, prefix, version, ttlSeconds, businessWarnings }>}
+ * @returns {Promise<{ qrValue, prefix, version, ttlSeconds, businessWarnings }|{ redirectToUrl, noQr }>}
  */
 async function createCouponToken(payloadInput) {
+    const redirect = await getRedirectInsteadOfQr(payloadInput.promotionId);
+    if (redirect) return redirect;
+
     const businessErrors = await validateBusinessRules(payloadInput);
     if (businessErrors.length > 0 && STRICT_CREATE_VALIDATION) {
         const first = businessErrors[0];

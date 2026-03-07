@@ -42,7 +42,8 @@
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1"
+    "react-router-dom": "^6.20.1",
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

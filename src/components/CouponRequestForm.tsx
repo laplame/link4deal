@@ -51,6 +51,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const [qrImageDataUrl, setQrImageDataUrl] = useState<string>('');
     const [qrWarning, setQrWarning] = useState<string | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState(120); // 2 minutos para que el cupón sea único/válido
+    const [redirectToUrl, setRedirectToUrl] = useState<string | null>(null); // Si la promoción redirige a Amazon (no QR)
     const autoRequestedRef = useRef(false);
 
     const getOrCreateDeviceId = () => {
@@ -116,6 +117,12 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     })
                 });
                 const data = await response.json();
+                if (response.ok && data?.ok && data?.noQr && data?.redirectToUrl) {
+                    setRedirectToUrl(data.redirectToUrl);
+                    setStep('qr');
+                    setIsLoading(false);
+                    return;
+                }
                 if (response.ok && data?.ok && data?.qrValue) {
                     nextQrValue = data.qrValue;
                 } else {
@@ -126,6 +133,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                 setQrWarning('Error conectando con backend QR. Se mostró un QR local de respaldo.');
             }
 
+            setRedirectToUrl(null);
             setQrValue(nextQrValue);
             const dataUrl = await QRCode.toDataURL(nextQrValue, {
                 width: 320,
@@ -198,6 +206,10 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     };
 
     if (step === 'qr') {
+        const isRedirectMode = !!redirectToUrl;
+        const isAmazonRedirect = isRedirectMode && /amzn\.to|amazon\./i.test(redirectToUrl || '');
+        const redirectButtonLabel = isAmazonRedirect ? 'Comprar en Amazon' : 'Ir a comprar';
+        const redirectTitle = isAmazonRedirect ? '¡Comprar en Amazon!' : '¡Ir a comprar!';
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center">
@@ -206,80 +218,103 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     </div>
                     
                     <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                        ¡Cupón Generado!
+                        {isRedirectMode ? redirectTitle : '¡Cupón Generado!'}
                     </h3>
                     
                     <p className="text-gray-600 mb-6">
-                        Tu cupón ha sido creado exitosamente. Escanea el código QR o usa el código manual.
+                        {isRedirectMode
+                            ? 'Haz clic en el botón para ir a la página de compra.'
+                            : 'Tu cupón ha sido creado exitosamente. Escanea el código QR o usa el código manual.'}
                     </p>
 
-                    {/* QR Code */}
-                    <div className="mb-6">
-                        {generateQRCode()}
-                    </div>
-                    {qrWarning && (
+                    {isRedirectMode ? (
+                        <div className="mb-6">
+                            <a
+                                href={redirectToUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-6 py-4 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl shadow-lg transition-colors"
+                            >
+                                <ExternalLink className="w-5 h-5" />
+                                {redirectButtonLabel}
+                            </a>
+                            <p className="text-xs text-gray-500 mt-3">Se abrirá en una nueva pestaña</p>
+                        </div>
+                    ) : (
+                        <div className="mb-6">
+                            {generateQRCode()}
+                        </div>
+                    )}
+                    {qrWarning && !isRedirectMode && (
                         <p className="text-xs text-amber-600 mb-4">{qrWarning}</p>
                     )}
 
-                    {/* Contador 2 minutos */}
-                    <div className="mb-4 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
-                        <span className="text-sm font-medium">
-                            {countdownSeconds > 0
-                                ? `Válido por ${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}`
-                                : 'Cupón expirado'}
-                        </span>
-                    </div>
+                    {!isRedirectMode && (
+                        <>
+                            {/* Contador 2 minutos */}
+                            <div className="mb-4 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
+                                <span className="text-sm font-medium">
+                                    {countdownSeconds > 0
+                                        ? `Válido por ${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}`
+                                        : 'Cupón expirado'}
+                                </span>
+                            </div>
 
-                    {/* Coupon Code */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                        <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
-                        <p className="text-lg font-mono font-bold text-blue-600">{couponCode}</p>
-                        {qrValue && (
-                            <p className="text-[11px] text-gray-400 mt-2 break-all">
-                                Token QR: {qrValue}
+                            {/* Coupon Code */}
+                            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                                <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
+                                <p className="text-lg font-mono font-bold text-blue-600">{couponCode}</p>
+                                {qrValue && (
+                                    <p className="text-[11px] text-gray-400 mt-2 break-all">
+                                        Token QR: {qrValue}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Smart contract mockup */}
+                            <div className="bg-slate-100 rounded-lg p-4 mb-6 border border-slate-200">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Smart contract</p>
+                                <p className="text-[11px] font-mono text-slate-600 break-all mb-3">
+                                    {qrValue ? `0x${Array.from(qrValue.slice(0, 20)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(40, '0').slice(0, 42)}` : '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1'}
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">Solana</span>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800">XRP</span>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">Ethereum</span>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Avalanche</span>
+                                </div>
+                                <Link
+                                    to={`/promocion/${productId}/smart-contract`}
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    Ver smart contract
+                                </Link>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleWhatsAppRedirect}
+                                    className="w-full bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <MessageCircle className="w-5 h-5" />
+                                    Contactar por WhatsApp
+                                </button>
+                                
+                                <button
+                                    onClick={onClose}
+                                    className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Ticket className="w-5 h-5" />
+                                    Redimir cupón
+                                </button>
+                            </div>
+                            <p className="mt-3 text-sm text-gray-600">
+                                Envíame este cupón a mi app
                             </p>
-                        )}
-                    </div>
-
-                    {/* Smart contract mockup */}
-                    <div className="bg-slate-100 rounded-lg p-4 mb-6 border border-slate-200">
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Smart contract</p>
-                        <p className="text-[11px] font-mono text-slate-600 break-all mb-3">
-                            {qrValue ? `0x${Array.from(qrValue.slice(0, 20)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(40, '0').slice(0, 42)}` : '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1'}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">Solana</span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800">XRP</span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">Ethereum</span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Avalanche</span>
-                        </div>
-                        <Link
-                            to={`/promocion/${productId}/smart-contract`}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800"
-                        >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Ver smart contract
-                        </Link>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="space-y-3">
-                        <button
-                            onClick={handleWhatsAppRedirect}
-                            className="w-full bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <MessageCircle className="w-5 h-5" />
-                            Contactar por WhatsApp
-                        </button>
-                        
-                        <button
-                            onClick={onClose}
-                            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Ticket className="w-5 h-5" />
-                            Redimir cupón
-                        </button>
-                    </div>
+                        </>
+                    )}
 
                     <button
                         onClick={onClose}
@@ -287,9 +322,6 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     >
                         Cerrar
                     </button>
-                    <p className="mt-3 text-sm text-gray-600">
-                        Envíame este cupón a mi app
-                    </p>
                 </div>
             </div>
         );

@@ -34,6 +34,9 @@ const searchLimiter = rateLimit({
 // GET /api/promotions - Obtener todas las promociones (con paginación y filtros)
 router.get('/', searchLimiter, (req, res) => promotionController.getAllPromotions(req, res));
 
+// GET /api/promotions/active - Solo activas y vigentes (validUntil >= ahora); cálculo de fecha en servidor
+router.get('/active', searchLimiter, (req, res) => promotionController.getActivePromotions(req, res));
+
 // GET /api/promotions/hot - Obtener ofertas calientes
 router.get('/hot', (req, res) => promotionController.getHotOffers(req, res));
 
@@ -77,6 +80,9 @@ router.get('/status', async (req, res) => {
 
 // GET /api/promotions/:id/history - Obtener historial de precios de una promoción
 router.get('/:id/history', (req, res) => promotionController.getPriceHistory(req, res));
+
+// POST /api/promotions/backfill-conversions - Crear datos de éxito atribuidos a "Influencer General"
+router.post('/backfill-conversions', (req, res) => promotionController.backfillConversionsToInfluencerGeneral(req, res));
 
 // GET /api/promotions/:id - Obtener promoción por ID (DEBE IR AL FINAL)
 router.get('/:id', (req, res) => promotionController.getPromotionById(req, res));

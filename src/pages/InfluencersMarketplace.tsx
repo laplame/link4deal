@@ -137,6 +137,22 @@ export default function InfluencersMarketplace() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoadingInfluencers, setIsLoadingInfluencers] = useState(true);
   const [apiMessage, setApiMessage] = useState<string | null>(null);
+  const [activePromotionsCount, setActivePromotionsCount] = useState<number | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Total de promociones activas en la plataforma (API de promociones, no por influencer)
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/promotions/active?limit=1&page=1')
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        const total = data?.data?.totalDocs ?? data?.totalDocs ?? 0;
+        setActivePromotionsCount(Number(total));
+      })
+      .catch(() => { if (!cancelled) setActivePromotionsCount(0); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Cargar influencers desde la API (sin mock)
   useEffect(() => {
@@ -144,25 +160,33 @@ export default function InfluencersMarketplace() {
     setIsLoadingInfluencers(true);
     setApiMessage(null);
     fetch('/api/influencers?limit=50&page=1')
-      .then(res => res.json())
-      .then(data => {
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
         if (cancelled) return;
         if (data.message) setApiMessage(data.message);
-        const list = (data.success && data.data?.docs) ? (data.data.docs as Influencer[]) : [];
+        let list = (data.success && data.data?.docs) ? (data.data.docs as Influencer[]) : [];
+        list = list.filter(i => (i.username || '') !== 'influencer-general');
         setInfluencers(list);
         setFilteredInfluencers(list);
+        if (!ok && !data.message) setApiMessage('Error al cargar influencers. Comprueba la conexión y reintenta.');
       })
       .catch(() => {
         if (!cancelled) {
           setInfluencers([]);
           setFilteredInfluencers([]);
+          setApiMessage('No se pudo conectar con el servidor. Reintenta en unos segundos.');
         }
       })
       .finally(() => {
         if (!cancelled) setIsLoadingInfluencers(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshTrigger]);
+
+  const handleRetryInfluencers = () => {
+    setApiMessage(null);
+    setRefreshTrigger(t => t + 1);
+  };
 
   // Filtrar influencers
   useEffect(() => {
@@ -214,6 +238,14 @@ export default function InfluencersMarketplace() {
   const locations = Array.from(new Set(influencers.map(i => i.location).filter(Boolean))).sort();
   const followerRanges = ['0-10K', '10K-50K', '50K-100K', '100K-500K', '500K+'];
   const engagementRanges = ['0-2%', '2-4%', '4-6%', '6%+'];
+
+  // Estadísticas listadas desde la BD (filteredInfluencers = datos actuales de la API tras filtros)
+  const statsTotalInfluencers = filteredInfluencers.length;
+  const statsTotalFollowers = filteredInfluencers.reduce((sum, i) => sum + (Number(i.totalFollowers) || 0), 0);
+  const statsTotalEarnings = filteredInfluencers.reduce((sum, i) => sum + (Number(i.totalEarnings) || 0), 0);
+  const statsActivePromotions = activePromotionsCount !== null ? activePromotionsCount : filteredInfluencers.reduce((sum, i) => sum + (Number(i.activePromotions) || 0), 0);
+  const formatFollowers = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
+  const formatEarnings = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n}`);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -386,13 +418,13 @@ export default function InfluencersMarketplace() {
           )}
         </div>
 
-        {/* Estadísticas rápidas */}
+        {/* Estadísticas rápidas: datos de la BD listados (API con populate) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Influencers</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredInfluencers.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statsTotalInfluencers}</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <Users className="w-6 h-6 text-blue-600" />
@@ -404,9 +436,7 @@ export default function InfluencersMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Seguidores Totales</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {(filteredInfluencers.reduce((sum, i) => sum + i.totalFollowers, 0) / 1000000).toFixed(1)}M
-                </p>
+                <p className="text-2xl font-bold text-purple-600">{formatFollowers(statsTotalFollowers)}</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -418,9 +448,7 @@ export default function InfluencersMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Ganancias Totales</p>
-                <p className="text-2xl font-bold text-green-600">
-                  ${(filteredInfluencers.reduce((sum, i) => sum + i.totalEarnings, 0) / 1000).toFixed(0)}K
-                </p>
+                <p className="text-2xl font-bold text-green-600">{formatEarnings(statsTotalEarnings)}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <DollarSign className="w-6 h-6 text-green-600" />
@@ -432,9 +460,7 @@ export default function InfluencersMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Promociones Activas</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {filteredInfluencers.reduce((sum, i) => sum + i.activePromotions, 0)}
-                </p>
+                <p className="text-2xl font-bold text-orange-600">{statsActivePromotions}</p>
               </div>
               <div className="p-3 bg-orange-100 rounded-lg">
                 <Target className="w-6 h-6 text-orange-600" />
@@ -445,7 +471,14 @@ export default function InfluencersMarketplace() {
 
         {/* Grid de influencers */}
         {apiMessage && (
-          <p className="text-sm text-gray-500 mb-2">{apiMessage}</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="text-sm text-gray-500">{apiMessage}</p>
+            {filteredInfluencers.length === 0 && (
+              <button type="button" onClick={handleRetryInfluencers} className="text-sm font-medium text-orange-600 hover:text-orange-700 underline">
+                Reintentar
+              </button>
+            )}
+          </div>
         )}
         {isLoadingInfluencers ? (
           <div className="py-12 text-center text-gray-500">Cargando influencers...</div>
@@ -598,11 +631,7 @@ export default function InfluencersMarketplace() {
 
                 {/* Botón de ver perfil */}
                                         <Link
-                          to={`/influencer/${influencer.name.toLowerCase()
-                            .normalize('NFD')
-                            .replace(/[\u0300-\u036f]/g, '')
-                            .replace(/\s+/g, '-')
-                            .replace(/[^a-z0-9-]/g, '')}`}
+                          to={`/influencer/${influencer.id}`}
                           className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-pink-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2"
                         >
                   <Eye className="w-5 h-5" />

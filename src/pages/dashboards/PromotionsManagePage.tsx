@@ -73,7 +73,7 @@ export default function PromotionsManagePage() {
         page: String(page),
         limit: String(limit),
       });
-      if (statusFilter) params.set('status', statusFilter);
+      if (statusFilter) params.set('status', statusFilter); else params.set('status', 'all');
       if (search.trim()) params.set('search', search.trim());
       const res = await fetch(`/api/promotions?${params}`);
       const data = await res.json();

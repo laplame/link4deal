@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
     ArrowLeft, 
     Camera, 
@@ -13,6 +14,8 @@ import {
     Heart,
     Share2,
     MessageCircle,
+    Mail,
+    Inbox,
     Zap,
     Star,
     Award,
@@ -26,7 +29,6 @@ import {
     Plus,
     Settings,
     Bell,
-    Mail,
     Phone,
     Globe,
     MapPin,
@@ -90,163 +92,148 @@ interface Earning {
     type: 'commission' | 'bonus' | 'referral';
 }
 
+interface InboxMessage {
+    id: string;
+    senderName: string;
+    senderEmail: string | null;
+    message: string;
+    read: boolean;
+    createdAt: string;
+}
+
 export default function InfluencerDashboard() {
+    const { hasRole } = useAuth();
+    const isInfluencerRole = hasRole('influencer');
     const [influencers, setInfluencers] = useState<Influencer[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [earnings, setEarnings] = useState<Earning[]>([]);
     const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
+    const [inboxLoading, setInboxLoading] = useState(false);
 
-    // Mock data - en una aplicación real esto vendría de una API
     useEffect(() => {
-        const mockInfluencers: Influencer[] = [
-            {
-                id: '1',
-                name: 'María García',
-                username: '@mariagarcia',
-                avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-                followers: 125000,
-                engagement: 4.8,
-                categories: ['Moda', 'Belleza', 'Lifestyle'],
-                status: 'verified',
-                joinDate: '2023-03-15',
-                totalEarnings: 45000,
-                monthlyEarnings: 3800,
-                completedCampaigns: 24,
-                activeCampaigns: 3,
-                rating: 4.9,
-                location: 'Madrid, España',
-                socialMedia: {
-                    instagram: '@mariagarcia',
-                    tiktok: '@mariagarcia',
-                    youtube: 'María García'
+        if (!isInfluencerRole) return;
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        setInboxLoading(true);
+        fetch('/api/influencers/messages/inbox', {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success && data.data?.messages) {
+                    setInboxMessages(data.data.messages);
                 }
-            },
-            {
-                id: '2',
-                name: 'Carlos Rodríguez',
-                username: '@carlosrodriguez',
-                avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-                followers: 89000,
-                engagement: 3.2,
-                categories: ['Tecnología', 'Gaming', 'Reviews'],
-                status: 'active',
-                joinDate: '2023-06-20',
-                totalEarnings: 28000,
-                monthlyEarnings: 2200,
-                completedCampaigns: 18,
-                activeCampaigns: 2,
-                rating: 4.7,
-                location: 'Barcelona, España',
-                socialMedia: {
-                    instagram: '@carlosrodriguez',
-                    youtube: 'Carlos Tech'
-                }
-            },
-            {
-                id: '3',
-                name: 'Ana Martínez',
-                username: '@anamartinez',
-                avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-                followers: 210000,
-                engagement: 5.1,
-                categories: ['Fitness', 'Salud', 'Motivación'],
-                status: 'verified',
-                joinDate: '2022-11-10',
-                totalEarnings: 78000,
-                monthlyEarnings: 6500,
-                completedCampaigns: 35,
-                activeCampaigns: 4,
-                rating: 4.8,
-                location: 'Valencia, España',
-                socialMedia: {
-                    instagram: '@anamartinez',
-                    tiktok: '@anamartinez',
-                    youtube: 'Ana Fitness'
-                }
-            }
-        ];
+            })
+            .catch(() => {})
+            .finally(() => setInboxLoading(false));
+    }, [isInfluencerRole]);
 
-        const mockCampaigns: Campaign[] = [
-            {
-                id: '1',
-                title: 'Lanzamiento Nueva Colección Primavera',
-                brand: 'Zara',
-                status: 'active',
-                startDate: '2024-01-15',
-                endDate: '2024-02-15',
-                budget: 5000,
-                earnings: 2500,
-                progress: 75,
-                type: 'post',
-                category: 'Moda',
-                requirements: ['3 posts en Instagram', '2 stories', '1 reel']
-            },
-            {
-                id: '2',
-                title: 'Review Producto Tecnológico',
-                brand: 'Samsung',
-                status: 'active',
-                startDate: '2024-01-20',
-                endDate: '2024-02-20',
-                budget: 3000,
-                earnings: 1500,
-                progress: 50,
-                type: 'video',
-                category: 'Tecnología',
-                requirements: ['1 video review', '2 posts', '1 story']
-            },
-            {
-                id: '3',
-                title: 'Promoción Suplementos Deportivos',
-                brand: 'MyProtein',
-                status: 'pending',
-                startDate: '2024-02-01',
-                endDate: '2024-03-01',
-                budget: 4000,
-                earnings: 0,
-                progress: 0,
-                type: 'post',
-                category: 'Fitness',
-                requirements: ['4 posts', '3 stories', '1 video testimonial']
-            }
-        ];
+    // Datos desde la API (BD); con populate en backend
+    useEffect(() => {
+        const token = localStorage.getItem('auth_token');
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const mockEarnings: Earning[] = [
-            {
-                id: '1',
-                campaign: 'Lanzamiento Nueva Colección Primavera',
-                brand: 'Zara',
-                amount: 2500,
-                date: '2024-01-15',
-                status: 'paid',
-                type: 'commission'
-            },
-            {
-                id: '2',
-                campaign: 'Review Producto Tecnológico',
-                brand: 'Samsung',
-                amount: 1500,
-                date: '2024-01-20',
-                status: 'processing',
-                type: 'commission'
-            },
-            {
-                id: '3',
-                campaign: 'Referral Influencer',
-                brand: 'Sistema',
-                amount: 500,
-                date: '2024-01-10',
-                status: 'paid',
-                type: 'referral'
-            }
-        ];
-
-        setInfluencers(mockInfluencers);
-        setCampaigns(mockCampaigns);
-        setEarnings(mockEarnings);
-    }, []);
+        if (isInfluencerRole && token) {
+            fetch('/api/influencers/me', { headers })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.success && data.data) {
+                        const inf = data.data;
+                        const asDashboardInfluencer: Influencer = {
+                            id: inf.id,
+                            name: inf.name || '',
+                            username: inf.username || '',
+                            avatar: inf.avatar || '',
+                            followers: inf.totalFollowers ?? 0,
+                            engagement: inf.engagement ?? 0,
+                            categories: Array.isArray(inf.categories) ? inf.categories : [],
+                            status: inf.status || 'pending',
+                            joinDate: inf.joinDate || '',
+                            totalEarnings: inf.totalEarnings ?? 0,
+                            monthlyEarnings: inf.monthlyEarnings ?? 0,
+                            completedCampaigns: inf.completedPromotions ?? 0,
+                            activeCampaigns: inf.activePromotions ?? 0,
+                            rating: inf.rating ?? 0,
+                            location: inf.location || '',
+                            socialMedia: inf.socialMedia || {},
+                        };
+                        setInfluencers([asDashboardInfluencer]);
+                        const promos = Array.isArray(inf.recentPromotions) ? inf.recentPromotions : [];
+                        setCampaigns(promos.map((p: any) => ({
+                            id: p.id || '',
+                            title: p.title || '',
+                            brand: p.brand || '',
+                            status: (p.status || 'pending') as Campaign['status'],
+                            startDate: p.date || '',
+                            endDate: p.date || '',
+                            budget: p.earnings ?? 0,
+                            earnings: p.earnings ?? 0,
+                            progress: p.status === 'completed' ? 100 : p.status === 'active' ? 50 : 0,
+                            type: 'post',
+                            category: '',
+                            requirements: [],
+                        })));
+                        const pays = Array.isArray(inf.recentPayments) ? inf.recentPayments : [];
+                        setEarnings(pays.map((p: any) => ({
+                            id: p.id || '',
+                            campaign: p.description || '',
+                            brand: '',
+                            amount: p.amount ?? 0,
+                            date: p.date || '',
+                            status: (p.status || 'pending') as Earning['status'],
+                            type: (p.type || 'commission') as Earning['type'],
+                        })));
+                    } else {
+                        setInfluencers([]);
+                        setCampaigns([]);
+                        setEarnings([]);
+                    }
+                })
+                .catch(() => {
+                    setInfluencers([]);
+                    setCampaigns([]);
+                    setEarnings([]);
+                });
+        } else {
+            fetch('/api/influencers?limit=50&page=1')
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.success && data.data?.docs) {
+                        const list = (data.data.docs as any[]).map((inf) => ({
+                            id: inf.id,
+                            name: inf.name || '',
+                            username: inf.username || '',
+                            avatar: inf.avatar || '',
+                            followers: inf.totalFollowers ?? 0,
+                            engagement: inf.engagement ?? 0,
+                            categories: Array.isArray(inf.categories) ? inf.categories : [],
+                            status: inf.status || 'pending',
+                            joinDate: inf.joinDate || '',
+                            totalEarnings: inf.totalEarnings ?? 0,
+                            monthlyEarnings: inf.monthlyEarnings ?? 0,
+                            completedCampaigns: inf.completedPromotions ?? 0,
+                            activeCampaigns: inf.activePromotions ?? 0,
+                            rating: inf.rating ?? 0,
+                            location: inf.location || '',
+                            socialMedia: inf.socialMedia || {},
+                        })) as Influencer[];
+                        setInfluencers(list);
+                    } else {
+                        setInfluencers([]);
+                    }
+                    setCampaigns([]);
+                    setEarnings([]);
+                })
+                .catch(() => {
+                    setInfluencers([]);
+                    setCampaigns([]);
+                    setEarnings([]);
+                });
+        }
+    }, [isInfluencerRole]);
 
     const totalInfluencers = influencers.length;
     const activeInfluencers = influencers.filter(i => i.status === 'active' || i.status === 'verified').length;
@@ -335,6 +322,52 @@ export default function InfluencerDashboard() {
                             +12% este mes
                         </div>
                     </div>
+
+                    {isInfluencerRole && (
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 md:col-span-2 lg:col-span-5">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Inbox className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-lg font-semibold text-gray-900">Mensajes recibidos</h2>
+                            </div>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Mensajes que te han dejado desde tu perfil público. Los ves aquí al iniciar sesión.
+                            </p>
+                            {inboxLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent" />
+                                </div>
+                            ) : inboxMessages.length === 0 ? (
+                                <p className="text-gray-500 py-6">No tienes mensajes aún.</p>
+                            ) : (
+                                <ul className="space-y-3 max-h-80 overflow-y-auto">
+                                    {inboxMessages.map((msg) => (
+                                        <li
+                                            key={msg.id}
+                                            className={`border rounded-lg p-4 ${msg.read ? 'bg-gray-50 border-gray-200' : 'bg-purple-50/50 border-purple-200'}`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-gray-900">{msg.senderName}</p>
+                                                    {msg.senderEmail && (
+                                                        <p className="text-sm text-gray-500">{msg.senderEmail}</p>
+                                                    )}
+                                                    <p className="text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</p>
+                                                    <p className="text-xs text-gray-400 mt-2">
+                                                        {new Date(msg.createdAt).toLocaleString('es')}
+                                                    </p>
+                                                </div>
+                                                {!msg.read && (
+                                                    <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-purple-200 text-purple-800">
+                                                        Nuevo
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    )}
 
                     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                         <div className="flex items-center justify-between">

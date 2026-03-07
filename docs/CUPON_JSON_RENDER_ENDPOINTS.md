@@ -41,13 +41,28 @@ El cupón **no se pide por GET con un id** después de crearlo. Se crea con POST
 - **prefix**, **version**, **ttlSeconds**: metadatos para el cliente.
 - **businessWarnings**: si hay avisos de negocio (ej. promoción no activa) pero no se bloqueó la creación.
 
+### Respuesta de redirección (sin QR)
+
+Cuando la promoción tiene **redirectInsteadOfQr** activado (p. ej. productos que se compran en Amazon), el create **no genera token ni QR**. La respuesta es:
+
+```json
+{
+  "ok": true,
+  "noQr": true,
+  "redirectToUrl": "https://amzn.to/3NfsW8K"
+}
+```
+
+- **noQr**: indica que no hay QR; el cliente debe mostrar un botón de redirección en lugar del código QR.
+- **redirectToUrl**: URL a la que enviar al usuario. Para **Amazon**: si la promoción no define `redirectToUrl` se usa `https://amzn.to/3NfsW8K`. Si el usuario guarda una URL de producto Amazon (ej. `https://www.amazon.com.mx/dp/B0DMV3BMGP?th=1`), el backend construye la URL de afiliado añadiendo o reemplazando el parámetro `tag` con el tag de afiliado configurado (por defecto `jalme-20`, configurable con `AMAZON_AFFILIATE_TAG`). Para otras tiendas (Adidas, etc.) se devuelve la URL tal cual.
+
 ---
 
 ## 2. JSON que usa el modal "¡Cupón Generado!"
 
 El modal no recibe un único JSON de “cupón”; construye el estado a partir de:
 
-1. **Respuesta del create** (`ok`, `qrValue`, etc.).
+1. **Respuesta del create** (`ok`, `qrValue`, o bien `ok`, `noQr`, `redirectToUrl`).
 2. **Estado local del componente** (`couponCode`, `countdownSeconds`, etc.).
 
 Estructura lógica que representa lo que se muestra:
@@ -79,9 +94,10 @@ Estructura lógica que representa lo que se muestra:
 Componente: `src/components/CouponRequestForm.tsx`.
 
 - **Paso 1** – Formulario: nombre, WhatsApp.
-- **Paso 2** – Al enviar (o auto): se llama a **POST /api/discount-qr/create**; se guardan `qrValue`, `couponCode` y se genera la imagen QR con `qrcode.toDataURL(qrValue)`.
-- **Paso 3** – Pantalla "¡Cupón Generado!" (`step === 'qr'`):
-  - Título: "¡Cupón Generado!".
+- **Paso 2** – Al enviar (o auto): se llama a **POST /api/discount-qr/create**. Si la respuesta tiene `noQr` y `redirectToUrl`, no se genera QR y se muestra la pantalla de redirección; si no, se guardan `qrValue`, `couponCode` y se genera la imagen QR con `qrcode.toDataURL(qrValue)`.
+- **Paso 3** – Pantalla resultado (`step === 'qr'`):
+  - **Con QR**: título "¡Cupón Generado!", QR, código, countdown, botones WhatsApp/Redimir.
+  - **Con redirección** (`noQr` + `redirectToUrl`): título "¡Comprar en Amazon!", botón "Comprar en Amazon" que abre `redirectToUrl` en nueva pestaña, botón Cerrar.
   - Mensaje: "Tu cupón ha sido creado exitosamente. Escanea el código QR o usa el código manual."
   - Imagen: `<img src={qrImageDataUrl} />` (QR del `qrValue`).
   - Contador: "Válido por M:SS" con `countdownSeconds` (2 minutos).

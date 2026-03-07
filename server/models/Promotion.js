@@ -186,6 +186,11 @@ const promotionSchema = new mongoose.Schema({
         tokenStandard: String,
         blockchainExplorer: String
     },
+
+    /** Si es true, al solicitar cupón no se genera QR; se redirige a redirectToUrl (ej. link de afiliado Amazon). */
+    redirectInsteadOfQr: { type: Boolean, default: false },
+    /** URL de redirección para comprar (ej. Amazon afiliado). Si redirectInsteadOfQr y está vacío, se usa el default del sistema (amzn.to). */
+    redirectToUrl: { type: String, trim: true, default: '' },
     
     // Estadísticas
     views: {

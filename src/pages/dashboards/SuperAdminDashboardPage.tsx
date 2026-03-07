@@ -35,6 +35,8 @@ interface PromotionDoc {
   storeName?: string;
   brand?: string;
   images?: { url?: string; filename?: string; cloudinaryUrl?: string }[];
+  redirectInsteadOfQr?: boolean;
+  redirectToUrl?: string;
 }
 
 interface PaginatedData {
@@ -106,7 +108,7 @@ export default function SuperAdminDashboardPage() {
         page: String(page),
         limit: String(limit),
       });
-      if (statusFilter) params.set('status', statusFilter);
+      if (statusFilter) params.set('status', statusFilter); else params.set('status', 'all');
       if (search.trim()) params.set('search', search.trim());
       const res = await fetch(`/api/promotions?${params}`);
       const data = await res.json();
@@ -198,6 +200,8 @@ export default function SuperAdminDashboardPage() {
       storeName: p.storeName,
       validFrom: p.validFrom ? (typeof p.validFrom === 'string' ? p.validFrom : new Date(p.validFrom).toISOString().slice(0, 10)) : undefined,
       validUntil: p.validUntil ? (typeof p.validUntil === 'string' ? p.validUntil : new Date(p.validUntil).toISOString().slice(0, 10)) : undefined,
+      redirectInsteadOfQr: p.redirectInsteadOfQr ?? false,
+      redirectToUrl: p.redirectToUrl ?? '',
     });
   };
 
@@ -595,6 +599,43 @@ export default function SuperAdminDashboardPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Tipo de promoción</p>
+                <div className="flex flex-wrap gap-4 mb-3">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editRedirectType"
+                      checked={!editForm.redirectInsteadOfQr}
+                      onChange={() => setEditForm((f) => ({ ...f, redirectInsteadOfQr: false, redirectToUrl: '' }))}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Cupón con QR</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editRedirectType"
+                      checked={!!editForm.redirectInsteadOfQr}
+                      onChange={() => setEditForm((f) => ({ ...f, redirectInsteadOfQr: true }))}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Quick promotion (redirección)</span>
+                  </label>
+                </div>
+                {editForm.redirectInsteadOfQr && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">URL de redirección (vacío = Amazon por defecto)</label>
+                    <input
+                      type="url"
+                      value={editForm.redirectToUrl ?? ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, redirectToUrl: e.target.value }))}
+                      placeholder="https://amzn.to/... o https://www.adidas.mx/..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">

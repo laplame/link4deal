@@ -9,6 +9,7 @@ const influencerSchema = new mongoose.Schema({
     name: { type: String, trim: true },
     username: { type: String, trim: true },
     avatar: { type: String, trim: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // Formulario: idiomas y años de experiencia
     languages: [{ type: String, trim: true }],

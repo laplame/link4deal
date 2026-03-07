@@ -27,6 +27,8 @@ import {
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 
+const IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
+
 interface Promotion {
   id: string;
   title: string;
@@ -90,17 +92,16 @@ export default function PromotionsMarketplace() {
       setApiMessage(null);
       
       try {
-        const response = await fetch('/api/promotions?limit=50&page=1');
+        const response = await fetch('/api/promotions/active?limit=50&page=1');
         const data = await response.json();
-        
-        if (data.success && data.data.docs) {
+        const docs = Array.isArray(data?.data?.docs) ? data.data.docs : Array.isArray(data?.docs) ? data.docs : [];
+        if (data.success && docs.length >= 0) {
           // Guardar mensaje de la API si existe
           if (data.message) {
             setApiMessage(data.message);
           }
-          
           // Transformar datos de la API al formato del frontend
-          const transformedPromotions: Promotion[] = data.data.docs.map((promo: any) => {
+          const transformedPromotions: Promotion[] = docs.map((promo: any) => {
             // Mapeo de categorías del backend al frontend
             const categoryMap: { [key: string]: string } = {
               'fashion': 'Moda',
@@ -121,19 +122,16 @@ export default function PromotionsMarketplace() {
             const diffHours = Math.ceil((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const diffMinutes = Math.ceil((diffTime % (1000 * 60 * 60)) / (1000 * 60));
             
-            const timeLeft = diffDays > 0 
-              ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
-              : diffHours > 0 
-              ? `${diffHours}h ${diffMinutes}m`
-              : `${diffMinutes}m`;
-
-            // Determinar estado basado en fecha
-            let status: 'active' | 'ending' | 'closed' = 'active';
-            if (diffDays <= 0) {
-              status = 'closed';
-            } else if (diffDays <= 3) {
-              status = 'ending';
+            // Usar displayStatus/timeLeftLabel del endpoint /active (cálculo en servidor) si existe
+            let status: 'active' | 'ending' | 'closed' = (promo.displayStatus || 'active') as 'active' | 'ending' | 'closed';
+            if (!promo.displayStatus) {
+              const apiStatus = promo.status || 'active';
+              if (diffDays <= 0) status = 'closed';
+              else if (apiStatus === 'active' && diffDays <= 3) status = 'ending';
+              else if (apiStatus === 'active') status = 'active';
+              else status = 'closed';
             }
+            const timeLeft = promo.timeLeftLabel != null ? promo.timeLeftLabel : (diffDays > 0 ? `${diffDays}d ${diffHours}h ${diffMinutes}m` : diffHours > 0 ? `${diffHours}h ${diffMinutes}m` : `${diffMinutes}m`);
 
             // Calcular descuento si no existe
             const originalPrice = promo.originalPrice || 0;
@@ -142,7 +140,7 @@ export default function PromotionsMarketplace() {
               (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
 
             return {
-              id: promo._id || promo.id,
+              id: promo.id || promo._id?.toString() || '',
               title: promo.title || 'Sin título',
               brand: promo.brand || 'Sin marca',
               category: categoryMap[promo.category] || promo.category || 'Otros',
@@ -156,9 +154,9 @@ export default function PromotionsMarketplace() {
               discountPercentage: discountPercentage,
               image: getPromotionImageUrl(promo.images),
               location: promo.storeLocation?.city || promo.storeLocation?.address || 'Ciudad de México',
-              validUntil: promo.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              validUntil: promo.validUntilISO || promo.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
               totalApplications: promo.conversions || promo.totalApplications || 0,
-              maxApplications: promo.maxApplications || 100,
+              maxApplications: promo.totalQuantity ?? promo.maxApplications ?? 100,
               status: status,
               auctionType: (promo.auctionType || 'dutch') as 'dutch' | 'english',
               timeLeft: timeLeft,
@@ -250,6 +248,14 @@ export default function PromotionsMarketplace() {
   const categories = ['Moda', 'Tecnología', 'Deportes', 'Belleza', 'Comida', 'Viajes', 'Automotriz'];
   const locations = ['Ciudad de México', 'Monterrey', 'Guadalajara', 'Puebla', 'Querétaro', 'Tijuana'];
   const priceRanges = ['0-500', '500-1000', '1000-5000', '5000+'];
+
+  // Sumas listadas desde la API (GET /api/promotions) — datos de la BD
+  const statsPromocionesActivas = filteredPromotions.filter(p => p.status === 'active').length;
+  const statsTerminandoPronto = filteredPromotions.filter(p => p.status === 'ending').length;
+  const statsTotalAplicaciones = filteredPromotions.reduce((sum, p) => sum + (p.totalApplications || 0), 0);
+  const statsComisionPromedio = filteredPromotions.length
+    ? Math.round(filteredPromotions.reduce((sum, p) => sum + (p.commission || 0), 0) / filteredPromotions.length)
+    : 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -398,13 +404,13 @@ export default function PromotionsMarketplace() {
           )}
         </div>
 
-        {/* Estadísticas rápidas */}
+        {/* Estadísticas rápidas: suma de datos de la API (GET /api/promotions) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Promociones Activas</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredPromotions.filter(p => p.status === 'active').length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statsPromocionesActivas}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-green-600" />
@@ -416,7 +422,7 @@ export default function PromotionsMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Terminando Pronto</p>
-                <p className="text-2xl font-bold text-orange-600">{filteredPromotions.filter(p => p.status === 'ending').length}</p>
+                <p className="text-2xl font-bold text-orange-600">{statsTerminandoPronto}</p>
               </div>
               <div className="p-3 bg-orange-100 rounded-lg">
                 <Clock className="w-6 h-6 text-orange-600" />
@@ -428,7 +434,7 @@ export default function PromotionsMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Aplicaciones</p>
-                <p className="text-2xl font-bold text-blue-600">{filteredPromotions.reduce((sum, p) => sum + p.totalApplications, 0)}</p>
+                <p className="text-2xl font-bold text-blue-600">{statsTotalAplicaciones}</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <Users className="w-6 h-6 text-blue-600" />
@@ -440,9 +446,7 @@ export default function PromotionsMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Comisión Promedio</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {Math.round(filteredPromotions.reduce((sum, p) => sum + p.commission, 0) / filteredPromotions.length)}%
-                </p>
+                <p className="text-2xl font-bold text-purple-600">{statsComisionPromedio}%</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <DollarSign className="w-6 h-6 text-purple-600" />
@@ -508,6 +512,7 @@ export default function PromotionsMarketplace() {
                   src={promotion.image} 
                   alt={promotion.title}
                   className="w-full h-48 object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).src = IMAGE_PLACEHOLDER; }}
                 />
                 <div className="absolute top-3 left-3 flex flex-col gap-2">
                   {promotion.hot && (
@@ -523,7 +528,16 @@ export default function PromotionsMarketplace() {
                     </div>
                   )}
                 </div>
-                <div className="absolute top-3 right-3">
+                <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
+                  {promotion.maxApplications > 0 && promotion.totalApplications >= promotion.maxApplications ? (
+                    <div className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                      Agotado
+                    </div>
+                  ) : promotion.maxApplications > 0 ? (
+                    <div className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                      En stock
+                    </div>
+                  ) : null}
                   <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(promotion.status)}`}>
                     {promotion.status === 'active' ? 'Activa' : promotion.status === 'ending' ? 'Terminando' : 'Cerrada'}
                   </div>
@@ -621,13 +635,22 @@ export default function PromotionsMarketplace() {
                 </div>
 
                 {/* Botón de aplicación */}
-                <button
-                  onClick={() => handleApply(promotion)}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <Target className="w-5 h-5" />
-                  Aplicar Ahora
-                </button>
+                {promotion.maxApplications > 0 && promotion.totalApplications >= promotion.maxApplications ? (
+                  <button
+                    disabled
+                    className="w-full bg-gray-300 text-gray-500 py-3 px-4 rounded-lg font-medium cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    Agotado
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleApply(promotion)}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    <Target className="w-5 h-5" />
+                    Aplicar Ahora
+                  </button>
+                )}
 
                 {/* Acciones adicionales */}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">

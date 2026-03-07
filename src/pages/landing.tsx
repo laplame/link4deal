@@ -435,7 +435,7 @@ export default function LandingPage() {
             setProductsError(null);
             
             try {
-                const response = await fetch('/api/promotions?limit=50&page=1&status=active');
+                const response = await fetch('/api/promotions/active?limit=50&page=1');
                 const contentType = response.headers.get('content-type') || '';
                 const text = await response.text();
                 let data: { success?: boolean; data?: { docs?: unknown[] }; message?: string };
@@ -459,9 +459,10 @@ export default function LandingPage() {
                     throw new Error(serverMessage);
                 }
 
-                if (data.success && data.data?.docs && data.data.docs.length > 0) {
+                const docs = Array.isArray(data?.data?.docs) ? data.data.docs : Array.isArray(data?.docs) ? data.docs : [];
+                if (data.success && docs.length > 0) {
                     // Transformar promociones de la API al formato de ProductCard
-                    const transformedProducts: Product[] = data.data.docs.map((promo: any) => {
+                    const transformedProducts: Product[] = docs.map((promo: any) => {
                         // Calcular descuento
                         const originalPrice = promo.originalPrice || 0;
                         const currentPrice = promo.currentPrice || 0;
@@ -498,7 +499,9 @@ export default function LandingPage() {
                             brand: promo.brand || 'Sin marca',
                             rating: 4.5, // Valor por defecto
                             reviewCount: promo.views || 0,
-                            stock: promo.stock || promo.totalQuantity || 0,
+                            stock: promo.totalQuantity != null
+                                ? Math.max(0, (promo.totalQuantity || 0) - (promo.conversions || 0))
+                                : 999,
                             location: promo.storeLocation?.city || promo.storeLocation?.address || 'CDMX',
                             shipping: 'Envío disponible',
                             warranty: 'Garantía incluida',
@@ -1014,7 +1017,12 @@ export default function LandingPage() {
                         <p className="text-gray-600">Cargando promociones...</p>
                     </div>
                 ) : (
-                    <section id="ofertas" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <section id="ofertas">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-semibold text-gray-900">Promociones Activas</h3>
+                            <span className="text-sm text-gray-500">{products.length} ofertas desde la API</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {products.length > 0 ? (
                             products.map((product) => (
                                 <ProductCard
@@ -1036,6 +1044,7 @@ export default function LandingPage() {
                                 </Link>
                             </div>
                         )}
+                        </div>
                     </section>
                 )}
 

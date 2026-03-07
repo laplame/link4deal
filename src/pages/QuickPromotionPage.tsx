@@ -11,7 +11,9 @@ import {
     X,
     Zap,
     Gift,
-    Sparkles
+    Sparkles,
+    QrCode,
+    ExternalLink
 } from 'lucide-react';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 
@@ -157,6 +159,14 @@ export default function QuickPromotionPage() {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [showReward, setShowReward] = useState(false);
     const [createdPromotionId, setCreatedPromotionId] = useState<string | null>(null);
+    /** Tipo de promoción: cupón con QR o quick-promotion (redirección a comprar). */
+    const [promotionType, setPromotionType] = useState<'coupon' | 'quick-promotion'>('coupon');
+    /** Si es quick-promotion: Amazon (URL por defecto) o URL personalizada. */
+    const [redirectDestination, setRedirectDestination] = useState<'amazon' | 'custom'>('amazon');
+    /** URL del producto Amazon (opcional). Si se indica, se redirige directo a ese producto con el tag de afiliado. */
+    const [amazonProductUrl, setAmazonProductUrl] = useState('');
+    /** URL de redirección cuando redirectDestination === 'custom'. */
+    const [customRedirectUrl, setCustomRedirectUrl] = useState('');
 
     const loadTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
         setFormData({
@@ -339,6 +349,10 @@ export default function QuickPromotionPage() {
             setSubmitError('El precio con oferta no puede ser mayor al precio original');
             return;
         }
+        if (promotionType === 'quick-promotion' && redirectDestination === 'custom' && !customRedirectUrl.trim()) {
+            setSubmitError('Para quick promotion con URL personalizada debes indicar la URL de compra.');
+            return;
+        }
 
         setIsSubmitting(true);
         setSubmitError(null);
@@ -371,6 +385,15 @@ export default function QuickPromotionPage() {
             }
             if (formData.termsAndConditions?.trim()) {
                 formDataToSend.append('termsAndConditions', formData.termsAndConditions.trim());
+            }
+            // Tipo de promoción: redirección en lugar de QR
+            formDataToSend.append('redirectInsteadOfQr', promotionType === 'quick-promotion' ? 'true' : 'false');
+            if (promotionType === 'quick-promotion') {
+                if (redirectDestination === 'custom' && customRedirectUrl.trim()) {
+                    formDataToSend.append('redirectToUrl', customRedirectUrl.trim());
+                } else if (redirectDestination === 'amazon' && amazonProductUrl.trim()) {
+                    formDataToSend.append('redirectToUrl', amazonProductUrl.trim());
+                }
             }
             
             // Imágenes
@@ -468,6 +491,10 @@ export default function QuickPromotionPage() {
                             setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                             setImagePreviews([]);
                             setCreatedPromotionId(null);
+                            setPromotionType('coupon');
+                            setRedirectDestination('amazon');
+                            setCustomRedirectUrl('');
+                            setAmazonProductUrl('');
                             if (id) navigate(`/promotion-details/${id}`);
                         }}
                     >
@@ -519,6 +546,10 @@ export default function QuickPromotionPage() {
                                                     });
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
+                                                    setPromotionType('coupon');
+                                                    setRedirectDestination('amazon');
+                                                    setCustomRedirectUrl('');
+                                                    setAmazonProductUrl('');
                                                     if (id) navigate(`/promotion-details/${id}`);
                                                 }}
                                                 className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-yellow-600 transition-all shadow-md"
@@ -535,6 +566,10 @@ export default function QuickPromotionPage() {
                                                     setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
+                                                    setPromotionType('coupon');
+                                                    setRedirectDestination('amazon');
+                                                    setCustomRedirectUrl('');
+                                                    setAmazonProductUrl('');
                                                 }}
                                             >
                                                 Validar KYC Ahora
@@ -549,6 +584,10 @@ export default function QuickPromotionPage() {
                                             setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
                                             setImagePreviews([]);
                                             setCreatedPromotionId(null);
+                                            setPromotionType('coupon');
+                                            setRedirectDestination('amazon');
+                                            setCustomRedirectUrl('');
+                                            setAmazonProductUrl('');
                                             if (id) navigate(`/promotion-details/${id}`);
                                         }}
                                         className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded"
@@ -726,6 +765,98 @@ export default function QuickPromotionPage() {
                                     ))}
                                 </select>
                             </div>
+                        </div>
+
+                        {/* Tipo de promoción: cupón QR vs quick-promotion (redirección) */}
+                        <div className="border-t border-gray-200 pt-6">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Tag className="h-5 w-5 text-gray-600" />
+                                <h3 className="text-lg font-semibold text-gray-900">Tipo de promoción</h3>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Cupón con QR: el usuario obtiene un código/QR para canjear en tienda. Quick promotion: se redirige directo a una página para comprar (ej. Amazon, Adidas).
+                            </p>
+                            <div className="flex flex-wrap gap-3 mb-4">
+                                <label className="inline-flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="promotionType"
+                                        checked={promotionType === 'coupon'}
+                                        onChange={() => setPromotionType('coupon')}
+                                        className="text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span className="flex items-center gap-1.5">
+                                        <QrCode className="h-4 w-4" />
+                                        Cupón con QR
+                                    </span>
+                                </label>
+                                <label className="inline-flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="promotionType"
+                                        checked={promotionType === 'quick-promotion'}
+                                        onChange={() => setPromotionType('quick-promotion')}
+                                        className="text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span className="flex items-center gap-1.5">
+                                        <ExternalLink className="h-4 w-4" />
+                                        Quick promotion (redirección)
+                                    </span>
+                                </label>
+                            </div>
+                            {promotionType === 'quick-promotion' && (
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-4">
+                                    <p className="text-sm font-medium text-gray-700">¿A dónde redirigir?</p>
+                                    <div className="flex flex-wrap gap-3">
+                                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="redirectDestination"
+                                                checked={redirectDestination === 'amazon'}
+                                                onChange={() => setRedirectDestination('amazon')}
+                                                className="text-amber-600 focus:ring-amber-500"
+                                            />
+                                            <span>Amazon (link de afiliado por defecto)</span>
+                                        </label>
+                                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="redirectDestination"
+                                                checked={redirectDestination === 'custom'}
+                                                onChange={() => setRedirectDestination('custom')}
+                                                className="text-amber-600 focus:ring-amber-500"
+                                            />
+                                            <span>URL personalizada (Adidas, etc.)</span>
+                                        </label>
+                                    </div>
+                                    {redirectDestination === 'amazon' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">URL del producto Amazon (opcional)</label>
+                                            <input
+                                                type="url"
+                                                value={amazonProductUrl}
+                                                onChange={(e) => setAmazonProductUrl(e.target.value)}
+                                                placeholder="https://www.amazon.com.mx/dp/B0DMV3BMGP?th=1"
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            />
+                                            <p className="mt-1 text-xs text-gray-500">Pega el enlace del producto para redirigir directo a la compra. Se aplicará tu tag de afiliado. Si lo dejas vacío, se usará el link genérico por defecto.</p>
+                                        </div>
+                                    )}
+                                    {redirectDestination === 'custom' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">URL de compra (afiliado o tienda)</label>
+                                            <input
+                                                type="url"
+                                                value={customRedirectUrl}
+                                                onChange={(e) => setCustomRedirectUrl(e.target.value)}
+                                                placeholder="https://www.adidas.mx/..."
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            />
+                                            <p className="mt-1 text-xs text-gray-500">Ej: link de afiliado Adidas, Nike, etc.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Precios */}

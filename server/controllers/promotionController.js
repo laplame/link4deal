@@ -1,4 +1,6 @@
 const Promotion = require('../models/Promotion');
+const PromotionConversion = require('../models/PromotionConversion');
+const Influencer = require('../models/Influencer');
 const cloudinaryConfig = require('../config/cloudinary');
 const ocrService = require('../services/ocrService');
 const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
@@ -8,6 +10,13 @@ const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
+
+/** Términos por defecto para promociones tipo Amazon (redirección a Amazon sin URL custom). */
+const DEFAULT_TERMS_AMAZON = `Términos de la promoción
+Esta oferta de 90 días de periodo de prueba gratis de un Plan Individual mensual de Amazon Music Unlimited solo está disponible para nuevos suscriptores de Amazon Music Unlimited que compren un producto elegible enviado y vendido por www.amazon.com.mx, para los que se registren a una suscripción elegible de Amazon (por ejemplo, Prime) o los que registren un dispositivo elegible en la app de Alexa. Después de tu compra o registro, se aplicará automáticamente a tu cuenta una suscripción promocional de 90 días a un Plan Individual de Amazon Music Unlimited. También recibirás un correo electrónico con más información sobre cómo canjear esta oferta. La oferta debe canjearse en un plazo de 30 días a partir de la fecha de compra, suscripción o registro de un producto o servicio elegible. Después del periodo de prueba promocional, tu suscripción continuará automáticamente al precio mensual de $129 hasta que la canceles. El contenido y los servicios digitales podrían estar disponibles únicamente para los clientes en México y están sujetos a los términos y condiciones de uso de Servicios Comerciales Amazon México, S. de R.L. de C.V. Esta promoción esta limitada a una por cliente y por cuenta. Amazon se reserva el derecho de modificar o cancelar esta promoción en cualquier momento. La promoción no es transferible y está prohibida su reventa. Si infringes cualquiera de estos términos, la promoción no será válida. Si devuelves alguno de los productos o contenidos relacionado con esta oferta, tu reembolso será igual al monto que pagaste por el producto o contenido, sujeto a las políticas de reembolso aplicables.`;
+
+/** Términos genéricos cuando la promoción no tiene términos (ej. no extraídos de imagen). */
+const DEFAULT_TERMS_GENERIC = '1 promoción por cliente. Válido hasta agotar existencias o fin de los cupones, lo que suceda primero.';
 
 class PromotionController {
     // Helper para verificar conexión a MongoDB
@@ -328,7 +337,10 @@ class PromotionController {
             // Crear la promoción (campos con valores por defecto para máxima flexibilidad)
             const promotionData = {
                 title: title.trim(),
-                description: (description && String(description).trim()) ? String(description).trim() : '',
+                description: (() => {
+                    const d = (description && String(description).trim()) ? String(description).trim() : '';
+                    return d.length > 1000 ? d.slice(0, 1000) : d;
+                })(),
                 productName: (productName && String(productName).trim()) ? String(productName).trim() : title.trim(),
                 brand: brand ? String(brand).trim() : '',
                 category: category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(category) ? category : 'other',
@@ -349,7 +361,12 @@ class PromotionController {
                 tags: parsedTags,
                 features: parsedFeatures,
                 specifications: parsedSpecifications,
-                termsAndConditions: (termsAndConditions && String(termsAndConditions).trim()) ? String(termsAndConditions).trim() : '',
+                termsAndConditions: (() => {
+                    const provided = (termsAndConditions && String(termsAndConditions).trim()) ? String(termsAndConditions).trim() : '';
+                    if (provided) return provided;
+                    const isAmazonRedirect = (req.body.redirectInsteadOfQr === 'true' || req.body.redirectInsteadOfQr === true) && !(req.body.redirectToUrl && String(req.body.redirectToUrl).trim());
+                    return isAmazonRedirect ? DEFAULT_TERMS_AMAZON : DEFAULT_TERMS_GENERIC;
+                })(),
                 isHotOffer: isHotOffer === 'true' || isHotOffer === true,
                 hotness: hotness || 'warm',
                 validFrom: dateValidation.validFrom,
@@ -364,6 +381,8 @@ class PromotionController {
                 cashbackValue: cashbackValue !== undefined && cashbackValue !== '' ? parseFloat(cashbackValue) : null,
                 promotionalValueUsd: null,
                 status: 'active',
+                redirectInsteadOfQr: req.body.redirectInsteadOfQr === 'true' || req.body.redirectInsteadOfQr === true,
+                redirectToUrl: (req.body.redirectToUrl && String(req.body.redirectToUrl).trim()) ? String(req.body.redirectToUrl).trim() : '',
                 seller: {
                     name: 'Usuario del sistema',
                     email: 'system@link4deal.com',
@@ -538,10 +557,18 @@ class PromotionController {
 
             // Filtros
             if (category) query.category = category;
-            if (status) query.status = status;
-            // Por vigencia: si se pide status active, solo promociones vigentes (validUntil >= hoy)
-            if (status === 'active') {
+            // Por defecto (index, marketplace, app): solo activas y vigentes. Terminadas no se listan.
+            // Para admin: pasar status=all para ver todas (draft, active, paused, expired).
+            const wantAll = status === 'all';
+            const wantOnlyActive = !wantAll && (status === undefined || status === 'active' || status === '');
+            if (wantOnlyActive) {
+                query.status = 'active';
                 query.validUntil = { $gte: new Date() };
+            } else if (status && status !== 'all') {
+                query.status = status;
+                if (status === 'active') {
+                    query.validUntil = { $gte: new Date() };
+                }
             }
             if (isHotOffer) query.isHotOffer = isHotOffer === 'true';
             if (search) {
@@ -578,15 +605,98 @@ class PromotionController {
         }
     }
 
+    /**
+     * GET /api/promotions/active
+     * Lista solo promociones activas y vigentes (validUntil >= ahora en el servidor).
+     * El cálculo de vigencia se hace en el servidor para evitar desfases por zona horaria en el cliente.
+     * Respuesta: { success, data: { docs, totalDocs, ... }, message } con cada doc incluyendo:
+     * - isActive, validUntilISO, daysLeft, timeLeftLabel, displayStatus ('active'|'ending'|'closed').
+     */
+    async getActivePromotions(req, res) {
+        try {
+            if (!this.isMongoConnected()) {
+                const empty = this.getEmptyResponse(req, 'MongoDB no conectado');
+                return res.json(empty);
+            }
+            const now = new Date();
+            const query = {
+                status: 'active',
+                validUntil: { $gte: now }
+            };
+            const page = Math.max(1, parseInt(req.query.page) || 1);
+            const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+            const options = {
+                page,
+                limit,
+                sort: { createdAt: -1 },
+                populate: 'seller'
+            };
+            const result = await Promotion.paginate(query, options);
+            const docs = (result.docs || []).map((doc) => {
+                const promo = doc.toObject ? doc.toObject() : doc;
+                const validUntil = promo.validUntil ? new Date(promo.validUntil) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                const diffMs = validUntil.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                const diffHours = Math.max(0, Math.ceil((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+                const diffMinutes = Math.max(0, Math.ceil((diffMs % (1000 * 60 * 60)) / (1000 * 60 * 60)));
+                let displayStatus = 'active';
+                if (diffDays <= 0) displayStatus = 'closed';
+                else if (diffDays <= 3) displayStatus = 'ending';
+                const timeLeftLabel = diffDays > 0
+                    ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
+                    : diffHours > 0 ? `${diffHours}h ${diffMinutes}m` : `${diffMinutes}m`;
+                return {
+                    ...promo,
+                    id: promo._id ? promo._id.toString() : promo.id,
+                    isActive: true,
+                    validUntilISO: validUntil.toISOString(),
+                    daysLeft: Math.max(0, diffDays),
+                    timeLeftLabel,
+                    displayStatus
+                };
+            });
+            return res.json({
+                success: true,
+                data: {
+                    docs,
+                    totalDocs: result.totalDocs ?? docs.length,
+                    limit: result.limit ?? limit,
+                    page: result.page ?? page,
+                    totalPages: result.totalPages ?? 1,
+                    hasNextPage: result.hasNextPage ?? false,
+                    hasPrevPage: result.hasPrevPage ?? false
+                },
+                message: 'Promociones activas y vigentes (cálculo de fecha en servidor).'
+            });
+        } catch (error) {
+            console.error('❌ Error getActivePromotions:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error al listar promociones activas',
+                error: error.message
+            });
+        }
+    }
+
     async getPromotionById(req, res) {
         try {
             const { id } = req.params;
 
-            // Validar ObjectId
+            // Si el ID no es ObjectId (ej. sim-xxx de modo simulado), buscar en memoria o devolver 404
             if (!this.isValidObjectId(id)) {
-                return res.status(400).json({
+                if (global.simulatedPromotions) {
+                    const promo = global.simulatedPromotions.find(p => p._id === id || p.id === id);
+                    if (promo) {
+                        return res.json({
+                            success: true,
+                            data: promo,
+                            message: 'Promoción obtenida (modo simulado)'
+                        });
+                    }
+                }
+                return res.status(404).json({
                     success: false,
-                    message: 'ID de promoción inválido'
+                    message: 'Promoción no encontrada'
                 });
             }
 
@@ -830,7 +940,8 @@ class PromotionController {
                 'originalPrice', 'currentPrice', 'currency', 'discountPercentage',
                 'storeName', 'storeLocation', 'isPhysicalStore', 'tags',
                 'features', 'specifications', 'termsAndConditions', 'isHotOffer', 'hotness',
-                'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status'
+                'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status',
+                'redirectInsteadOfQr', 'redirectToUrl'
             ];
 
             const filteredData = {};
@@ -848,6 +959,10 @@ class PromotionController {
                             console.warn(`⚠️ Error parseando ${field}:`, error.message);
                             filteredData[field] = updateData[field];
                         }
+                    } else if (field === 'redirectInsteadOfQr') {
+                        filteredData[field] = updateData[field] === true || updateData[field] === 'true';
+                    } else if (field === 'redirectToUrl') {
+                        filteredData[field] = (updateData[field] && String(updateData[field]).trim()) ? String(updateData[field]).trim() : '';
                     } else {
                         filteredData[field] = updateData[field];
                     }
@@ -1136,6 +1251,93 @@ class PromotionController {
             res.status(500).json({
                 success: false,
                 message: 'Error interno del servidor',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Asegura "Influencer General" y crea registros de éxito (PromotionConversion) para
+     * cada promoción con conversions > 0, atribuidos a ese influencer (no reclamados por nadie).
+     */
+    async backfillConversionsToInfluencerGeneral(req, res) {
+        try {
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'MongoDB no conectado'
+                });
+            }
+            const GENERAL_USERNAME = 'influencer-general';
+            const GENERAL_NAME = 'Influencer General';
+
+            let general = await Influencer.findOne({ username: GENERAL_USERNAME });
+            if (!general) {
+                general = await Influencer.create({
+                    name: GENERAL_NAME,
+                    username: GENERAL_USERNAME,
+                    status: 'active',
+                    totalFollowers: 0,
+                    completedPromotions: 0,
+                    activePromotions: 0,
+                    totalEarnings: 0,
+                    monthlyEarnings: 0,
+                    couponStats: {
+                        totalCoupons: 0,
+                        activeCoupons: 0,
+                        totalSales: 0,
+                        totalCommission: 0,
+                        averageConversion: 0
+                    }
+                });
+            }
+            const generalId = general._id;
+
+            const promotions = await Promotion.find({
+                $or: [
+                    { conversions: { $gt: 0 } },
+                    { conversions: { $exists: false } }
+                ]
+            }).lean();
+
+            let created = 0;
+            let skipped = 0;
+            for (const promo of promotions) {
+                const conversions = promo.conversions || 0;
+                if (conversions <= 0) continue;
+                const existing = await PromotionConversion.findOne({
+                    promotion: promo._id,
+                    influencer: generalId,
+                    source: 'general'
+                });
+                if (existing) {
+                    skipped++;
+                    continue;
+                }
+                await PromotionConversion.create({
+                    promotion: promo._id,
+                    influencer: generalId,
+                    quantity: conversions,
+                    source: 'general',
+                    note: 'Atribución a Influencer General: promoción no reclamada por ningún influencer.'
+                });
+                created++;
+            }
+
+            return res.json({
+                success: true,
+                message: 'Backfill de conversiones a Influencer General completado',
+                data: {
+                    influencerGeneralId: generalId.toString(),
+                    recordsCreated: created,
+                    recordsSkipped: skipped
+                }
+            });
+        } catch (error) {
+            console.error('❌ Error en backfill conversiones:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error en backfill de conversiones',
                 error: error.message
             });
         }
