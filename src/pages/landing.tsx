@@ -488,6 +488,7 @@ export default function LandingPage() {
                         };
 
                         return {
+                            // id = promotionId para CouponRequestForm y redirect (mismo valor que en promotion-details)
                             id: promo._id || promo.id,
                             name: promo.title || promo.productName || 'Sin título',
                             price: currentPrice,

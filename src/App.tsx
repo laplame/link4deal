@@ -45,6 +45,7 @@ import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
+import ApiDocsPage from './pages/ApiDocsPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import { useLocation, Link } from 'react-router-dom';
 import { Home, AlertCircle } from 'lucide-react';
@@ -136,6 +137,8 @@ function App() {
                   <Route path="/admin/influencers" element={<InfluencerDashboard />} />
                   <Route path="/admin/brands" element={<BrandDashboard />} />
                   <Route path="/admin/agencies" element={<AgencyDashboard />} />
+                  <Route path="/admin/api-docs" element={<ApiDocsPage />} />
+                  <Route path="/api-docs" element={<ApiDocsPage />} />
                   <Route path="/admin/ocr-profile" element={<InfluencerOCRProfile />} />
                   <Route path="/admin/promotions" element={<DashboardLayout><PromotionsManagePage /></DashboardLayout>} />
                   <Route path="/kyc-form" element={<KYCForm />} />

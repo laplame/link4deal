@@ -303,6 +303,7 @@ export default function SuperAdminDashboardPage() {
             Super Admin – Todas las promociones
           </h1>
           <div className="flex items-center gap-3">
+            <Link to="/admin/api-docs" className="text-sm text-gray-600 hover:text-gray-900">API Docs</Link>
             <Link to="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">Dashboard</Link>
             <button
               type="button"

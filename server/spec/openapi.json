@@ -1,0 +1,186 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Link4Deal API",
+    "description": "API para promociones, cupones QR, influencers y agencias.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "/api", "description": "API base" }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Autenticación" },
+    { "name": "Promociones", "description": "CRUD de promociones" },
+    { "name": "Cupón QR", "description": "Crear y validar cupones QR" },
+    { "name": "Influencers", "description": "Influencers y bids" },
+    { "name": "Agencias", "description": "Agencias" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Iniciar sesión",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "login": { "type": "string", "description": "Email o teléfono" },
+                  "password": { "type": "string", "format": "password" }
+                },
+                "required": ["login", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token y usuario" },
+          "401": { "description": "Credenciales inválidas" }
+        }
+      }
+    },
+    "/promotions": {
+      "get": {
+        "tags": ["Promociones"],
+        "summary": "Listar promociones",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["all", "active", "draft", "expired"] } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Lista paginada de promociones" }
+        }
+      }
+    },
+    "/promotions/active": {
+      "get": {
+        "tags": ["Promociones"],
+        "summary": "Promociones activas y vigentes",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": { "description": "Promociones con validUntil >= ahora" }
+        }
+      }
+    },
+    "/promotions/{id}": {
+      "get": {
+        "tags": ["Promociones"],
+        "summary": "Obtener promoción por ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Detalle de la promoción" },
+          "404": { "description": "Promoción no encontrada" }
+        }
+      }
+    },
+    "/discount-qr/create": {
+      "post": {
+        "tags": ["Cupón QR"],
+        "summary": "Crear cupón QR (o URL de redirección)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deviceId": { "type": "string" },
+                  "influencerId": { "type": "string" },
+                  "promotionId": { "type": "string" },
+                  "referralCode": { "type": "string" },
+                  "discountPercentage": { "type": "number" },
+                  "walletAddress": { "type": "string" }
+                },
+                "required": ["deviceId", "promotionId", "referralCode", "discountPercentage"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "QR creado (qrValue) o redirección (noQr, redirectToUrl)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ok": { "type": "boolean" },
+                        "qrValue": { "type": "string" },
+                        "prefix": { "type": "string" },
+                        "version": { "type": "string" },
+                        "ttlSeconds": { "type": "integer" },
+                        "businessWarnings": { "type": "array", "items": { "type": "object" } }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ok": { "type": "boolean" },
+                        "noQr": { "type": "boolean" },
+                        "redirectToUrl": { "type": "string" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Datos inválidos" }
+        }
+      },
+      "get": {
+        "tags": ["Cupón QR"],
+        "summary": "Crear cupón QR (query params)",
+        "parameters": [
+          { "name": "deviceId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "promotionId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "referralCode", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "discountPercentage", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "influencerId", "in": "query", "schema": { "type": "string" } },
+          { "name": "walletAddress", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Mismo que POST" }
+        }
+      }
+    },
+    "/influencers": {
+      "get": {
+        "tags": ["Influencers"],
+        "summary": "Listar influencers",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Lista de influencers" }
+        }
+      }
+    },
+    "/agencies": {
+      "get": {
+        "tags": ["Agencias"],
+        "summary": "Listar agencias",
+        "responses": {
+          "200": { "description": "Lista de agencias" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

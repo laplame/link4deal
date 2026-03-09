@@ -214,6 +214,13 @@ app.get('/api', (req, res) => {
 
 // ===== RUTAS DE LA API =====
 
+// OpenAPI spec (para documentación Redoc; acceso público al spec)
+const openapiSpec = require('./spec/openapi.json');
+app.get('/api/openapi.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(openapiSpec);
+});
+
 // Auth routes
 app.use('/api/auth', strictLimiter, authRoutes);
 

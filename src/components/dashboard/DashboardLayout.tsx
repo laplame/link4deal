@@ -13,6 +13,7 @@ import {
   Shield,
   Home,
   ShoppingBag,
+  FileCode,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SITE_CONFIG } from '../../config/site';
@@ -40,6 +41,7 @@ const roleNav: NavItem[] = [
   { to: '/admin/influencers', label: 'Influencers', icon: <Sparkles className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
   { to: '/admin/brands', label: 'Marcas', icon: <ShoppingBag className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
   { to: '/admin/agencies', label: 'Agencias', icon: <Building2 className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
+  { to: '/admin/api-docs', label: 'API Docs', icon: <FileCode className="h-5 w-5 shrink-0" />, roles: ['agency'] },
   { to: '/admin', label: 'Panel Admin', icon: <Shield className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
 ];
 
@@ -73,8 +75,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const roleLabel = primaryRole ? PRIMARY_ROLE_LABELS[primaryRole] : 'Usuario';
-  const showRoleNav = (item: NavItem) =>
-    !item.roles || (primaryRole && item.roles.includes(primaryRole));
+  const showRoleNav = (item: NavItem) => {
+    if (item.to === '/admin/api-docs') {
+      return primaryRole === 'agency' || user?.isSuperAdmin === true;
+    }
+    return !item.roles || (primaryRole && item.roles.includes(primaryRole));
+  };
 
   const navItems = [...commonNav, ...roleNav.filter(showRoleNav)];
 

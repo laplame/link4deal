@@ -13,6 +13,7 @@ import {
 import QRCode from 'qrcode';
 
 interface CouponRequestFormProps {
+    /** ID de la promoción (MongoDB _id). Se envía como promotionId al backend; debe ser el mismo en index y en promotion-details. */
     productId: string;
     productName: string;
     productPrice: number;
@@ -174,11 +175,17 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         await issueCouponQr();
     };
 
+    // Mismo flujo en index y en promotion-details: al montar o cambiar promoción, solicitar cupón (o redirección) con el mismo promotionId
+    useEffect(() => {
+        setRedirectToUrl(null);
+        autoRequestedRef.current = false;
+    }, [productId]);
+
     useEffect(() => {
         if (!autoGenerateOnOpen || autoRequestedRef.current) return;
         autoRequestedRef.current = true;
         issueCouponQr();
-    }, [autoGenerateOnOpen]);
+    }, [autoGenerateOnOpen, productId]);
 
     const handleWhatsAppRedirect = () => {
         const message = `¡Hola! Necesito ayuda con mi cupón de Link4Deal:\n\n🎫 Código: ${couponCode}\n🏷️ Producto: ${productName}`;
