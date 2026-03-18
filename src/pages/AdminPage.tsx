@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getDownloadCount } from '../services/appDownloads';
 import { 
     ArrowLeft, 
     Users, 
@@ -35,7 +36,8 @@ import {
     CheckCircle,
     Ticket,
     CreditCard,
-    Store
+    Store,
+    Download
 } from 'lucide-react';
 
 interface AdminSection {
@@ -54,6 +56,14 @@ interface AdminSection {
 export default function AdminPage() {
     const { user, isAuthenticated, isLoading } = useAuth();
     const isSuperAdmin = user?.isSuperAdmin === true;
+    const [downloadCount, setDownloadCount] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        getDownloadCount()
+            .then(({ count }) => setDownloadCount(count))
+            .catch(() => setDownloadCount(0));
+    }, [isSuperAdmin]);
 
     if (isLoading) {
         return (
@@ -493,6 +503,24 @@ export default function AdminPage() {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 py-8">
+                {/* Contador de descargas de la app */}
+                <div className="mb-8 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl shadow-lg text-white">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                                <Download className="w-8 h-8" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold opacity-90">Descargas de la App</h3>
+                                <p className="text-sm opacity-80">Total de descargas del APK registradas</p>
+                            </div>
+                        </div>
+                        <div className="text-4xl font-bold">
+                            {downloadCount !== null ? downloadCount.toLocaleString() : '—'}
+                        </div>
+                    </div>
+                </div>
+
                 {/* Acceso rápido: trabajar en Marcas/Negocios e Influencers */}
                 <div className="mb-10">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Trabajar en</h2>

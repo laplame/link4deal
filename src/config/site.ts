@@ -22,8 +22,10 @@ export const SITE_CONFIG = {
   website: 'https://damecodigo.com',
   appStoreUrl: 'https://apps.apple.com/app/damecodigo',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=com.damecodigo.app',
-  /** Descarga directa del APK (Android). Archivo en public/build-1772854318161.apk */
-  apkDownloadUrl: '/build-1772854318161.apk',
+  /** Descarga directa del APK (Android). Pasa por redirect para contabilizar descargas. */
+  apkDownloadUrl: '/api/app-downloads/redirect',
+  /** Ruta del APK estático (usado por el redirect en backend) */
+  apkStaticPath: '/build-1772854318161.apk',
   linkedinUrl: 'https://www.linkedin.com/company/damecodigo',
   githubUrl: 'https://github.com/damecodigo',
   get copyright() {

@@ -242,6 +242,9 @@ app.use('/api/analyze-profile-image', analyzeProfileRoutes);
 
 app.use('/api/brands', brandRoutes);
 
+const appDownloadsRoutes = require('./routes/appDownloads');
+app.use('/api/app-downloads', appDownloadsRoutes);
+
 // ===== MANEJO DE ERRORES =====
 
 // 404 handler
