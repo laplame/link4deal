@@ -1082,13 +1082,17 @@ export default function LandingPage() {
                     <div className="border-t border-blue-800 mb-8"></div>
 
                     {/* Bottom Section */}
-                    <div className="flex flex-col md:flex-row justify-between items-center">
-                        <div className="text-gray-400 text-sm mb-4 md:mb-0">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="text-gray-400 text-sm">
                 {SITE_CONFIG.copyright}
                         </div>
-                        <div className="flex space-x-6 text-sm">
+                        <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+                            <Link to="/privacy" className="text-blue-200 hover:text-white transition-colors">Privacidad</Link>
+                            <span className="text-gray-500">•</span>
+                            <Link to="/cookies" className="text-blue-200 hover:text-white transition-colors">Cookies</Link>
+                            <span className="text-gray-500">•</span>
                             <span className="text-gray-400">Tecnología Blockchain</span>
-                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-500">•</span>
                             <span className="text-gray-400">Promociones Inteligentes</span>
                         </div>
                     </div>

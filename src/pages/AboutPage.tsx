@@ -649,9 +649,8 @@ export default function AboutPage() {
                         <div>
                             <h5 className="font-semibold mb-4">Legal</h5>
                             <ul className="space-y-2 text-gray-400">
-                                <li><a href="#" className="hover:text-white transition-colors">Términos</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Privacidad</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Cookies</a></li>
+                                <li><Link to="/privacy" className="hover:text-white transition-colors">Privacidad</Link></li>
+                                <li><Link to="/cookies" className="hover:text-white transition-colors">Cookies</Link></li>
                             </ul>
                         </div>
                     </div>

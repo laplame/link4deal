@@ -187,13 +187,62 @@ Para rellenar el form a partir de una foto (como en quick-promotion):
 |--------|-----|------|
 | POST | `/api/promotions/analyze-image` | `multipart/form-data` con campo **images** (1–5 archivos). |
 
-Respuesta esperada (éxito): JSON con campos extraídos (título, descripción, precios, términos, etc.) para rellenar el formulario. La app puede mapear esos campos a los nombres de la tabla anterior y luego enviar `POST /api/promotions` con FormData (incluyendo las mismas imágenes si se desea).
+**Respuesta esperada (éxito):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "title": "string",
+    "description": "string",
+    "productName": "string",
+    "brand": "string",
+    "category": "electronics|fashion|home|beauty|sports|books|food|other",
+    "originalPrice": number,
+    "currentPrice": number,
+    "discountPercentage": number,
+    "offerType": "percentage|bogo|cashback_fixed|cashback_percentage",
+    "cashbackValue": number|null,
+    "termsAndConditions": "string"
+  },
+  "message": "Análisis completado"
+}
+```
+
+La app mapea `data` a los campos del formulario y luego envía `POST /api/promotions` con FormData (incluyendo las mismas imágenes).
 
 ---
 
-## 6. Resumen rápido
+## 6. Tipo de promoción: cupón QR vs redirección (quick-promotion)
+
+En el formulario quick-promotion la app permite elegir:
+
+| Opción | Comportamiento |
+|--------|----------------|
+| **Cupón con QR** | Flujo clásico: al solicitar cupón se genera un token QR para canjear en tienda. |
+| **Quick promotion (redirección)** | No se genera QR; el usuario es redirigido a una URL. Subopciones: **Amazon** (link de afiliado por defecto o URL de producto; el backend aplica el tag de afiliado) o **URL personalizada** (ej. Adidas, Nike). |
+
+Campos enviados al crear la promoción cuando es redirección:
+
+- `redirectInsteadOfQr`: `"true"` (string).
+- `redirectToUrl`: opcional. Vacío = Amazon por defecto (`https://amzn.to/...`). Si se indica URL de producto Amazon o de otra tienda, se guarda y al solicitar cupón el backend devuelve esa URL (en Amazon se añade/reemplaza el parámetro `tag` con el afiliado).
+
+---
+
+## 7. Implementación en la app
+
+| Elemento | Implementación |
+|----------|----------------|
+| **Página** | `QuickPromotionPage` (`src/pages/QuickPromotionPage.tsx`) |
+| **Rutas** | `/quick-promotion`, `/add-promotion` |
+| **Flujo** | 1) Foto primero (opcional): subir 1–5 imágenes → opcionalmente llamar a `POST /api/promotions/analyze-image` para rellenar con Gemini. 2) Bloque de datos mínimos (título*, descripción, moneda, precios, tipo de oferta, vigencia, totalQuantity, tipo de promoción, términos). 3) Vista previa valor en tokens (USD). 4) Envío: FormData `POST /api/promotions`; si éxito, redirigir a `/promotion-details/{data.id}`. |
+| **Analyze-image** | Se invoca al subir imágenes (automático) o con el botón "Volver a analizar". Respuesta `data` se mapea a título, descripción, marca, categoría, precios, offerType, cashbackValue, termsAndConditions. |
+
+---
+
+## 8. Resumen rápido
 
 - **Crear promoción:** `POST /api/promotions` con FormData (o JSON sin imágenes).  
 - **Obligatorio:** `title`.  
 - **Respuesta éxito:** 201 con `data.id`; redirigir a detalle con ese `id`.  
-- **Form en la app:** título, moneda (USD/MXN), precios, tipo de oferta, vigencia, totalQuantity, imágenes opcionales; opcionalmente usar `POST /api/promotions/analyze-image` para rellenar desde una foto.
+- **Form en la app:** título, moneda (USD/MXN), precios, tipo de oferta, vigencia, totalQuantity, imágenes opcionales; opcionalmente usar `POST /api/promotions/analyze-image` para rellenar desde una foto (creación de promociones con AI). Ver secciones 5, 6 y 7 de este documento.

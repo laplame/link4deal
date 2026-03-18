@@ -9,6 +9,8 @@ import { routerConfig } from './config/router';
 import CookieBanner from './components/CookieBanner';
 import LandingPage from './pages/landing';
 import AboutPage from './pages/AboutPage';
+import PrivacyPage from './pages/PrivacyPage';
+import CookiesPage from './pages/CookiesPage';
 import UserTypeSelector from './pages/UserTypeSelector';
 import InfluencerSetup from './pages/InfluencerSetup';
 import BrandSetup from './pages/BrandSetup';
@@ -115,6 +117,8 @@ function App() {
                   <Route path="/checkout" element={<CheckoutPage />} />
                   <Route path="/checkout/success" element={<CheckoutSuccess />} />
                   <Route path="/about" element={<AboutPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/cookies" element={<CookiesPage />} />
                   <Route path="/user-type-selector" element={<UserTypeSelector />} />
                   <Route path="/influencer-setup" element={<InfluencerSetup />} />
                   <Route path="/brand-setup" element={<BrandSetup />} />

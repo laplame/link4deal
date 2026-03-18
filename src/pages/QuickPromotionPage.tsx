@@ -624,14 +624,14 @@ export default function QuickPromotionPage() {
                         </div>
                     )}
 
-                    {/* 1. Prioridad: foto de la promoción → Gemini extrae datos */}
+                    {/* 1. Foto primero (opcional): ver CREAR_PROMOCION_APP_REFERENCIA.md — opcionalmente analyze-image con Gemini */}
                     <div className="mb-8 pb-8 border-b border-gray-200">
                         <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
                             <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">1</span>
-                            Sube la foto de la promoción
+                            Foto primero (opcional)
                         </h2>
                         <p className="text-sm text-gray-600 mb-4">
-                            Con Gemini extraemos título, precios, marca y términos si aparecen. Luego solo completa lo que falte.
+                            Sube 1–5 imágenes de la promoción. Opcional: la app llama a <strong>POST /api/promotions/analyze-image</strong> (Gemini) para rellenar título, precios, marca y términos. Luego completa lo que falte.
                         </p>
                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
                             <input
@@ -645,7 +645,7 @@ export default function QuickPromotionPage() {
                             <label htmlFor="image-upload" className="cursor-pointer">
                                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
                                 <p className="text-sm text-gray-600">Haz clic o arrastra aquí la foto (máx. 5)</p>
-                                <p className="text-xs text-gray-500 mt-1">Se analizará automáticamente con Gemini</p>
+                                <p className="text-xs text-gray-500 mt-1">Se analizará con AI (Gemini) al subir</p>
                             </label>
                         </div>
                         {imagePreviews.length > 0 && (
@@ -678,12 +678,12 @@ export default function QuickPromotionPage() {
                                         {isAnalyzing ? (
                                             <>
                                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                                                Analizando con Gemini...
+                                                Analizando con AI (Gemini)...
                                             </>
                                         ) : (
                                             <>
                                                 <Sparkles className="h-5 w-5" />
-                                                Volver a analizar
+                                                Analizar imagen con AI (Gemini)
                                             </>
                                         )}
                                     </button>
@@ -694,13 +694,13 @@ export default function QuickPromotionPage() {
                         )}
                     </div>
 
-                    {/* 2. Completa solo lo que no se haya detectado */}
+                    {/* 2. Bloque de datos mínimos (doc: CREAR_PROMOCION_APP_REFERENCIA) */}
                     <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">2</span>
-                        Completa lo que falte
+                        Datos mínimos
                     </h2>
                     <p className="text-sm text-gray-600 mb-6">
-                        Revisa y rellena solo los datos que Gemini no pudo obtener (por ejemplo fechas, ciudad, cantidad de cupones).
+                        Título*, descripción, moneda, precios, tipo de oferta, vigencia, cantidad de cupones. Revisa lo que haya rellenado la AI y completa lo que falte.
                     </p>
                     <div className="space-y-6">
                         <div>
@@ -984,8 +984,9 @@ export default function QuickPromotionPage() {
                             </div>
                             {promotionalValueUsd != null && (
                                 <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                    <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide mb-1">Vista previa de valor en tokens</p>
                                     <p className="text-sm font-medium text-indigo-900">
-                                        Valor en tokens (USD): <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd.toFixed(2)} USD</span>
+                                        <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd.toFixed(2)} USD</span>
                                         <span className="text-indigo-700 font-normal"> = {promotionalValueUsd.toFixed(2)} tokens</span>
                                     </p>
                                     {isMxn && (

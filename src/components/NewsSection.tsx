@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ExternalLink, Calendar, User, TrendingUp, Share2, Heart, MessageCircle } from 'lucide-react';
 import { SITE_CONFIG } from '../config/site';
 
-interface NewsPost {
+/** URL del artículo: al hacer clic en la tarjeta o en "Ver en LinkedIn" se redirige aquí (nueva pestaña). */
+export interface NewsPost {
   id: string;
   title: string;
   excerpt: string;
@@ -10,6 +11,7 @@ interface NewsPost {
   authorAvatar: string;
   company: string;
   publishDate: string;
+  /** URL a la que redirigir al hacer clic en el artículo o en el botón (ej. post de LinkedIn, artículo externo). */
   linkedinUrl: string;
   engagement: {
     likes: number;
@@ -19,6 +21,17 @@ interface NewsPost {
   category: string;
   image?: string;
   isTrending?: boolean;
+}
+
+/**
+ * Abre la URL del artículo en nueva pestaña. Solo redirige si la URL es válida (http/https).
+ */
+function openArticleUrl(url: string | undefined): void {
+  if (!url || typeof url !== 'string') return;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    window.open(trimmed, '_blank', 'noopener,noreferrer');
+  }
 }
 
 const NewsSection: React.FC = () => {
@@ -31,7 +44,7 @@ const NewsSection: React.FC = () => {
       authorAvatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?auto=format&fit=crop&w=150&q=80",
       company: "TechCrunch México",
       publishDate: "2024-01-15",
-      linkedinUrl: "https://www.linkedin.com/posts/link4deal_blockchain-influencers-marketing-activity-123456789",
+      linkedinUrl: "https://www.linkedin.com/feed/update/urn:li:activity:7440111204578119680",
       engagement: {
         likes: 1247,
         comments: 89,
@@ -172,8 +185,9 @@ const NewsSection: React.FC = () => {
     return num.toString();
   };
 
-  const handlePostClick = (linkedinUrl: string) => {
-    window.open(linkedinUrl, '_blank');
+  /** Redirección al URL del artículo (tarjeta completa o botón "Ver en LinkedIn"). */
+  const handleArticleClick = (url: string) => {
+    openArticleUrl(url);
   };
 
   return (
@@ -240,7 +254,9 @@ const NewsSection: React.FC = () => {
             <article
               key={post.id}
               className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 overflow-hidden group cursor-pointer"
-              onClick={() => handlePostClick(post.linkedinUrl)}
+              onClick={() => handleArticleClick(post.linkedinUrl)}
+              role="link"
+              aria-label={`Ver artículo: ${post.title}`}
             >
               {/* Image */}
               {post.image && (
@@ -320,13 +336,15 @@ const NewsSection: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* LinkedIn Button */}
+                  {/* Botón: redirige al URL del artículo (evita doble disparo del click de la tarjeta) */}
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handlePostClick(post.linkedinUrl);
+                      handleArticleClick(post.linkedinUrl);
                     }}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-300 flex items-center gap-2"
+                    aria-label={`Ver artículo en LinkedIn: ${post.title}`}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.047-1.032-3.047-1.032 0-1.26 1.317-1.26 3.047v5.569H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
