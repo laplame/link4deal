@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Building2, Users, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RegisteredBrandCard, type RegisteredBrand } from '../components/RegisteredBrandCard';
+import { BizneShopCard, type BizneShop } from '../components/BizneShopCard';
 
 const titles = {
   en: 'Brand or Business',
@@ -13,7 +14,10 @@ export function BrandPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [brands, setBrands] = useState<RegisteredBrand[]>([]);
+  const [bizneShops, setBizneShops] = useState<BizneShop[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
+  const [loadingBizne, setLoadingBizne] = useState(true);
+  const [bizneError, setBizneError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +33,36 @@ export function BrandPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const filteredBrands = brands.filter(b => {
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/bizne-shops?all=1')
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data?.success && Array.isArray(data.data?.shops)) {
+          setBizneShops(data.data.shops);
+          setBizneError(false);
+        } else if (!cancelled) {
+          setBizneShops([]);
+          setBizneError(!data?.success);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBizneShops([]);
+          setBizneError(true);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoadingBizne(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const categories = useMemo(() => {
+    const fromBrands = brands.flatMap(b => b.categories || []);
+    const fromBizne = bizneShops.map(s => s.storeType).filter(Boolean) as string[];
+    return Array.from(new Set([...fromBrands, ...fromBizne])).filter(Boolean).sort();
+  }, [brands, bizneShops]);
+
+  const filteredBrands = useMemo(() => brands.filter(b => {
     const term = searchTerm.toLowerCase();
     const matchesSearch = !term ||
       (b.companyName || '').toLowerCase().includes(term) ||
@@ -38,10 +71,25 @@ export function BrandPage() {
     const catMatch = selectedCategory === 'all' ||
       (Array.isArray(b.categories) && b.categories.some((c: string) => c.toLowerCase() === selectedCategory.toLowerCase()));
     return matchesSearch && catMatch;
-  });
+  }), [brands, searchTerm, selectedCategory]);
 
-  const categories = Array.from(new Set(brands.flatMap(b => b.categories || []))).filter(Boolean).sort();
-  const isEmpty = !loadingBrands && filteredBrands.length === 0;
+  const filteredBizneShops = useMemo(() => bizneShops.filter(s => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = !term ||
+      (s.storeName || '').toLowerCase().includes(term) ||
+      (s.storeType || '').toLowerCase().includes(term) ||
+      (s.fullAddress || '').toLowerCase().includes(term) ||
+      (s.storeLocation || '').toLowerCase().includes(term);
+    const catMatch = selectedCategory === 'all' ||
+      (s.storeType && s.storeType.toLowerCase() === selectedCategory.toLowerCase());
+    return matchesSearch && catMatch;
+  }), [bizneShops, searchTerm, selectedCategory]);
+
+  /** Spinner inicial hasta que al menos una fuente responda con datos o ambas terminen vacías. */
+  const waitingForAnyData =
+    !brands.length && !bizneShops.length && (loadingBrands || loadingBizne);
+  const hasAny = filteredBrands.length > 0 || filteredBizneShops.length > 0;
+  const isEmpty = !loadingBrands && !loadingBizne && !hasAny;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -115,21 +163,75 @@ export function BrandPage() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {loadingBrands && (
+        {waitingForAnyData && (
           <div className="text-center py-6 text-gray-400">
             {language === 'es' ? 'Cargando marcas y negocios...' : 'Loading brands and businesses...'}
           </div>
         )}
 
-        {!loadingBrands && filteredBrands.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredBrands.map(brand => (
-              <RegisteredBrandCard key={brand._id} brand={brand} />
-            ))}
+        {bizneError && !loadingBizne && (
+          <p className="text-center text-amber-500/90 text-sm mb-6">
+            {language === 'es'
+              ? 'No se pudieron cargar las tiendas BizneAI. Las marcas registradas en DameCodigo siguen visibles.'
+              : 'Could not load BizneAI shops. DameCodigo-registered brands are still shown.'}
+          </p>
+        )}
+
+        {!waitingForAnyData && hasAny && (
+          <div className="space-y-10">
+            {filteredBrands.length > 0 && (
+              <section>
+                <h2 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-blue-400" />
+                  {language === 'es' ? 'Marcas en DameCodigo' : 'Brands on DameCodigo'}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredBrands.map(brand => (
+                    <RegisteredBrandCard key={`brand-${brand._id}`} brand={brand} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {(loadingBizne || bizneShops.length > 0) && (
+              <section>
+                <h2 className="text-lg font-semibold text-gray-200 mb-1 flex items-center gap-2">
+                  <span className="text-violet-400">●</span>
+                  {language === 'es' ? 'Tiendas BizneAI' : 'BizneAI stores'}
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  {language === 'es'
+                    ? 'Negocios conectados a la red BizneAI (activos; sin tiendas modelo).'
+                    : 'Businesses on the BizneAI network (active; model shops excluded).'}
+                </p>
+                {loadingBizne && filteredBizneShops.length === 0 && !bizneError && (
+                  <p className="text-sm text-gray-500 py-4">
+                    {language === 'es' ? 'Cargando tiendas BizneAI...' : 'Loading BizneAI stores...'}
+                  </p>
+                )}
+                {filteredBizneShops.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredBizneShops.map(shop => (
+                      <BizneShopCard
+                        key={`bizne-${shop.id || shop._id}`}
+                        shop={shop}
+                      />
+                    ))}
+                  </div>
+                )}
+                {!loadingBizne && bizneShops.length > 0 && filteredBizneShops.length === 0 && (
+                  <p className="text-sm text-gray-500 py-2">
+                    {language === 'es'
+                      ? 'Ninguna tienda coincide con la búsqueda o el filtro.'
+                      : 'No stores match your search or filter.'}
+                  </p>
+                )}
+              </section>
+            )}
           </div>
         )}
 
-        {isEmpty && !loadingBrands && (
+        {isEmpty && (
           <div className="text-center py-12">
             <Building2 className="h-12 w-12 text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-400">

@@ -1,7 +1,43 @@
+const mongoose = require('mongoose');
 const Brand = require('../models/Brand');
 const database = require('../config/database');
 
 class BrandController {
+    async getById(req, res) {
+        try {
+            const { id } = req.params;
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de marca inválido'
+                });
+            }
+            if (!database.isConnected) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'Base de datos no disponible'
+                });
+            }
+            const brand = await Brand.findById(id).lean();
+            if (!brand) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Marca o negocio no encontrado'
+                });
+            }
+            return res.json({
+                success: true,
+                data: brand
+            });
+        } catch (err) {
+            console.error('Error obteniendo marca:', err);
+            res.status(500).json({
+                success: false,
+                message: err.message || 'Error al obtener la marca'
+            });
+        }
+    }
+
     async list(req, res) {
         try {
             if (!database.isConnected) {

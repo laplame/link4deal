@@ -25,6 +25,8 @@ import CreatePromotionWizard from './pages/CreatePromotionWizard';
 import QuickPromotionPage from './pages/QuickPromotionPage';
 import PromotionsMarketplace from './pages/PromotionsMarketplace';
 import { BrandPage } from './pages/BrandPage';
+import BrandProfilePage from './pages/BrandProfilePage';
+import BizneShopProfilePage from './pages/BizneShopProfilePage';
 import InfluencersMarketplace from './pages/InfluencersMarketplace';
 import InfluencerProfilePage from './pages/InfluencerProfilePage';
 import InfluencerOCRProfile from './pages/InfluencerOCRProfile';
@@ -134,6 +136,8 @@ function App() {
                   <Route path="/add-promotion" element={<QuickPromotionPage />} />
                   <Route path="/marketplace" element={<PromotionsMarketplace />} />
                   <Route path="/brands" element={<BrandPage />} />
+                  <Route path="/brand/:brandId" element={<BrandProfilePage />} />
+                  <Route path="/shop/bizne/:shopId" element={<BizneShopProfilePage />} />
                   <Route path="/influencers" element={<InfluencersMarketplace />} />
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />

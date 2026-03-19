@@ -27,6 +27,8 @@ function getTitle(pathname: string): string | undefined {
   if (pathname.startsWith('/promotion-details')) return 'Detalle oferta';
   if (pathname.startsWith('/promocion/') && pathname.endsWith('/smart-contract')) return 'Smart contract';
   if (pathname.startsWith('/influencer/')) return 'Perfil influencer';
+  if (pathname.startsWith('/brand/')) return 'Marca o negocio';
+  if (pathname.startsWith('/shop/bizne/')) return 'Tienda BizneAI';
   if (pathname.startsWith('/category/')) return 'Categoría';
   return undefined;
 }
