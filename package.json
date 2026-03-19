@@ -46,7 +46,7 @@
     "recharts": "^2.15.4"
   },
   "overrides": {
-    "vite": "5.4.11"
+    "vite": "5.4.21"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -66,6 +66,6 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.2.2",
-    "vite": "5.4.11"
+    "vite": "5.4.21"
   }
 }
