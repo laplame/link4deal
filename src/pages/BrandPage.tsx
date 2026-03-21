@@ -18,6 +18,8 @@ export function BrandPage() {
   const [loadingBrands, setLoadingBrands] = useState(true);
   const [loadingBizne, setLoadingBizne] = useState(true);
   const [bizneError, setBizneError] = useState(false);
+  /** Detalle del backend (p. ej. mensaje del 502) para diagnosticar. */
+  const [bizneErrorDetail, setBizneErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,22 +36,45 @@ export function BrandPage() {
   }, []);
 
   useEffect(() => {
+    /** Desactivar con VITE_ENABLE_BIZNE_SHOPS=false en build si el backend aún no expone /api/bizne-shops. */
+    if (import.meta.env.VITE_ENABLE_BIZNE_SHOPS === 'false') {
+      setLoadingBizne(false);
+      return;
+    }
+
     let cancelled = false;
     fetch('/api/bizne-shops?all=1')
-      .then(res => res.json())
-      .then(data => {
-        if (!cancelled && data?.success && Array.isArray(data.data?.shops)) {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        /** 404 = ruta no desplegada en el servidor Node; no mostrar error (solo marcas locales). */
+        if (res.status === 404) {
+          setBizneShops([]);
+          setBizneError(false);
+          setBizneErrorDetail(null);
+          return;
+        }
+        if (data?.success && Array.isArray(data.data?.shops)) {
           setBizneShops(data.data.shops);
           setBizneError(false);
-        } else if (!cancelled) {
+          setBizneErrorDetail(null);
+        } else {
           setBizneShops([]);
-          setBizneError(!data?.success);
+          setBizneError(true);
+          setBizneErrorDetail(
+            typeof data?.message === 'string'
+              ? data.message
+              : res.status >= 400
+                ? `HTTP ${res.status}`
+                : 'Respuesta inválida (sin success ni shops)'
+          );
         }
       })
       .catch(() => {
         if (!cancelled) {
           setBizneShops([]);
           setBizneError(true);
+          setBizneErrorDetail('Red o respuesta no JSON (revisa consola / red)');
         }
       })
       .finally(() => { if (!cancelled) setLoadingBizne(false); });
@@ -170,11 +195,18 @@ export function BrandPage() {
         )}
 
         {bizneError && !loadingBizne && (
-          <p className="text-center text-amber-500/90 text-sm mb-6">
-            {language === 'es'
-              ? 'No se pudieron cargar las tiendas BizneAI. Las marcas registradas en DameCodigo siguen visibles.'
-              : 'Could not load BizneAI shops. DameCodigo-registered brands are still shown.'}
-          </p>
+          <div className="text-center text-amber-500/90 text-sm mb-6 space-y-1">
+            <p>
+              {language === 'es'
+                ? 'No se pudieron cargar las tiendas BizneAI. Las marcas registradas en DameCodigo siguen visibles.'
+                : 'Could not load BizneAI shops. DameCodigo-registered brands are still shown.'}
+            </p>
+            {bizneErrorDetail && (
+              <p className="text-xs text-gray-500 max-w-xl mx-auto break-words" title={bizneErrorDetail}>
+                {bizneErrorDetail}
+              </p>
+            )}
+          </div>
         )}
 
         {!waitingForAnyData && hasAny && (

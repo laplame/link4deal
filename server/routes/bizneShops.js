@@ -1,25 +1,41 @@
 /**
  * Proxy hacia la API pública de tiendas BizneAI.
  * Documentación / origen: https://bizneai.com/api/shop
+ *
+ * Usamos axios (no fetch nativo) para que funcione en Node 16+ sin depender de undici.
  */
 const express = require('express');
+const axios = require('axios');
 
 const router = express.Router();
 const DEFAULT_BASE = process.env.BIZNEAI_SHOP_API_URL || 'https://bizneai.com/api/shop';
 
+const httpClient = axios.create({
+    timeout: 45000,
+    headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Link4Deal/1.0 (brand directory proxy)'
+    },
+    validateStatus: (status) => status >= 200 && status < 300
+});
+
 async function fetchJson(url) {
-    const res = await fetch(url, {
-        headers: {
-            Accept: 'application/json',
-            'User-Agent': 'Link4Deal/1.0 (brand directory proxy)'
+    try {
+        const { data, status } = await httpClient.get(url);
+        if (data && data.success === false) {
+            const err = new Error(data.message || 'BizneAI devolvió success: false');
+            err.status = status;
+            throw err;
         }
-    });
-    if (!res.ok) {
-        const err = new Error(`BizneAI HTTP ${res.status}`);
-        err.status = res.status;
+        return data;
+    } catch (err) {
+        if (err.response) {
+            const e = new Error(`BizneAI HTTP ${err.response.status}`);
+            e.status = err.response.status;
+            throw e;
+        }
         throw err;
     }
-    return res.json();
 }
 
 /**

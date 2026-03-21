@@ -268,7 +268,9 @@ app.use('*', (req, res) => {
             'POST /api/discount-qr/create',
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
-            'POST /api/discount-qr/redeem'
+            'POST /api/discount-qr/redeem',
+            'GET /api/bizne-shops',
+            'GET /api/bizne-shops/:id'
         ],
         timestamp: new Date().toISOString()
     });

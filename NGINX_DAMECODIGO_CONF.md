@@ -100,6 +100,29 @@ sudo systemctl reload nginx
 
 Comprobar: `curl -s -o /dev/null -w "%{http_code}" "https://damecodigo.com/api/promotions?limit=1"` → debe devolver **200**.
 
+### API Bizne shops (`/api/bizne-shops`)
+
+Si en el navegador ves **404** en `GET /api/bizne-shops?all=1`, el **Node en el servidor no tiene desplegada** esa ruta (código antiguo o PM2 sin reiniciar). Nginx ya reenvía todo `/api/` al backend; no hace falta regla extra.
+
+**En el servidor:**
+
+```bash
+cd ~/project/link4deal
+git pull
+npm install --prefix .  # si cambió package.json del server
+pm2 restart all   # o el nombre del proceso del backend (ej. link4deal-backend)
+```
+
+**Comprobar backend directo (ajusta el puerto al de PM2, ej. 5001):**
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:5001/api/bizne-shops?all=1"
+```
+
+Debe ser **200** con JSON `success: true`. Si sigue **404**, el `server/index.js` cargado no incluye `app.use('/api/bizne-shops', ...)`.
+
+**Mientras tanto (solo front):** en el build de Vite puedes poner `VITE_ENABLE_BIZNE_SHOPS=false` para no llamar a ese endpoint (evita el 404 en consola hasta desplegar el backend).
+
 ---
 
 ## Si sigue 404: diagnóstico en el servidor
