@@ -23,6 +23,9 @@ const getUploadDir = () => {
 /** Carpeta única para todas las imágenes de promociones. URL: /uploads/promotions/<filename> */
 const getPromotionUploadDir = () => path.join(getUploadDir(), 'promotions');
 
+/** Avatares de influencer (registro / foto de perfil). URL: /uploads/influencers/<filename> */
+const getInfluencerUploadDir = () => path.join(getUploadDir(), 'influencers');
+
 // Configuración de almacenamiento en disco para respaldo local
 const diskStorage = multer.diskStorage({
     destination: async (req, file, cb) => {
@@ -266,11 +269,13 @@ const optimizeImages = async (req, res, next) => {
 module.exports = {
     getUploadDir,
     getPromotionUploadDir,
+    getInfluencerUploadDir,
     upload,
     memoryUpload,
     diskUpload,
     validateFiles,
     cleanupTempFiles,
     optimizeImages,
-    fileFilter
+    fileFilter,
+    handleUploadError
 };

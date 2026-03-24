@@ -1,8 +1,12 @@
+const path = require('path');
+const fs = require('fs').promises;
 const Influencer = require('../models/Influencer');
 const InfluencerMessage = require('../models/InfluencerMessage');
 const Bid = require('../models/Bid');
 const database = require('../config/database');
 const mongoose = require('mongoose');
+const { getInfluencerUploadDir } = require('../middleware/upload');
+const cloudinaryConfig = require('../config/cloudinary');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -203,6 +207,63 @@ class InfluencerController {
             res.status(500).json({
                 success: false,
                 message: err.message || 'Error al crear'
+            });
+        }
+    }
+
+    /**
+     * POST /api/influencers/avatar — Subida de foto de perfil (Multer en memoria).
+     * Si Cloudinary está configurado, sube ahí (carpeta link4deal/influencers); si no, guarda en server/uploads/influencers/.
+     */
+    async uploadAvatar(req, res) {
+        try {
+            if (!req.file || !req.file.buffer) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Sube una imagen en el campo "avatar"'
+                });
+            }
+
+            let avatarUrl = '';
+
+            if (cloudinaryConfig.isConfigured) {
+                try {
+                    const cloudinaryFile = {
+                        buffer: req.file.buffer,
+                        originalname: req.file.originalname,
+                        mimetype: req.file.mimetype
+                    };
+                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile, {
+                        folder: 'link4deal/influencers'
+                    });
+                    if (cloudinaryResult?.success && cloudinaryResult.data?.secure_url) {
+                        avatarUrl = cloudinaryResult.data.secure_url;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Cloudinary avatar no disponible, usando disco local:', e.message);
+                }
+            }
+
+            if (!avatarUrl) {
+                const dir = getInfluencerUploadDir();
+                await fs.mkdir(dir, { recursive: true });
+                const ext = path.extname(req.file.originalname) || '.jpg';
+                const filename = `influencer-avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+                const fullPath = path.join(dir, filename);
+                await fs.writeFile(fullPath, req.file.buffer);
+                avatarUrl = `/uploads/influencers/${filename}`;
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: { avatarUrl },
+                message: 'Avatar subido correctamente'
+            });
+        } catch (err) {
+            console.error('Error subiendo avatar de influencer:', err);
+            res.status(500).json({
+                success: false,
+                message: err.message || 'Error al subir la imagen'
             });
         }
     }

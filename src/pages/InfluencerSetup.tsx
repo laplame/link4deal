@@ -11,7 +11,8 @@ import {
     Youtube,
     Twitter,
     CheckCircle,
-    Sparkles
+    Sparkles,
+    User
 } from 'lucide-react';
 
 interface SocialMediaAccount {
@@ -35,6 +36,8 @@ const InfluencerSetup: React.FC = () => {
     const [influencerScreenshotFile, setInfluencerScreenshotFile] = useState<File | null>(null);
     const [isAnalyzingInfluencer, setIsAnalyzingInfluencer] = useState(false);
     const [analyzeInfluencerError, setAnalyzeInfluencerError] = useState<string | null>(null);
+    const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+    const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
     
     // Form data
     const [formData, setFormData] = useState({
@@ -200,6 +203,21 @@ const InfluencerSetup: React.FC = () => {
         setAnalyzeInfluencerError(null);
     };
 
+    const handleProfilePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (profilePhotoPreview) URL.revokeObjectURL(profilePhotoPreview);
+        setProfilePhotoFile(file);
+        setProfilePhotoPreview(URL.createObjectURL(file));
+        e.target.value = '';
+    };
+
+    const clearProfilePhoto = () => {
+        if (profilePhotoPreview) URL.revokeObjectURL(profilePhotoPreview);
+        setProfilePhotoPreview(null);
+        setProfilePhotoFile(null);
+    };
+
     const handleNext = () => {
         if (currentStep < 3) {
             setCurrentStep(currentStep + 1);
@@ -216,6 +234,25 @@ const InfluencerSetup: React.FC = () => {
         setIsLoading(true);
 
         try {
+            let avatarUrl: string | undefined;
+            if (profilePhotoFile) {
+                const fd = new FormData();
+                fd.append('avatar', profilePhotoFile);
+                const tokenUpload = localStorage.getItem('auth_token');
+                const uploadHeaders: HeadersInit = {};
+                if (tokenUpload) uploadHeaders['Authorization'] = `Bearer ${tokenUpload}`;
+                const uploadRes = await fetch('/api/influencers/avatar', {
+                    method: 'POST',
+                    headers: uploadHeaders,
+                    body: fd
+                });
+                const uploadJson = await uploadRes.json().catch(() => ({}));
+                if (!uploadRes.ok) {
+                    throw new Error(uploadJson?.message || 'Error al subir la foto de perfil');
+                }
+                avatarUrl = uploadJson?.data?.avatarUrl;
+            }
+
             const payload = {
                 displayName: formData.displayName.trim(),
                 bio: formData.bio.trim() || undefined,
@@ -228,7 +265,8 @@ const InfluencerSetup: React.FC = () => {
                     username: acc.username,
                     followers: acc.followers || 0,
                     verified: acc.verified
-                }))
+                })),
+                ...(avatarUrl ? { avatar: avatarUrl } : {})
             };
 
             const token = localStorage.getItem('auth_token');
@@ -270,6 +308,34 @@ const InfluencerSetup: React.FC = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Tu nombre artístico o de marca"
                 />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Foto de perfil (opcional)
+                </label>
+                <p className="text-sm text-gray-600 mb-3">Se guardará al crear el perfil (Cloudinary o servidor).</p>
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="w-20 h-20 rounded-full border-2 border-gray-200 overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
+                        {profilePhotoPreview ? (
+                            <img src={profilePhotoPreview} alt="Vista previa perfil" className="w-full h-full object-cover" />
+                        ) : (
+                            <User className="w-10 h-10 text-gray-400" aria-hidden />
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer text-sm font-medium text-gray-800">
+                            <Upload className="w-4 h-4" />
+                            Elegir imagen
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleProfilePhotoChange} />
+                        </label>
+                        {profilePhotoPreview && (
+                            <button type="button" onClick={clearProfilePhoto} className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
+                                <X className="w-4 h-4" /> Quitar
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div>
