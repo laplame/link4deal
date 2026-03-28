@@ -43,6 +43,13 @@ const STATUS_LABELS: Record<string, string> = {
   deleted: 'Eliminado'
 };
 
+/** URL pública en Polygonscan (mainnet) para la dirección del contrato mostrada en esta página. */
+function getPolygonscanAddressUrl(address: string): string {
+  const trimmed = (address || '').trim();
+  const hex = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
+  return `https://polygonscan.com/address/${hex}`;
+}
+
 interface PromotionData {
   _id: string;
   title: string;
@@ -155,6 +162,10 @@ export default function PromotionSmartContractPage() {
   const jurisdiction = promotion.storeLocation?.country || 'MX';
   const isMxn = (promotion.currency || promotion.currencyDisplay || '').toUpperCase() === 'MXN';
   const valuePerCoupon = valuePerCouponUsd;
+
+  const contractAddress =
+    promotion.smartContract?.address || `0x${(id || '').padEnd(40, '0').slice(0, 42)}`;
+  const polygonExplorerUrl = getPolygonscanAddressUrl(contractAddress);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -301,22 +312,29 @@ export default function PromotionSmartContractPage() {
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Contrato y redes</p>
               <div className="bg-slate-100 rounded-xl p-4 border border-slate-200">
                 <p className="text-[11px] font-mono text-slate-600 break-all mb-3">
-                  {promotion.smartContract?.address || `0x${(id || '').padEnd(40, '0').slice(0, 42)}`}
+                  {contractAddress}
                 </p>
                 <div className="flex flex-wrap gap-2 mb-3">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#8247E5]/15 text-[#6B21A8] border border-[#8247E5]/30">
+                    Polygon
+                  </span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-100 text-purple-800">Solana</span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-100 text-sky-800">XRP</span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-200 text-slate-700">Ethereum</span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-800">Avalanche</span>
                 </div>
+                <p className="text-xs text-slate-500 mb-2">
+                  El enlace abre{' '}
+                  <span className="font-medium text-slate-700">Polygonscan</span> (red Polygon PoS) con esta dirección como referencia.
+                </p>
                 <a
-                  href={promotion.smartContract?.blockchainExplorer || '#'}
+                  href={polygonExplorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  Ver smart contract en el explorador
+                  Ver smart contract en Polygonscan
                 </a>
               </div>
             </div>

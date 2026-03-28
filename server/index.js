@@ -346,13 +346,13 @@ async function startServer() {
             console.log('⚠️ MongoDB en modo simulado');
         }
         
-        // Verificar Cloudinary
-        if (cloudinaryConfig.isReady && typeof cloudinaryConfig.isReady === 'function' && cloudinaryConfig.isReady()) {
-            console.log('☁️ Cloudinary configurado');
-        } else if (cloudinaryConfig.isConfigured) {
-            console.log('☁️ Cloudinary configurado');
+        // Cloudinary (necesario para isConfigured = true en uploadAvatar, promociones, etc.)
+        console.log('☁️ Configurando Cloudinary...');
+        const cloudinaryReady = cloudinaryConfig.configure();
+        if (cloudinaryReady) {
+            console.log('☁️ Cloudinary listo para uploads');
         } else {
-            console.log('⚠️ Cloudinary no configurado - algunas funcionalidades pueden no estar disponibles');
+            console.log('⚠️ Cloudinary no configurado — imágenes usarán almacenamiento local (/uploads/...) donde aplique');
         }
         
         // Iniciar servidor

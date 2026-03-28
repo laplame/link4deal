@@ -25,28 +25,76 @@ Guía para entender el flujo en web y replicarlo en la app móvil.
 
 ---
 
-## 2. Foto de perfil: Multer en memoria, Cloudinary o disco
+## 2. Foto de perfil: subida, almacenamiento y recuperación
 
-### Respuesta corta
+### 2.1 Cómo se sube (flujo end-to-end)
 
-| Pregunta | En el flujo actual `/influencer-setup` |
-|----------|----------------------------------------|
-| **¿Cómo se sube la foto de perfil?** | **`POST /api/influencers/avatar`** con `multipart/form-data`, campo **`avatar`**. **Multer** usa **`memoryStorage()`** (`memoryUpload.single('avatar')` en `server/routes/influencers.js`): el archivo llega como **`req.file.buffer`** en RAM. |
-| **¿Se usa Cloudinary?** | **Sí, si está configurado** (`CLOUDINARY_*` en `.env`). Se sube a la carpeta **`link4deal/influencers`**. La URL (`secure_url`) se devuelve en la respuesta. |
-| **Si Cloudinary no está disponible** | Se escribe el buffer en **`server/uploads/influencers/`** y la URL pública es **`/uploads/influencers/<filename>`** (mismo patrón que otras subidas locales). |
-| **`POST /api/influencers`** | Sigue siendo **solo JSON**. El cliente primero sube el avatar (si hay), obtiene `avatarUrl`, y en el **create** envía **`avatar: "<url>"`**. |
-| **Captura para IA** (`analyze-profile-image`) | Sigue en **memoria**, sin persistir; es independiente de la foto de perfil. |
-| **Portfolio paso 3** | Sigue **sin** enviarse al backend (sin cambio). |
+1. **Cliente (web):** en `InfluencerSetup`, si el usuario eligió archivo, al pulsar **Crear perfil** se hace primero **`POST /api/influencers/avatar`** con `FormData` y el campo **`avatar`** (no se envía `Content-Type` manualmente: el navegador añade el `boundary` de `multipart`).
+2. **Middleware:** `memoryUpload.single('avatar')` (`server/middleware/upload.js`) — el archivo **no** se escribe a disco todavía; solo existe **`req.file.buffer`** en RAM. Tipos MIME y extensión validados (JPEG, PNG, WEBP, GIF); límite de tamaño `MAX_FILE_SIZE` o 10 MB por defecto.
+3. **Controlador `uploadAvatar`:**  
+   - Si **Cloudinary está configurado** (`cloudinaryConfig.configure()` en el arranque de **`server/index.js`**) y `uploadImage` devuelve éxito → se guarda la URL **`secure_url`** (HTTPS) en la respuesta. Carpeta en Cloudinary: **`link4deal/influencers`** (sobrescribe el `CLOUDINARY_FOLDER` por defecto para esta ruta).  
+   - Si Cloudinary no está configurado, falla la subida o la respuesta no trae `secure_url` → se escribe el buffer en **`getInfluencerUploadDir()`** (normalmente `server/uploads/influencers/`) y se devuelve una ruta **relativa al sitio**: **`/uploads/influencers/<filename>`**.
+4. **Cliente:** el JSON de respuesta incluye **`data.avatarUrl`**. Ese mismo valor se envía en el siguiente paso como **`avatar`** en **`POST /api/influencers`** (JSON).
+5. **Persistencia:** `influencerController.create` guarda **`avatar`** como string en el documento MongoDB (`Influencer`).
 
-### Detalle técnico (referencias)
-
-- **Avatar:** `server/routes/influencers.js` → `POST /avatar` → `influencerController.uploadAvatar` → `cloudinaryConfig.uploadImage(..., { folder: 'link4deal/influencers' })` o disco via `getInfluencerUploadDir()` (`server/middleware/upload.js`).
-- **Análisis IA:** `server/routes/analyzeProfile.js` → `memoryUpload.single('image')` → Gemini (sin guardar archivo).
-- **Crear influencer:** `POST /` → `influencerController.create` lee `body.avatar` y lo guarda en MongoDB.
+**Independiente:** la captura para **“Analizar con IA”** usa **`POST /api/analyze-profile-image`** (campo `image`), **no** persiste el archivo; no es la foto de perfil guardada.
 
 ---
 
-## 3. Subida de avatar (antes del alta)
+### 2.2 Cómo se recupera y se muestra la imagen
+
+| Paso | Qué ocurre |
+|------|-------------|
+| **Lectura** | Listados y detalle (`GET /api/influencers`, `GET /api/influencers/:id`, etc.) devuelven el influencer con **`avatar`** tal cual está en MongoDB (string). |
+| **Formato del valor** | Puede ser **URL absoluta HTTPS** (Cloudinary) o **ruta relativa** (`/uploads/influencers/...`) si se guardó en disco. |
+| **Frontend** | Componentes como `InfluencersMarketplace`, `InfluencerProfilePage`, `InfluencerProfileModal` usan la URL en el atributo **`src`** de la imagen (p. ej. `src={influencer.avatar}`). |
+| **Rutas relativas en el navegador** | El navegador pide la imagen al **mismo origen** que la SPA (ej. `http://localhost:5173/uploads/...`). En desarrollo, **Vite** (`vite.config.ts`) hace **proxy** de **`/uploads`** y **`/api`** hacia el backend (`http://localhost:3000`), así que el PNG/JPG se sirve bien. |
+| **App móvil / otro dominio** | Si `avatar` es **`/uploads/...`**, hay que **prefijar la base del API** (ej. `https://tudominio.com`) para construir la URL absoluta antes de cargar la imagen. Con Cloudinary, la URL ya es absoluta y suele funcionar sin cambios. |
+
+**Servir archivos locales:** en **`server/index.js`** (y `server/server.js` en el mini-servidor de promos) existe **`app.use('/uploads', express.static(uploadsPath))`**, donde `uploadsPath` = `path.resolve(getUploadDir())`. La carpeta física debe coincidir con la ruta que usa `getInfluencerUploadDir()` (variable **`UPLOAD_PATH`** en `.env` si está definida).
+
+---
+
+### 2.3 Verificación de la lógica (checklist técnico)
+
+| Comprobación | Estado esperado |
+|--------------|-----------------|
+| Multer solo en memoria para `/avatar` | `memoryStorage()` + `single('avatar')`; disco solo si se escribe en `uploadAvatar` (fallback). |
+| Cloudinary activo en el proceso principal | `cloudinaryConfig.configure()` se llama al arrancar **`server/index.js`**; sin eso `isConfigured` queda en false y **no** se usa Cloudinary (solo disco). |
+| `uploadImage` devuelve error controlado | `cloudinary.js` devuelve `{ success: false }` sin lanzar; si no hay `secure_url`, `uploadAvatar` cae al fallback local. |
+| URL guardada en MongoDB | Un solo string; el front no reescribe la URL. |
+| Imagen local accesible | Mismo `getUploadDir()` para guardar y para `express.static('/uploads')`. |
+
+---
+
+### 2.4 Mejoras posibles (roadmap de subida de imágenes)
+
+| Área | Idea |
+|------|------|
+| **Tamaño y peso** | Reducir en servidor con **Sharp** (resize máx. ej. 512×512, WebP) antes de Cloudinary/disco; o bajar el límite específico para `avatar` (hoy comparte `MAX_FILE_SIZE` global de Multer). |
+| **Seguridad** | Rechazar dimensiones absurdas o validar “magic bytes” además del MIME (no solo extensión). |
+| **Cloudinary** | Guardar **`public_id`** en `Influencer` para poder **borrar** la imagen anterior al cambiar avatar (evitar huérfanos en la nube). |
+| **Disco local** | Mismo criterio: borrar archivo anterior si se implementa **PATCH** de perfil con nueva foto. |
+| **UX** | Placeholder en `<img>` si `avatar` viene vacío (evitar `src=""`); estado de carga en la subida. |
+| **API** | Endpoint **`PATCH /api/influencers/me/avatar`** (o similar) para usuarios ya registrados, reutilizando `uploadAvatar` o extrayendo un servicio compartido. |
+| **CDN / caché** | Headers de caché en Nginx para `/uploads/influencers/*`; Cloudinary ya optimiza entrega. |
+| **Portfolio paso 3** | Si se implementa, reutilizar el mismo patrón (multer memoria → Cloudinary o disco) y límites por tipo. |
+
+---
+
+### 2.5 Tabla rápida (resumen)
+
+| Pregunta | Respuesta |
+|----------|-----------|
+| **¿Cómo se sube?** | `POST /api/influencers/avatar`, campo **`avatar`**, Multer en **memoria** → Cloudinary o disco. |
+| **¿Cómo se guarda la referencia?** | `POST /api/influencers` con **`avatar: "<url>"`** → campo **`avatar`** en MongoDB. |
+| **¿Cómo se recupera?** | `GET` de influencers; **`avatar`** en JSON → `img src` (relativo necesita mismo origen + proxy o base URL absoluta). |
+| **Captura IA** | No persiste; solo `analyze-profile-image`. |
+| **Portfolio** | Aún no sube al backend. |
+
+---
+
+## 3. API de subida de avatar (antes del alta)
 
 | Método | URL | Body |
 |--------|-----|------|
@@ -65,6 +113,7 @@ o, en fallback local:
 ```
 
 ---
+
 
 ## 4. Paso opcional: análisis con IA (screenshot)
 
@@ -179,6 +228,8 @@ En el controlador (`influencerController.create`):
 | API avatar | `server/routes/influencers.js` → `POST /avatar` (`memoryUpload.single('avatar')`) |
 | Lógica crear / upload avatar | `server/controllers/influencerController.js` → `create`, `uploadAvatar` |
 | Multer memoria / carpeta influencers | `server/middleware/upload.js` (`memoryUpload`, `getInfluencerUploadDir`) |
+| Arranque Cloudinary (`configure()`) | `server/index.js` → `startServer()` (necesario para usar Cloudinary en `uploadAvatar`) |
+| Servir `/uploads` | `server/index.js` (`express.static` + `getUploadDir()`); proxy Vite `vite.config.ts` (`/uploads` → backend) |
 | Modelo | `server/models/Influencer.js` |
 | Análisis imagen (memoria, sin persistir) | `server/routes/analyzeProfile.js`, `server/services/geminiProfileAnalyzer.js` |
 
@@ -190,6 +241,7 @@ En el controlador (`influencerController.create`):
 - [ ] Validaciones: paso 1 (`displayName` + `bio`); paso 2 (al menos una preferencia en `collaborationPreferences`).
 - [ ] `POST /api/analyze-profile-image` con `image` + `type=influencer` (opcional).
 - [ ] Si hay foto de perfil: `POST /api/influencers/avatar` con campo **`avatar`**, luego `POST /api/influencers` con `avatar` en el JSON.
+- [ ] Si `avatar` es ruta relativa (`/uploads/...`), anteponer la **base URL del API** al mostrar la imagen (no aplica si Cloudinary devolvió URL HTTPS).
 - [ ] `POST /api/influencers` con el JSON de la sección 6; incluir `Authorization` si hay sesión (también en `/avatar` si aplica).
 - [ ] Manejar 201 → navegar a lista de influencers o pantalla de confirmación.
 - [ ] Manejar 503/400 con mensaje claro.
