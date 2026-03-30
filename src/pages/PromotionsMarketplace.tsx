@@ -29,6 +29,19 @@ import { getPromotionImageUrl } from '../utils/promotionImage';
 
 const IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
 
+interface PromotionLocalized {
+  es?: {
+    badgeShort?: string;
+    badgeAria?: string;
+    activationByLocationDescription?: string;
+  };
+  en?: {
+    badgeShort?: string;
+    badgeAria?: string;
+    activationByLocationDescription?: string;
+  };
+}
+
 interface Promotion {
   id: string;
   title: string;
@@ -54,6 +67,10 @@ interface Promotion {
   views: number;
   hot: boolean;
   featured: boolean;
+  /** Alineado a API / app: cupón con validación por GPS */
+  gpsActivationEnabled?: boolean;
+  locationRadiusMeters?: number;
+  localizedStrings?: PromotionLocalized;
 }
 
 interface FilterState {
@@ -63,6 +80,8 @@ interface FilterState {
   auctionType: string;
   status: string;
   sortBy: string;
+  /** Diferenciar promos que requieren estar en zona (GPS) */
+  activationType: 'all' | 'gps' | 'standard';
 }
 
 export default function PromotionsMarketplace() {
@@ -75,7 +94,8 @@ export default function PromotionsMarketplace() {
     priceRange: 'all',
     auctionType: 'all',
     status: 'all',
-    sortBy: 'trending'
+    sortBy: 'trending',
+    activationType: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -165,7 +185,15 @@ export default function PromotionsMarketplace() {
               engagement: promo.engagement || 4.5,
               views: promo.views || 0,
               hot: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot' || false,
-              featured: promo.featured || promo.hotness === 'fire' || promo.hotness === 'hot' || false
+              featured: promo.featured || promo.hotness === 'fire' || promo.hotness === 'hot' || false,
+              gpsActivationEnabled: !!(promo.gpsActivationEnabled ?? promo.activateByGps),
+              locationRadiusMeters:
+                typeof promo.locationRadiusMeters === 'number'
+                  ? promo.locationRadiusMeters
+                  : typeof promo.gpsRadiusMeters === 'number'
+                    ? promo.gpsRadiusMeters
+                    : 500,
+              localizedStrings: promo.localizedStrings
             };
           });
 
@@ -218,6 +246,11 @@ export default function PromotionsMarketplace() {
     if (filters.status !== 'all') {
       filtered = filtered.filter(promo => promo.status === filters.status);
     }
+    if (filters.activationType === 'gps') {
+      filtered = filtered.filter(promo => promo.gpsActivationEnabled);
+    } else if (filters.activationType === 'standard') {
+      filtered = filtered.filter(promo => !promo.gpsActivationEnabled);
+    }
 
     // Ordenamiento
     switch (filters.sortBy) {
@@ -256,6 +289,7 @@ export default function PromotionsMarketplace() {
   const statsComisionPromedio = filteredPromotions.length
     ? Math.round(filteredPromotions.reduce((sum, p) => sum + (p.commission || 0), 0) / filteredPromotions.length)
     : 0;
+  const statsPorUbicacion = filteredPromotions.filter(p => p.gpsActivationEnabled).length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -399,13 +433,31 @@ export default function PromotionsMarketplace() {
                   <option value="ending">Terminando</option>
                   <option value="closed">Cerradas</option>
                 </select>
+
+              </div>
+              <div className="mt-4 max-w-lg">
+                <label className="block text-xs font-medium text-amber-900/80 mb-1">Diferenciar por tipo de cupón</label>
+                <select
+                  value={filters.activationType}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      activationType: e.target.value as FilterState['activationType']
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-amber-200 bg-amber-50/50 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                >
+                  <option value="all">Todas: con o sin activación por ubicación</option>
+                  <option value="gps">Solo promos con activación por ubicación (GPS)</option>
+                  <option value="standard">Solo sin requisito de ubicación</option>
+                </select>
               </div>
             </div>
           )}
         </div>
 
         {/* Estadísticas rápidas: suma de datos de la API (GET /api/promotions) */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -450,6 +502,19 @@ export default function PromotionsMarketplace() {
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <DollarSign className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-amber-100 ring-1 ring-amber-100/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Por ubicación (GPS)</p>
+                <p className="text-2xl font-bold text-amber-700">{statsPorUbicacion}</p>
+                <p className="text-xs text-amber-800/80 mt-1">En el listado filtrado</p>
+              </div>
+              <div className="p-3 bg-amber-100 rounded-lg">
+                <MapPin className="w-6 h-6 text-amber-700" />
               </div>
             </div>
           </div>
@@ -525,6 +590,18 @@ export default function PromotionsMarketplace() {
                     <div className="bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
                       <Star className="w-3 h-3" />
                       FEATURED
+                    </div>
+                  )}
+                  {promotion.gpsActivationEnabled && (
+                    <div
+                      className="bg-amber-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 shadow-sm"
+                      title={
+                        promotion.localizedStrings?.es?.badgeAria ||
+                        'Requiere estar en la zona para obtener el cupón'
+                      }
+                    >
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      {promotion.localizedStrings?.es?.badgeShort ?? 'Por ubicación'}
                     </div>
                   )}
                 </div>

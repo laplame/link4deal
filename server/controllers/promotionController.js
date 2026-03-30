@@ -7,6 +7,7 @@ const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
 const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
+const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -122,8 +123,30 @@ class PromotionController {
                 specifications,
                 termsAndConditions,
                 isHotOffer,
-                hotness
+                hotness,
+                storeLatitude,
+                storeLongitude,
+                activateByGps,
+                gpsRadiusMeters,
+                // Alias usados por la app móvil (mismo significado que activateByGps / gpsRadiusMeters)
+                gpsActivationEnabled,
+                locationRadiusMeters,
+                storeCountry
             } = req.body;
+
+            /** App móvil envía gpsActivationEnabled / locationRadiusMeters; web envía activateByGps / gpsRadiusMeters */
+            const effectiveActivateByGps =
+                activateByGps !== undefined && activateByGps !== null ? activateByGps : gpsActivationEnabled;
+            const effectiveGpsRadiusMeters =
+                gpsRadiusMeters !== undefined && gpsRadiusMeters !== null && gpsRadiusMeters !== ''
+                    ? gpsRadiusMeters
+                    : locationRadiusMeters;
+
+            const parseCoord = (v) => {
+                if (v === undefined || v === null || v === '') return NaN;
+                const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+                return Number.isFinite(n) ? n : NaN;
+            };
 
             // Solo el título es obligatorio para permitir crear promociones de forma amplia
             const requiredFields = ['title'];
@@ -349,13 +372,39 @@ class PromotionController {
                 currency: currency || 'USD',
                 discountPercentage: discountPercentage || 0,
                 storeName: storeName ? String(storeName).trim() : '',
-                storeLocation: {
-                    address: storeAddress ? String(storeAddress).trim() : '',
-                    city: storeCity ? String(storeCity).trim() : '',
-                    state: storeState ? String(storeState).trim() : '',
-                    country: 'México'
-                },
-                isPhysicalStore: isPhysicalStore === 'true' || isPhysicalStore === true,
+                storeLocation: (() => {
+                    const lat = parseCoord(storeLatitude);
+                    const lng = parseCoord(storeLongitude);
+                    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+                    const countryStr = storeCountry && String(storeCountry).trim() ? String(storeCountry).trim() : 'México';
+                    return {
+                        address: storeAddress ? String(storeAddress).trim() : '',
+                        city: storeCity ? String(storeCity).trim() : '',
+                        state: storeState ? String(storeState).trim() : '',
+                        country: countryStr,
+                        ...(hasCoords ? { coordinates: { latitude: lat, longitude: lng } } : {})
+                    };
+                })(),
+                isPhysicalStore: (() => {
+                    if (isPhysicalStore === false || isPhysicalStore === 'false') return false;
+                    if (isPhysicalStore === true || isPhysicalStore === 'true') return true;
+                    const gpsOn =
+                        effectiveActivateByGps === true ||
+                        effectiveActivateByGps === 'true';
+                    return gpsOn;
+                })(),
+                activateByGps: effectiveActivateByGps === true || effectiveActivateByGps === 'true',
+                gpsRadiusMeters: (() => {
+                    const raw =
+                        effectiveGpsRadiusMeters !== undefined &&
+                        effectiveGpsRadiusMeters !== null &&
+                        effectiveGpsRadiusMeters !== ''
+                            ? effectiveGpsRadiusMeters
+                            : 500;
+                    const r = typeof raw === 'number' ? Math.round(raw) : parseInt(String(raw), 10);
+                    if (!Number.isFinite(r)) return 500;
+                    return Math.min(50000, Math.max(50, r));
+                })(),
                 images: processedImages,
                 ocrData: ocrData || undefined,
                 tags: parsedTags,
@@ -528,7 +577,7 @@ class PromotionController {
                     return res.json({
                         success: true,
                         data: {
-                            docs: paginatedPromotions,
+                            docs: paginatedPromotions.map((p) => enrichPromotionClientFields(p)),
                             totalDocs: global.simulatedPromotions.length,
                             limit: limitNum,
                             page: pageNum,
@@ -588,10 +637,16 @@ class PromotionController {
             };
 
             const promotions = await Promotion.paginate(query, options);
+            const data = {
+                ...promotions,
+                docs: (promotions.docs || []).map((doc) =>
+                    enrichPromotionClientFields(doc.toObject ? doc.toObject() : doc)
+                )
+            };
 
             res.json({
                 success: true,
-                data: promotions,
+                data,
                 message: 'Promociones obtenidas exitosamente'
             });
 
@@ -645,7 +700,7 @@ class PromotionController {
                 const timeLeftLabel = diffDays > 0
                     ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
                     : diffHours > 0 ? `${diffHours}h ${diffMinutes}m` : `${diffMinutes}m`;
-                return {
+                return enrichPromotionClientFields({
                     ...promo,
                     id: promo._id ? promo._id.toString() : promo.id,
                     isActive: true,
@@ -653,7 +708,7 @@ class PromotionController {
                     daysLeft: Math.max(0, diffDays),
                     timeLeftLabel,
                     displayStatus
-                };
+                });
             });
             return res.json({
                 success: true,
@@ -689,7 +744,7 @@ class PromotionController {
                     if (promo) {
                         return res.json({
                             success: true,
-                            data: promo,
+                            data: enrichPromotionClientFields(promo),
                             message: 'Promoción obtenida (modo simulado)'
                         });
                     }
@@ -707,7 +762,7 @@ class PromotionController {
                     if (promo) {
                         return res.json({
                             success: true,
-                            data: promo,
+                            data: enrichPromotionClientFields(promo),
                             message: 'Promoción obtenida (modo simulado)'
                         });
                     }
@@ -735,14 +790,14 @@ class PromotionController {
 
             const promoObj = promotion.toObject ? promotion.toObject() : promotion;
             const contractValues = await getValuePerCouponAndMaxEmissionAsync(promoObj);
-            const enriched = {
+            const enriched = enrichPromotionClientFields({
                 ...promoObj,
                 valuePerCouponUsd: contractValues.valuePerCouponUsd,
                 maxEmissionUsd: contractValues.maxEmissionUsd,
                 fxRateUsed: contractValues.fxRateUsed,
                 currencyDisplay: promoObj.currency || 'USD',
                 normalizedCurrency: contractValues.normalizedCurrency || 'USD'
-            };
+            });
 
             res.json({
                 success: true,
@@ -910,6 +965,13 @@ class PromotionController {
             }
 
             const updateData = req.body;
+            // Alias app móvil → campos del modelo
+            if (updateData.activateByGps === undefined && updateData.gpsActivationEnabled !== undefined) {
+                updateData.activateByGps = updateData.gpsActivationEnabled;
+            }
+            if (updateData.gpsRadiusMeters === undefined && updateData.locationRadiusMeters !== undefined) {
+                updateData.gpsRadiusMeters = updateData.locationRadiusMeters;
+            }
 
             // Verificar que la promoción existe
             const existingPromotion = await Promotion.findById(id);
@@ -941,7 +1003,8 @@ class PromotionController {
                 'storeName', 'storeLocation', 'isPhysicalStore', 'tags',
                 'features', 'specifications', 'termsAndConditions', 'isHotOffer', 'hotness',
                 'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status',
-                'redirectInsteadOfQr', 'redirectToUrl'
+                'redirectInsteadOfQr', 'redirectToUrl',
+                'activateByGps', 'gpsRadiusMeters'
             ];
 
             const filteredData = {};
@@ -959,10 +1022,13 @@ class PromotionController {
                             console.warn(`⚠️ Error parseando ${field}:`, error.message);
                             filteredData[field] = updateData[field];
                         }
-                    } else if (field === 'redirectInsteadOfQr') {
+                    } else if (field === 'redirectInsteadOfQr' || field === 'activateByGps') {
                         filteredData[field] = updateData[field] === true || updateData[field] === 'true';
                     } else if (field === 'redirectToUrl') {
                         filteredData[field] = (updateData[field] && String(updateData[field]).trim()) ? String(updateData[field]).trim() : '';
+                    } else if (field === 'gpsRadiusMeters') {
+                        const r = parseInt(updateData[field], 10);
+                        filteredData[field] = Number.isFinite(r) ? Math.min(50000, Math.max(50, r)) : 500;
                     } else {
                         filteredData[field] = updateData[field];
                     }
@@ -995,9 +1061,11 @@ class PromotionController {
                 { new: true, runValidators: true }
             );
 
+            const updatedPlain = updatedPromotion.toObject ? updatedPromotion.toObject() : updatedPromotion;
+
             res.json({
                 success: true,
-                data: updatedPromotion,
+                data: enrichPromotionClientFields(updatedPlain),
                 message: 'Promoción actualizada exitosamente'
             });
 

@@ -48,6 +48,8 @@ interface ProductCardProps {
             storeName: string;
         };
         distance?: number; // en metros
+        activateByGps?: boolean;
+        gpsRadiusMeters?: number;
     };
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
@@ -375,7 +377,11 @@ export default function ProductCard({
                     productCurrency={product.currency}
                     productImage={product.image}
                     discountPercentage={product.originalPrice ? discountPercentage : undefined}
-                    autoGenerateOnOpen={true}
+                    autoGenerateOnOpen={!product.activateByGps}
+                    activateByGps={product.activateByGps}
+                    gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
+                    promotionLat={product.storeLocation?.latitude}
+                    promotionLng={product.storeLocation?.longitude}
                     onClose={() => setShowCouponForm(false)}
                 />
             )}

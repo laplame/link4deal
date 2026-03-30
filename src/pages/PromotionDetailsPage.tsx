@@ -80,6 +80,11 @@ interface ProductDetails {
         benefits: string[];
         restrictions: string[];
     };
+    /** Activación solo cerca de coordenadas de tienda (GPS) */
+    activateByGps?: boolean;
+    gpsRadiusMeters?: number;
+    promotionLat?: number | null;
+    promotionLng?: number | null;
 }
 
 export default function PromotionDetailsPage() {
@@ -203,7 +208,11 @@ export default function PromotionDetailsPage() {
                             'Oferta válida mientras duren existencias',
                             'No combinable con otros descuentos'
                         ]
-                    }
+                    },
+                    activateByGps: !!promo.activateByGps,
+                    gpsRadiusMeters: typeof promo.gpsRadiusMeters === 'number' ? promo.gpsRadiusMeters : 500,
+                    promotionLat: promo.storeLocation?.coordinates?.latitude ?? null,
+                    promotionLng: promo.storeLocation?.coordinates?.longitude ?? null
                 };
 
                 setProduct(transformedProduct);
@@ -413,6 +422,24 @@ export default function PromotionDetailsPage() {
                                             <span>Stock: {product.stock} unidades disponibles</span>
                                         </div>
                                     </div>
+
+                                    {product.activateByGps && (
+                                        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                            <div className="flex items-start gap-2">
+                                                <MapPin className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="font-medium text-amber-900">Activación por ubicación (GPS)</p>
+                                                    <p className="text-sm text-amber-800 mt-1">
+                                                        Para obtener el cupón debes permitir acceso a tu ubicación y estar dentro de{' '}
+                                                        <strong>{product.gpsRadiusMeters ?? 500} m</strong>
+                                                        {product.promotionLat != null && product.promotionLng != null
+                                                            ? ' del punto configurado para esta promoción.'
+                                                            : ' del punto de la tienda (coordenadas pendientes en la promoción).'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     
                                     <div className="flex gap-3">
                                         <button
@@ -951,7 +978,11 @@ export default function PromotionDetailsPage() {
                     discountPercentage={product.originalPrice && product.originalPrice > 0
                         ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
                         : undefined}
-                    autoGenerateOnOpen={true}
+                    autoGenerateOnOpen={!product.activateByGps}
+                    activateByGps={product.activateByGps}
+                    gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
+                    promotionLat={product.promotionLat ?? undefined}
+                    promotionLng={product.promotionLng ?? undefined}
                     onClose={() => setShowCouponForm(false)}
                 />
             )}

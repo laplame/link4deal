@@ -11,6 +11,7 @@ import {
     ExternalLink
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { haversineDistanceMeters } from '../utils/geo';
 
 interface CouponRequestFormProps {
     /** ID de la promoción (MongoDB _id). Se envía como promotionId al backend; debe ser el mismo en index y en promotion-details. */
@@ -23,6 +24,11 @@ interface CouponRequestFormProps {
     discountPercentage?: number;
     onClose: () => void;
     autoGenerateOnOpen?: boolean;
+    /** Si true, solo se emite el cupón si el usuario está dentro del radio GPS respecto al punto de la promoción */
+    activateByGps?: boolean;
+    gpsRadiusMeters?: number;
+    promotionLat?: number;
+    promotionLng?: number;
 }
 
 interface FormData {
@@ -38,7 +44,11 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     productImage,
     discountPercentage: discountPercentageProp,
     onClose,
-    autoGenerateOnOpen = false
+    autoGenerateOnOpen = false,
+    activateByGps = false,
+    gpsRadiusMeters = 500,
+    promotionLat,
+    promotionLng
 }) => {
     const [step, setStep] = useState<'form' | 'qr' | 'success'>('form');
     const [formData, setFormData] = useState<FormData>({
@@ -53,6 +63,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const [qrWarning, setQrWarning] = useState<string | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState(120); // 2 minutos para que el cupón sea único/válido
     const [redirectToUrl, setRedirectToUrl] = useState<string | null>(null); // Si la promoción redirige a Amazon (no QR)
+    const [gpsError, setGpsError] = useState<string | null>(null);
     const autoRequestedRef = useRef(false);
 
     const getOrCreateDeviceId = () => {
@@ -90,6 +101,44 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
+    };
+
+    const verifyGpsForCoupon = (): Promise<boolean> => {
+        if (!activateByGps) return Promise.resolve(true);
+        if (promotionLat == null || promotionLng == null || Number.isNaN(promotionLat) || Number.isNaN(promotionLng)) {
+            setGpsError('Esta promoción requiere ubicación, pero no hay coordenadas de tienda configuradas. Contacta al soporte.');
+            return Promise.resolve(false);
+        }
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            setGpsError('Tu navegador no permite geolocalización.');
+            return Promise.resolve(false);
+        }
+        return new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const d = haversineDistanceMeters(
+                        pos.coords.latitude,
+                        pos.coords.longitude,
+                        promotionLat,
+                        promotionLng
+                    );
+                    if (d <= gpsRadiusMeters) {
+                        setGpsError(null);
+                        resolve(true);
+                    } else {
+                        setGpsError(
+                            `Debes estar dentro de ${gpsRadiusMeters} m del punto de la oferta. Distancia aproximada: ${Math.round(d)} m.`
+                        );
+                        resolve(false);
+                    }
+                },
+                () => {
+                    setGpsError('Activa el permiso de ubicación para validar que estás en la zona de la promoción.');
+                    resolve(false);
+                },
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+            );
+        });
     };
 
     const issueCouponQr = async () => {
@@ -167,8 +216,14 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+        setGpsError(null);
+
         if (!validateForm()) {
+            return;
+        }
+
+        const gpsOk = await verifyGpsForCoupon();
+        if (!gpsOk) {
             return;
         }
 
@@ -178,14 +233,15 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     // Mismo flujo en index y en promotion-details: al montar o cambiar promoción, solicitar cupón (o redirección) con el mismo promotionId
     useEffect(() => {
         setRedirectToUrl(null);
+        setGpsError(null);
         autoRequestedRef.current = false;
     }, [productId]);
 
     useEffect(() => {
-        if (!autoGenerateOnOpen || autoRequestedRef.current) return;
+        if (!autoGenerateOnOpen || activateByGps || autoRequestedRef.current) return;
         autoRequestedRef.current = true;
         issueCouponQr();
-    }, [autoGenerateOnOpen, productId]);
+    }, [autoGenerateOnOpen, activateByGps, productId]);
 
     const handleWhatsAppRedirect = () => {
         const message = `¡Hola! Necesito ayuda con mi cupón de Link4Deal:\n\n🎫 Código: ${couponCode}\n🏷️ Producto: ${productName}`;
@@ -418,6 +474,20 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                             <p className="text-red-500 text-sm mt-1">{errors.whatsapp}</p>
                         )}
                     </div>
+
+                    {activateByGps && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
+                            <p className="font-medium mb-1">Ubicación requerida</p>
+                            <p>
+                                Al continuar, el navegador pedirá tu ubicación. Debes estar dentro de{' '}
+                                <strong>{gpsRadiusMeters} m</strong> del punto de la oferta para obtener el cupón.
+                            </p>
+                        </div>
+                    )}
+
+                    {gpsError && (
+                        <p className="text-red-600 text-sm bg-red-50 border border-red-100 rounded-lg px-3 py-2">{gpsError}</p>
+                    )}
 
                     {/* Info Text */}
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

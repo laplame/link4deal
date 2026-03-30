@@ -13,7 +13,8 @@ import {
     Gift,
     Sparkles,
     QrCode,
-    ExternalLink
+    ExternalLink,
+    Smartphone
 } from 'lucide-react';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 
@@ -35,6 +36,10 @@ interface QuickPromotionData {
     totalQuantity: number;
     images: File[];
     termsAndConditions: string;
+    activateByGps: boolean;
+    gpsRadiusMeters: number;
+    storeLatitude: string;
+    storeLongitude: string;
 }
 
 const OFFER_TYPES: { value: OfferType; label: string; description: string }[] = [
@@ -134,7 +139,8 @@ export default function QuickPromotionPage() {
     const navigate = useNavigate();
     const defaultValidFrom = new Date().toISOString().split('T')[0];
     const defaultValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const [formData, setFormData] = useState<QuickPromotionData>({
+
+    const emptyQuickForm = (): QuickPromotionData => ({
         title: '',
         description: '',
         brand: '',
@@ -149,8 +155,14 @@ export default function QuickPromotionPage() {
         offerType: 'percentage',
         cashbackValue: 0,
         images: [],
-        termsAndConditions: ''
+        termsAndConditions: '',
+        activateByGps: false,
+        gpsRadiusMeters: 500,
+        storeLatitude: '',
+        storeLongitude: ''
     });
+
+    const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
@@ -167,10 +179,40 @@ export default function QuickPromotionPage() {
     const [amazonProductUrl, setAmazonProductUrl] = useState('');
     /** URL de redirección cuando redirectDestination === 'custom'. */
     const [customRedirectUrl, setCustomRedirectUrl] = useState('');
+    const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
+    const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
+
+    const fillStoreCoordsFromDevice = () => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            setGpsFromDeviceError('Tu navegador no permite geolocalización.');
+            return;
+        }
+        setGpsFromDeviceLoading(true);
+        setGpsFromDeviceError(null);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setFormData((prev) => ({
+                    ...prev,
+                    storeLatitude: String(pos.coords.latitude),
+                    storeLongitude: String(pos.coords.longitude)
+                }));
+                setGpsFromDeviceLoading(false);
+            },
+            (err) => {
+                setGpsFromDeviceLoading(false);
+                setGpsFromDeviceError(
+                    err.code === 1
+                        ? 'Permiso de ubicación denegado. Actívalo en el navegador o en Ajustes del sistema.'
+                        : 'No se pudo obtener la ubicación. Inténtalo de nuevo o escribe latitud y longitud a mano.'
+                );
+            },
+            { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+        );
+    };
 
     const loadTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
         setFormData({
-            ...formData,
+            ...emptyQuickForm(),
             ...template.data,
             images: [],
             termsAndConditions: formData.termsAndConditions
@@ -386,6 +428,14 @@ export default function QuickPromotionPage() {
             if (formData.termsAndConditions?.trim()) {
                 formDataToSend.append('termsAndConditions', formData.termsAndConditions.trim());
             }
+            formDataToSend.append('activateByGps', formData.activateByGps ? 'true' : 'false');
+            formDataToSend.append('gpsRadiusMeters', String(formData.gpsRadiusMeters));
+            if (formData.storeLatitude.trim()) {
+                formDataToSend.append('storeLatitude', formData.storeLatitude.trim());
+            }
+            if (formData.storeLongitude.trim()) {
+                formDataToSend.append('storeLongitude', formData.storeLongitude.trim());
+            }
             // Tipo de promoción: redirección en lugar de QR
             formDataToSend.append('redirectInsteadOfQr', promotionType === 'quick-promotion' ? 'true' : 'false');
             if (promotionType === 'quick-promotion') {
@@ -488,7 +538,7 @@ export default function QuickPromotionPage() {
                             const id = createdPromotionId;
                             setShowReward(false);
                             setSubmitSuccess(false);
-                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
+                            setFormData(emptyQuickForm());
                             setImagePreviews([]);
                             setCreatedPromotionId(null);
                             setPromotionType('coupon');
@@ -527,23 +577,7 @@ export default function QuickPromotionPage() {
                                                     const id = createdPromotionId;
                                                     setShowReward(false);
                                                     setSubmitSuccess(false);
-                                                    setFormData({
-                                                        title: '',
-                                                        description: '',
-                                                        brand: '',
-                                                        category: 'electronics',
-                                                        originalPrice: 0,
-                                                        currentPrice: 0,
-                                                        currency: 'USD',
-                                                        storeCity: 'Ciudad de México',
-                                                        validFrom: defaultValidFrom,
-                                                        validUntil: defaultValidUntil,
-                                                        totalQuantity: 100,
-                                                        offerType: 'percentage',
-                                                        cashbackValue: 0,
-                                                        images: [],
-                                                        termsAndConditions: ''
-                                                    });
+                                                    setFormData(emptyQuickForm());
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
                                                     setPromotionType('coupon');
@@ -563,7 +597,7 @@ export default function QuickPromotionPage() {
                                                 onClick={() => {
                                                     setShowReward(false);
                                                     setSubmitSuccess(false);
-                                                    setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
+                                                    setFormData(emptyQuickForm());
                                                     setImagePreviews([]);
                                                     setCreatedPromotionId(null);
                                                     setPromotionType('coupon');
@@ -581,7 +615,7 @@ export default function QuickPromotionPage() {
                                             const id = createdPromotionId;
                                             setShowReward(false);
                                             setSubmitSuccess(false);
-                                            setFormData({ title: '', description: '', brand: '', category: 'electronics', originalPrice: 0, currentPrice: 0, currency: 'USD', storeCity: 'Ciudad de México', validFrom: defaultValidFrom, validUntil: defaultValidUntil, totalQuantity: 100, offerType: 'percentage', cashbackValue: 0, images: [], termsAndConditions: '' });
+                                            setFormData(emptyQuickForm());
                                             setImagePreviews([]);
                                             setCreatedPromotionId(null);
                                             setPromotionType('coupon');
@@ -1047,21 +1081,106 @@ export default function QuickPromotionPage() {
                             </div>
                         </div>
 
-                        {/* Ubicación */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-200 pt-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <MapPin className="h-4 w-4 inline mr-1" />
-                                    Ciudad *
+                        {/* Ubicación y activación GPS */}
+                        <div className="border-t border-gray-200 pt-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <MapPin className="h-4 w-4 inline mr-1" />
+                                        Ciudad *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.storeCity}
+                                        onChange={(e) => handleInputChange('storeCity', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="Ciudad de México"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="border border-purple-200 rounded-xl p-4 bg-purple-50/50 space-y-4">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.activateByGps}
+                                        onChange={(e) => handleInputChange('activateByGps', e.target.checked)}
+                                        className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-medium text-gray-900">Activación por ubicación (GPS)</span>
+                                        <span className="block text-sm text-gray-600 mt-0.5">
+                                            El usuario deberá estar cerca del punto de la tienda para obtener el cupón (validación en el navegador al solicitar el cupón).
+                                        </span>
+                                    </span>
                                 </label>
-                                <input
-                                    type="text"
-                                    value={formData.storeCity}
-                                    onChange={(e) => handleInputChange('storeCity', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    placeholder="Ciudad de México"
-                                    required
-                                />
+
+                                {formData.activateByGps && (
+                                    <>
+                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                            <div className="flex-1">
+                                                <p className="text-xs text-gray-600 mb-2">
+                                                    En móvil puedes usar tu posición actual como punto de la tienda.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={fillStoreCoordsFromDevice}
+                                                    disabled={gpsFromDeviceLoading}
+                                                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm transition-colors"
+                                                >
+                                                    <Smartphone className="h-4 w-4 shrink-0" />
+                                                    {gpsFromDeviceLoading ? 'Obteniendo ubicación…' : 'Obtener del dispositivo'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {gpsFromDeviceError && (
+                                            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{gpsFromDeviceError}</p>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitud (WGS84)</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="ej. 19.432608"
+                                                    value={formData.storeLatitude}
+                                                    onChange={(e) => handleInputChange('storeLatitude', e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitud (WGS84)</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="ej. -99.133209"
+                                                    value={formData.storeLongitude}
+                                                    onChange={(e) => handleInputChange('storeLongitude', e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Radio permitido (metros)</label>
+                                            <input
+                                                type="number"
+                                                min={50}
+                                                max={50000}
+                                                step={50}
+                                                value={formData.gpsRadiusMeters}
+                                                onChange={(e) =>
+                                                    handleInputChange(
+                                                        'gpsRadiusMeters',
+                                                        Math.min(50000, Math.max(50, parseInt(e.target.value, 10) || 500))
+                                                    )
+                                                }
+                                                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Entre 50 m y 50 km.</p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 

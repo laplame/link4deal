@@ -54,6 +54,11 @@ interface PromotionData {
         location: string[];
         interests: string[];
         influencerRequirements: string[];
+        /** Cupón solo activable dentro del radio GPS respecto al punto de la tienda */
+        activateByGps: boolean;
+        gpsRadiusMeters: number;
+        storeLatitude: string;
+        storeLongitude: string;
     };
     smartContract: {
         network: string;
@@ -95,7 +100,7 @@ const steps = [
     { id: 'pricing', title: 'Precios y Ofertas', icon: <DollarSign className="h-5 w-5" /> },
     { id: 'inventory', title: 'Inventario', icon: <Smartphone className="h-5 w-5" /> },
     { id: 'timing', title: 'Tiempo y Validez', icon: <Calendar className="h-5 w-5" /> },
-    { id: 'targeting', title: 'Audiencia Objetivo', icon: <Users className="h-5 w-5" /> },
+    { id: 'targeting', title: 'Audiencia y GPS', icon: <Users className="h-5 w-5" /> },
     { id: 'smartContract', title: 'Smart Contract', icon: <Zap className="h-5 w-5" /> },
     { id: 'terms', title: 'Términos y Condiciones', icon: <Tag className="h-5 w-5" /> }
 ];
@@ -138,7 +143,11 @@ export default function CreatePromotionWizard() {
             ageRange: '',
             location: [],
             interests: [],
-            influencerRequirements: []
+            influencerRequirements: [],
+            activateByGps: false,
+            gpsRadiusMeters: 500,
+            storeLatitude: '',
+            storeLongitude: ''
         },
         smartContract: {
             network: 'Ethereum',
@@ -161,11 +170,41 @@ export default function CreatePromotionWizard() {
         }
     });
 
+    const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
+    const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
+
     const updatePromotionData = (section: keyof PromotionData, data: Partial<PromotionData[keyof PromotionData]>) => {
         setPromotionData(prev => ({
             ...prev,
             [section]: { ...prev[section], ...data }
         }));
+    };
+
+    const fillGpsCoordinatesFromDevice = () => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            setGpsFromDeviceError('Tu navegador no permite geolocalización.');
+            return;
+        }
+        setGpsFromDeviceLoading(true);
+        setGpsFromDeviceError(null);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                updatePromotionData('targeting', {
+                    storeLatitude: String(pos.coords.latitude),
+                    storeLongitude: String(pos.coords.longitude)
+                });
+                setGpsFromDeviceLoading(false);
+            },
+            (err) => {
+                setGpsFromDeviceLoading(false);
+                setGpsFromDeviceError(
+                    err.code === 1
+                        ? 'Permiso de ubicación denegado. Actívalo en el navegador o en Ajustes del sistema.'
+                        : 'No se pudo obtener la ubicación. Inténtalo de nuevo o escribe latitud y longitud a mano.'
+                );
+            },
+            { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+        );
     };
 
     const nextStep = () => {
@@ -550,6 +589,84 @@ export default function CreatePromotionWizard() {
                     <option value="55+">55+ años</option>
                 </select>
             </div>
+
+            <div className="border border-purple-200 rounded-xl p-4 bg-purple-50/50 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={promotionData.targeting.activateByGps}
+                        onChange={(e) => updatePromotionData('targeting', { activateByGps: e.target.checked })}
+                        className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>
+                        <span className="block text-sm font-medium text-gray-900">Activación por ubicación (GPS)</span>
+                        <span className="block text-sm text-gray-600 mt-0.5">
+                            Solo promociones seleccionadas: el usuario deberá estar cerca del punto de la tienda para obtener el cupón (se valida en el navegador).
+                        </span>
+                    </span>
+                </label>
+
+                {promotionData.targeting.activateByGps && (
+                    <>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex-1">
+                                <p className="text-xs text-gray-600 mb-2">
+                                    En móvil puedes usar tu posición actual como punto de la tienda.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={fillGpsCoordinatesFromDevice}
+                                    disabled={gpsFromDeviceLoading}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm transition-colors"
+                                >
+                                    <Smartphone className="h-4 w-4 shrink-0" />
+                                    {gpsFromDeviceLoading ? 'Obteniendo ubicación…' : 'Obtener del dispositivo'}
+                                </button>
+                            </div>
+                        </div>
+                        {gpsFromDeviceError && (
+                            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{gpsFromDeviceError}</p>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitud del punto (WGS84)</label>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="ej. 19.432608"
+                                    value={promotionData.targeting.storeLatitude}
+                                    onChange={(e) => updatePromotionData('targeting', { storeLatitude: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitud del punto (WGS84)</label>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="ej. -99.133209"
+                                    value={promotionData.targeting.storeLongitude}
+                                    onChange={(e) => updatePromotionData('targeting', { storeLongitude: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Radio permitido (metros)</label>
+                            <input
+                                type="number"
+                                min={50}
+                                max={50000}
+                                step={50}
+                                value={promotionData.targeting.gpsRadiusMeters}
+                                onChange={(e) => updatePromotionData('targeting', { gpsRadiusMeters: Math.min(50000, Math.max(50, parseInt(e.target.value, 10) || 500)) })}
+                                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Entre 50 m y 50 km. El usuario debe estar dentro de este radio del punto indicado.</p>
+                        </div>
+                    </>
+                )}
+            </div>
         </div>
     );
 
@@ -902,6 +1019,15 @@ export default function CreatePromotionWizard() {
                 formData.append('storeState', promotionData.targeting.location[0]);
             }
 
+            formData.append('activateByGps', promotionData.targeting.activateByGps ? 'true' : 'false');
+            formData.append('gpsRadiusMeters', String(promotionData.targeting.gpsRadiusMeters));
+            if (promotionData.targeting.storeLatitude.trim()) {
+                formData.append('storeLatitude', promotionData.targeting.storeLatitude.trim());
+            }
+            if (promotionData.targeting.storeLongitude.trim()) {
+                formData.append('storeLongitude', promotionData.targeting.storeLongitude.trim());
+            }
+
             // Tags
             if (promotionData.targeting.interests.length > 0) {
                 formData.append('tags', JSON.stringify(promotionData.targeting.interests));
@@ -983,6 +1109,9 @@ export default function CreatePromotionWizard() {
                     </div>
                     <p className="text-xl text-purple-100 max-w-2xl">
                         Crea promociones atractivas paso a paso con nuestro asistente inteligente
+                    </p>
+                    <p className="text-sm text-purple-200/90 max-w-2xl mt-3">
+                        <strong>Activación por GPS:</strong> configúrala en el paso <strong>«Audiencia y GPS»</strong> (radio en metros y coordenadas del punto de la tienda).
                     </p>
                 </div>
             </div>

@@ -90,6 +90,21 @@ const promotionSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    /**
+     * Si es true, el cupón solo debe activarse cuando el usuario está dentro del radio
+     * respecto a storeLocation.coordinates (validación en cliente; backend puede ampliarse).
+     */
+    activateByGps: {
+        type: Boolean,
+        default: false
+    },
+    /** Radio en metros para geocerca (solo aplica con activateByGps y coordenadas de tienda). */
+    gpsRadiusMeters: {
+        type: Number,
+        default: 500,
+        min: [50, 'El radio mínimo es 50 m'],
+        max: [50000, 'El radio máximo es 50 km']
+    },
     /** IDs de tiendas donde aplica la promoción (si está vacío, aplica a todas) */
     allowedShopIds: [{
         type: String,

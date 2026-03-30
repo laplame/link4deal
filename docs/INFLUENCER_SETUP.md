@@ -1,4 +1,4 @@
-# Registro de influencer – Ruta `/influencer-setup`
+ # Registro de influencer – Ruta `/influencer-setup`
 
 Guía para entender el flujo en web y replicarlo en la app móvil.
 
