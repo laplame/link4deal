@@ -20,6 +20,11 @@ import {
     Sparkles
 } from 'lucide-react';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
+import PromotionOptionalAttributionSection, {
+    emptyPromotionOptionalAttribution,
+    type PromotionOptionalAttribution
+} from '../components/PromotionOptionalAttributionSection';
+import type { BizneShop } from '../components/BizneShopCard';
 
 interface PromotionData {
     basicInfo: {
@@ -79,6 +84,7 @@ interface PromotionData {
         returnPolicy: string;
         warranty: string;
     };
+    optionalAttribution: PromotionOptionalAttribution;
 }
 
 const categories = [
@@ -167,7 +173,8 @@ export default function CreatePromotionWizard() {
             benefits: [],
             returnPolicy: '',
             warranty: ''
-        }
+        },
+        optionalAttribution: emptyPromotionOptionalAttribution()
     });
 
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
@@ -177,6 +184,27 @@ export default function CreatePromotionWizard() {
         setPromotionData(prev => ({
             ...prev,
             [section]: { ...prev[section], ...data }
+        }));
+    };
+
+    const applySelectedShopGps = (
+        shop: BizneShop,
+        coordinates: { latitude: number; longitude: number } | null
+    ) => {
+        if (!coordinates) return;
+        setPromotionData((prev) => ({
+            ...prev,
+            basicInfo: {
+                ...prev.basicInfo,
+                brand: prev.basicInfo.brand || shop.storeName || prev.basicInfo.brand
+            },
+            targeting: {
+                ...prev.targeting,
+                activateByGps: true,
+                storeLatitude: String(coordinates.latitude),
+                storeLongitude: String(coordinates.longitude),
+                location: shop.city ? [shop.city] : prev.targeting.location
+            }
         }));
     };
 
@@ -325,6 +353,15 @@ export default function CreatePromotionWizard() {
                     onChange={(e) => updatePromotionData('basicInfo', { brand: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Ej: Apple, Nike, Samsung..."
+                />
+            </div>
+
+            <div className="pt-2">
+                <PromotionOptionalAttributionSection
+                    idPrefix="wizard-promo"
+                    value={promotionData.optionalAttribution}
+                    onChange={(patch) => updatePromotionData('optionalAttribution', patch)}
+                    onShopSelect={applySelectedShopGps}
                 />
             </div>
         </div>
@@ -1036,6 +1073,17 @@ export default function CreatePromotionWizard() {
             // Términos y condiciones (desde el paso terms o extraídos por Gemini)
             const termsText = promotionData.terms.conditions.filter(c => c.trim()).join('\n\n');
             if (termsText) formData.append('termsAndConditions', termsText);
+
+            const o = promotionData.optionalAttribution;
+            ['brandId', 'shopId', 'gtmTag', 'campaignId', 'source', 'medium'].forEach((k) => {
+                const v = o[k as keyof PromotionOptionalAttribution];
+                if (v !== undefined && v !== null && String(v).trim() !== '') {
+                    formData.append(k, String(v).trim());
+                }
+            });
+            if (o.externalProductId?.trim()) {
+                formData.append('externalProductId', o.externalProductId.trim());
+            }
 
             // Category: backend espera slug (electronics, fashion...); el wizard usa nombre (Electrónica, Moda...)
             const categoryToSlug: Record<string, string> = {

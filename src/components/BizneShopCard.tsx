@@ -13,9 +13,36 @@ export interface BizneShop {
   streetAddress?: string;
   city?: string;
   state?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  gpsLocation?: {
+    type?: string;
+    coordinates?: [number, number] | number[];
+  };
   status?: string;
   ecommerceEnabled?: boolean;
   isModelShop?: boolean;
+}
+
+export function getBizneShopCoordinates(shop?: BizneShop | null): { latitude: number; longitude: number } | null {
+  if (!shop) return null;
+  const directLat = typeof shop.latitude === 'number' ? shop.latitude : Number.parseFloat(String(shop.latitude ?? ''));
+  const directLng = typeof shop.longitude === 'number' ? shop.longitude : Number.parseFloat(String(shop.longitude ?? ''));
+  if (Number.isFinite(directLat) && Number.isFinite(directLng)) {
+    return { latitude: directLat, longitude: directLng };
+  }
+
+  const coords = shop.gpsLocation?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const [lng, lat] = coords;
+    const gpsLat = Number(lat);
+    const gpsLng = Number(lng);
+    if (Number.isFinite(gpsLat) && Number.isFinite(gpsLng)) {
+      return { latitude: gpsLat, longitude: gpsLng };
+    }
+  }
+
+  return null;
 }
 
 function humanizeStoreType(type?: string): string {
@@ -34,6 +61,7 @@ export function BizneShopCard({ shop }: Props) {
   const navigate = useNavigate();
   const shopId = shop.id || shop._id || '';
   const typeLabel = humanizeStoreType(shop.storeType);
+  const coords = getBizneShopCoordinates(shop);
 
   const goToProfile = () => {
     if (!shopId) return;
@@ -81,6 +109,14 @@ export function BizneShopCard({ shop }: Props) {
           )}
           {shop.ecommerceEnabled && (
             <p className="text-xs text-green-400/90 mt-2">E-commerce habilitado</p>
+          )}
+          {coords && (
+            <p
+              className="text-xs text-violet-300/90 mt-2"
+              title={`${coords.latitude}, ${coords.longitude}`}
+            >
+              GPS disponible para promociones
+            </p>
           )}
         </div>
       </div>

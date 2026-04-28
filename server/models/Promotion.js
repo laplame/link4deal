@@ -202,6 +202,19 @@ const promotionSchema = new mongoose.Schema({
         blockchainExplorer: String
     },
 
+    /**
+     * Atribución / integración (opcionales; alineados al payload opcional del cupón QR).
+     * No son obligatorios para crear la promoción.
+     */
+    brandId: { type: String, trim: true },
+    shopId: { type: String, trim: true },
+    /** Id de producto en catálogo externo (distinto de _id de la promoción). */
+    externalProductId: { type: String, trim: true },
+    gtmTag: { type: String, trim: true },
+    campaignId: { type: String, trim: true },
+    source: { type: String, trim: true },
+    medium: { type: String, trim: true },
+
     /** Si es true, al solicitar cupón no se genera QR; se redirige a redirectToUrl (ej. link de afiliado Amazon). */
     redirectInsteadOfQr: { type: Boolean, default: false },
     /** URL de redirección para comprar (ej. Amazon afiliado). Si redirectInsteadOfQr y está vacío, se usa el default del sistema (amzn.to). */

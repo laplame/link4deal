@@ -38,6 +38,31 @@ async function fetchJson(url) {
     }
 }
 
+function normalizeShopGps(shop) {
+    if (!shop || typeof shop !== 'object') return shop;
+    const normalized = { ...shop };
+    const lat = Number(normalized.latitude);
+    const lng = Number(normalized.longitude);
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        normalized.latitude = lat;
+        normalized.longitude = lng;
+        return normalized;
+    }
+
+    const coords = normalized.gpsLocation && normalized.gpsLocation.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+        const gpsLng = Number(coords[0]);
+        const gpsLat = Number(coords[1]);
+        if (Number.isFinite(gpsLat) && Number.isFinite(gpsLng)) {
+            normalized.latitude = gpsLat;
+            normalized.longitude = gpsLng;
+        }
+    }
+
+    return normalized;
+}
+
 /**
  * GET /api/bizne-shops
  * Query:
@@ -86,7 +111,9 @@ router.get('/', async (req, res) => {
             stats = data?.stats;
         }
 
-        let filtered = shops.filter((s) => (s.status || 'active') === 'active');
+        let filtered = shops
+            .map(normalizeShopGps)
+            .filter((s) => s && (s.status || 'active') === 'active');
         if (!includeModels) {
             filtered = filtered.filter((s) => !s.isModelShop);
         }
@@ -120,7 +147,7 @@ router.get('/:id', async (req, res) => {
         const base = DEFAULT_BASE.replace(/\/$/, '');
         const url = `${base}/${encodeURIComponent(req.params.id)}`;
         const json = await fetchJson(url);
-        const shop = json?.data?.shop || json?.data || json?.shop || null;
+        const shop = normalizeShopGps(json?.data?.shop || json?.data || json?.shop || null);
         if (!shop || (typeof shop === 'object' && !shop._id && !shop.id)) {
             return res.status(404).json({
                 success: false,

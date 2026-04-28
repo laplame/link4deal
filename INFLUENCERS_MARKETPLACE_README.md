@@ -131,6 +131,14 @@ src/
 
 ## 🔌 Integración
 
+### Engagement social (likes, compartidos, comentarios)
+
+Las **tarjetas de influencer** y las **filas de promociones recientes** pueden mostrar corazón (like), conteos, compartidos y comentarios. El contrato REST unificado (`targetType`: `influencer` | `promotion`) está descrito en:
+
+**[docs/INFLUENCERS_PROMOTIONS_SOCIAL_ENGAGEMENT_API.md](docs/INFLUENCERS_PROMOTIONS_SOCIAL_ENGAGEMENT_API.md)**
+
+Incluye: `GET /api/social/summary`, `POST /api/social/summary/batch`, like, share, listado y creación de comentarios, y notas de persistencia.
+
 ### Rutas
 - **`/influencers`**: Página principal del marketplace
 - **`/marketplace`**: Marketplace de promociones (complementario)
@@ -161,6 +169,7 @@ src/
 
 ### 🔄 Próximos Pasos
 - [ ] Integración con API real
+- [ ] Likes, compartidos y comentarios en tarjetas (ver [INFLUENCERS_PROMOTIONS_SOCIAL_ENGAGEMENT_API.md](docs/INFLUENCERS_PROMOTIONS_SOCIAL_ENGAGEMENT_API.md))
 - [ ] Sistema de chat en tiempo real
 - [ ] Notificaciones de nuevos influencers
 - [ ] Sistema de favoritos y listas personalizadas

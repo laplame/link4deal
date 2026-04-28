@@ -8,7 +8,8 @@ import {
     CheckCircle, 
     Info,
     Ticket,
-    ExternalLink
+    ExternalLink,
+    Percent
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { haversineDistanceMeters } from '../utils/geo';
@@ -29,11 +30,24 @@ interface CouponRequestFormProps {
     gpsRadiusMeters?: number;
     promotionLat?: number;
     promotionLng?: number;
+    /** Opcionales: el backend los guarda en el payload del cupón sin validación estricta (atribución / GTM / UTM). */
+    brandId?: string;
+    shopId?: string;
+    gtmTag?: string;
+    campaignId?: string;
+    source?: string;
+    medium?: string;
+    couponMetadata?: Record<string, string | number | boolean>;
 }
 
 interface FormData {
     name: string;
     whatsapp: string;
+}
+
+/** Token emitido por `/api/discount-qr/create` (incluye `.v1.` y prefijo `…-N` con el %). No aplica al QR local de respaldo (`.local.`). */
+function isServerIssuerQrString(qr: string): boolean {
+    return Boolean(qr && qr.includes('.v1.') && !qr.includes('.local.'));
 }
 
 const CouponRequestForm: React.FC<CouponRequestFormProps> = ({ 
@@ -48,7 +62,14 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     activateByGps = false,
     gpsRadiusMeters = 500,
     promotionLat,
-    promotionLng
+    promotionLng,
+    brandId,
+    shopId,
+    gtmTag,
+    campaignId,
+    source: sourceProp,
+    medium: mediumProp,
+    couponMetadata
 }) => {
     const [step, setStep] = useState<'form' | 'qr' | 'success'>('form');
     const [formData, setFormData] = useState<FormData>({
@@ -64,7 +85,16 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const [countdownSeconds, setCountdownSeconds] = useState(120); // 2 minutos para que el cupón sea único/válido
     const [redirectToUrl, setRedirectToUrl] = useState<string | null>(null); // Si la promoción redirige a Amazon (no QR)
     const [gpsError, setGpsError] = useState<string | null>(null);
+    /** Mismo valor que discountPercentage del cupón; respuesta issuer: luxaesRedeemed + prefijo -N en el QR. */
+    const [luxaesRedeemed, setLuxaesRedeemed] = useState<number | null>(null);
+    const [tokenPrefix, setTokenPrefix] = useState<string | null>(null);
     const autoRequestedRef = useRef(false);
+
+    const discountPctFromProp = (): number => {
+        const p = discountPercentageProp;
+        if (typeof p === 'number' && p >= 0 && p <= 100) return Math.round(p);
+        return 0;
+    };
 
     const getOrCreateDeviceId = () => {
         const key = 'link4deal_device_id';
@@ -144,16 +174,36 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const issueCouponQr = async () => {
         setIsLoading(true);
         setQrWarning(null);
+        setLuxaesRedeemed(null);
+        setTokenPrefix(null);
+
+        const pctFallback = discountPctFromProp();
 
         try {
             // Generar código de cupón único
             const generatedCouponCode = `L4D-${productId}-${Date.now().toString(36).toUpperCase()}`;
             setCouponCode(generatedCouponCode);
-            const fallbackPrefixed = `LINK4DEAL-DISCOUNT.local.${generatedCouponCode}`;
+            const fallbackPrefixed =
+                pctFallback > 0
+                    ? `LINK4DEAL-DISCOUNT-${pctFallback}.local.${generatedCouponCode}`
+                    : `LINK4DEAL-DISCOUNT.local.${generatedCouponCode}`;
             let nextQrValue = fallbackPrefixed;
+            let resolvedPct = pctFallback;
+            let resolvedPrefix: string | null = null;
 
             // Intentar generar token QR seguro desde backend (issuer)
             try {
+                const optionalPayload: Record<string, string | number | Record<string, string | number | boolean>> = {};
+                if (brandId?.trim()) optionalPayload.brandId = brandId.trim();
+                if (shopId?.trim()) optionalPayload.shopId = shopId.trim();
+                if (gtmTag?.trim()) optionalPayload.gtmTag = gtmTag.trim();
+                if (campaignId?.trim()) optionalPayload.campaignId = campaignId.trim();
+                if (sourceProp?.trim()) optionalPayload.source = sourceProp.trim();
+                if (mediumProp?.trim()) optionalPayload.medium = mediumProp.trim();
+                if (couponMetadata && typeof couponMetadata === 'object' && Object.keys(couponMetadata).length > 0) {
+                    optionalPayload.metadata = { ...couponMetadata };
+                }
+
                 const response = await fetch('/api/discount-qr/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -163,37 +213,55 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                         promotionId: productId,
                         referralCode: generatedCouponCode,
                         discountPercentage: typeof discountPercentageProp === 'number' && discountPercentageProp >= 0 && discountPercentageProp <= 100 ? discountPercentageProp : 0,
-                        walletAddress: 'not-provided'
+                        walletAddress: 'not-provided',
+                        ...optionalPayload
                     })
                 });
                 const data = await response.json();
                 if (response.ok && data?.ok && data?.noQr && data?.redirectToUrl) {
                     setRedirectToUrl(data.redirectToUrl);
+                    resolvedPct = pctFallback;
+                    setLuxaesRedeemed(resolvedPct);
                     setStep('qr');
                     setIsLoading(false);
                     return;
                 }
                 if (response.ok && data?.ok && data?.qrValue) {
                     nextQrValue = data.qrValue;
+                    resolvedPct =
+                        typeof data.luxaesRedeemed === 'number' && Number.isFinite(data.luxaesRedeemed)
+                            ? Math.min(100, Math.max(0, Math.round(data.luxaesRedeemed)))
+                            : pctFallback;
+                    resolvedPrefix = typeof data.prefix === 'string' && data.prefix ? data.prefix : null;
+                    setLuxaesRedeemed(resolvedPct);
+                    setTokenPrefix(resolvedPrefix);
                 } else {
                     const detail = data?.message ? ` (${data.message})` : '';
                     setQrWarning(`No se pudo emitir QR seguro desde backend${detail}. Se mostró un QR local de respaldo.`);
+                    resolvedPct = pctFallback;
+                    resolvedPrefix = null;
+                    setLuxaesRedeemed(resolvedPct);
+                    setTokenPrefix(null);
                 }
             } catch {
                 setQrWarning('Error conectando con backend QR. Se mostró un QR local de respaldo.');
+                resolvedPct = pctFallback;
+                resolvedPrefix = null;
+                setLuxaesRedeemed(resolvedPct);
+                setTokenPrefix(null);
             }
 
             setRedirectToUrl(null);
             setQrValue(nextQrValue);
             const dataUrl = await QRCode.toDataURL(nextQrValue, {
-                width: 320,
+                width: 480,
                 margin: 1,
                 errorCorrectionLevel: 'L'
             });
             setQrImageDataUrl(dataUrl);
 
             // Simular envío por WhatsApp
-            const whatsappMessage = `¡Hola! Tu cupón de Link4Deal está listo:\n\n🎫 Código: ${generatedCouponCode}\n🏷️ Producto: ${productName}\n\nEscanea el QR para activarlo. ¡Gracias por elegirnos!`;
+            const whatsappMessage = `¡Hola! Tu cupón de Link4Deal está listo:\n\n🎫 Código: ${generatedCouponCode}\n🏷️ Producto: ${productName}\n📉 Descuento: ${resolvedPct}%\n\nEscanea el QR para activarlo. ¡Gracias por elegirnos!`;
             
             // En una implementación real, esto se enviaría a través de la API de WhatsApp Business
             console.log('Mensaje de WhatsApp:', whatsappMessage);
@@ -234,6 +302,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     useEffect(() => {
         setRedirectToUrl(null);
         setGpsError(null);
+        setLuxaesRedeemed(null);
+        setTokenPrefix(null);
         autoRequestedRef.current = false;
     }, [productId]);
 
@@ -244,7 +314,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     }, [autoGenerateOnOpen, activateByGps, productId]);
 
     const handleWhatsAppRedirect = () => {
-        const message = `¡Hola! Necesito ayuda con mi cupón de Link4Deal:\n\n🎫 Código: ${couponCode}\n🏷️ Producto: ${productName}`;
+        const pct = luxaesRedeemed ?? discountPctFromProp();
+        const message = `¡Hola! Necesito ayuda con mi cupón de Link4Deal:\n\n🎫 Código: ${couponCode}\n🏷️ Producto: ${productName}\n📉 Descuento: ${pct}%`;
         const whatsappUrl = `https://wa.me/+1234567890?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
@@ -252,13 +323,17 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     const generateQRCode = () => {
         if (qrImageDataUrl) {
             return (
-                <div className="inline-flex items-center justify-center p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <img src={qrImageDataUrl} alt="QR del cupón" className="w-48 h-48" />
+                <div className="flex w-full max-w-sm mx-auto items-center justify-center p-2 sm:p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <img
+                        src={qrImageDataUrl}
+                        alt="QR del cupón"
+                        className="w-[min(18rem,85vw)] h-[min(18rem,85vw)] sm:w-80 sm:h-80 max-w-full object-contain"
+                    />
                 </div>
             );
         }
         return (
-            <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+            <div className="w-[min(18rem,85vw)] h-[min(18rem,85vw)] sm:w-80 sm:h-80 max-w-full mx-auto bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
                 <div className="text-center">
                     <QrCode className="w-20 h-20 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">QR Code</p>
@@ -273,30 +348,40 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         const isAmazonRedirect = isRedirectMode && /amzn\.to|amazon\./i.test(redirectToUrl || '');
         const redirectButtonLabel = isAmazonRedirect ? 'Comprar en Amazon' : 'Ir a comprar';
         const redirectTitle = isAmazonRedirect ? '¡Comprar en Amazon!' : '¡Ir a comprar!';
+        const displayDiscountPct = luxaesRedeemed ?? discountPctFromProp();
+        const serverIssuerQr = qrValue ? isServerIssuerQrString(qrValue) : false;
+        const qrPrefixFirstSegment = qrValue ? qrValue.split('.')[0] : '';
+        const isLocalFallbackQr = Boolean(qrValue && qrValue.includes('.local.'));
+        const localQrShowsPctInPrefix =
+            isLocalFallbackQr && /-\d+$/.test(qrPrefixFirstSegment);
         return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle className="w-8 h-8 text-green-600" />
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+                <div className="bg-white rounded-2xl max-w-md w-full max-h-[min(92vh,100dvh)] overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 sm:py-5 text-center shadow-xl ring-1 ring-black/5 touch-pan-y">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
                     </div>
                     
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
                         {isRedirectMode ? redirectTitle : '¡Cupón Generado!'}
                     </h3>
                     
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 text-sm mb-3 leading-snug">
                         {isRedirectMode
                             ? 'Haz clic en el botón para ir a la página de compra.'
                             : 'Tu cupón ha sido creado exitosamente. Escanea el código QR o usa el código manual.'}
                     </p>
 
                     {isRedirectMode ? (
-                        <div className="mb-6">
+                        <div className="mb-4">
+                            <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border border-emerald-100 mb-3">
+                                <Percent className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                <span>{displayDiscountPct}% de descuento</span>
+                            </div>
                             <a
                                 href={redirectToUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-6 py-4 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl shadow-lg transition-colors"
+                                className="inline-flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow-lg transition-colors"
                             >
                                 <ExternalLink className="w-5 h-5" />
                                 {redirectButtonLabel}
@@ -304,39 +389,91 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                             <p className="text-xs text-gray-500 mt-3">Se abrirá en una nueva pestaña</p>
                         </div>
                     ) : (
-                        <div className="mb-6">
-                            {generateQRCode()}
-                        </div>
-                    )}
-                    {qrWarning && !isRedirectMode && (
-                        <p className="text-xs text-amber-600 mb-4">{qrWarning}</p>
-                    )}
-
-                    {!isRedirectMode && (
-                        <>
-                            {/* Contador 2 minutos */}
-                            <div className="mb-4 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
-                                <span className="text-sm font-medium">
-                                    {countdownSeconds > 0
-                                        ? `Válido por ${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}`
-                                        : 'Cupón expirado'}
-                                </span>
+                        <article className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-left shadow-sm">
+                            <div className="p-3 border-b border-gray-200">
+                                {productImage && (
+                                    <img
+                                        src={productImage}
+                                        alt={productName}
+                                        className="w-full h-28 object-cover rounded-xl mb-3"
+                                    />
+                                )}
+                                <p className="text-xs text-gray-500 mb-1">Promoción</p>
+                                <h4 className="text-base font-bold text-gray-900 leading-snug">{productName}</h4>
+                                <div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border border-emerald-100">
+                                    <Percent className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" aria-hidden />
+                                    <span>{displayDiscountPct}% de descuento</span>
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-2 leading-snug">
+                                    Luxae a redimir:{' '}
+                                    <strong className="text-gray-800">{displayDiscountPct}</strong>
+                                    {' — '}
+                                    mismo valor que el <strong>{displayDiscountPct}%</strong>.
+                                </p>
                             </div>
 
-                            {/* Coupon Code */}
-                            <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                                <p className="text-sm text-gray-600 mb-2">Código del Cupón:</p>
-                                <p className="text-lg font-mono font-bold text-blue-600">{couponCode}</p>
-                                {qrValue && (
-                                    <p className="text-[11px] text-gray-400 mt-2 break-all">
-                                        Token QR: {qrValue}
+                            <div className="bg-white px-3 py-3 text-center border-b border-gray-200">
+                                {generateQRCode()}
+                                <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg">
+                                    <span className="text-xs sm:text-sm font-medium">
+                                        {countdownSeconds > 0
+                                            ? `Válido por ${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}`
+                                            : 'Cupón expirado'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="p-3 border-b border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Código del cupón</p>
+                                <p className="text-base sm:text-lg font-mono font-bold text-blue-600 break-all">{couponCode}</p>
+
+                                {serverIssuerQr && qrValue && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                        <p className="text-[11px] text-gray-600 mb-1">
+                                            Texto codificado en el QR
+                                            <span className="text-gray-400 font-normal"> — el prefijo incluye el {displayDiscountPct}%</span>
+                                        </p>
+                                        <div className="max-h-24 sm:max-h-28 overflow-y-auto overscroll-y-contain rounded border border-gray-200 bg-white px-2 py-1.5">
+                                            <p className="text-[10px] text-gray-700 break-all font-mono leading-relaxed">{qrValue}</p>
+                                        </div>
+                                        {qrPrefixFirstSegment && (
+                                            <p className="text-[10px] text-gray-500 mt-1.5">
+                                                Primer segmento:{' '}
+                                                <span className="font-mono text-gray-700">{qrPrefixFirstSegment}</span>
+                                                {' '}(sufijo <span className="font-mono">-{displayDiscountPct}</span> = {displayDiscountPct}% de descuento).
+                                            </p>
+                                        )}
+                                        {tokenPrefix && (
+                                            <p className="text-[10px] text-gray-500 mt-1.5">
+                                                Prefijo firmado:{' '}
+                                                <span className="font-mono text-gray-700 break-all">{tokenPrefix}</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {qrValue && !serverIssuerQr && (
+                                    <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-3 leading-snug">
+                                        <strong>QR de respaldo</strong> (sin firma del servidor).
+                                        {localQrShowsPctInPrefix ? (
+                                            <>
+                                                {' '}
+                                                El prefijo incluye <strong>-{displayDiscountPct}</strong> (= {displayDiscountPct}%) solo como referencia; para
+                                                canjear usa el <strong>código alfanumérico</strong> o genera otro QR con conexión.
+                                            </>
+                                        ) : (
+                                            <>
+                                                {' '}
+                                                El descuento vigente es el <strong>{displayDiscountPct}%</strong> indicado arriba; usa ese valor o el código
+                                                alfanumérico.
+                                            </>
+                                        )}
                                     </p>
                                 )}
                             </div>
 
-                            {/* Smart contract mockup */}
-                            <div className="bg-slate-100 rounded-lg p-4 mb-6 border border-slate-200">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Smart contract</p>
+                            <div className="p-3 border-b border-gray-200">
+                                <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1.5">Smart contract</p>
                                 <p className="text-[11px] font-mono text-slate-600 break-all mb-3">
                                     {qrValue ? `0x${Array.from(qrValue.slice(0, 20)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(40, '0').slice(0, 42)}` : '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1'}
                                 </p>
@@ -355,44 +492,60 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                                 </Link>
                             </div>
 
-                            {/* Action Buttons */}
-                            <div className="space-y-3">
+                            <div className="bg-white p-3 text-center">
+                                <div className="space-y-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleWhatsAppRedirect}
+                                        className="w-full bg-green-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <MessageCircle className="w-4 h-4 shrink-0" />
+                                        Contactar por WhatsApp
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="w-full bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Ticket className="w-4 h-4 shrink-0" />
+                                        Redimir cupón
+                                    </button>
+                                </div>
+                                <p className="mt-2 text-xs text-gray-600">
+                                    Envíame este cupón a mi app
+                                </p>
                                 <button
-                                    onClick={handleWhatsAppRedirect}
-                                    className="w-full bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <MessageCircle className="w-5 h-5" />
-                                    Contactar por WhatsApp
-                                </button>
-                                
-                                <button
+                                    type="button"
                                     onClick={onClose}
-                                    className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                    className="mt-3 text-sm text-gray-500 hover:text-gray-700 transition-colors pb-[max(0.25rem,env(safe-area-inset-bottom))]"
                                 >
-                                    <Ticket className="w-5 h-5" />
-                                    Redimir cupón
+                                    Cerrar
                                 </button>
                             </div>
-                            <p className="mt-3 text-sm text-gray-600">
-                                Envíame este cupón a mi app
-                            </p>
-                        </>
+                        </article>
+                    )}
+                    {qrWarning && !isRedirectMode && (
+                        <p className="text-[11px] text-amber-600 mb-3">{qrWarning}</p>
                     )}
 
-                    <button
+                    {isRedirectMode && (
+                        <button
+                        type="button"
                         onClick={onClose}
-                        className="mt-4 text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                        Cerrar
-                    </button>
+                        className="mt-3 text-sm text-gray-500 hover:text-gray-700 transition-colors pb-[max(0.25rem,env(safe-area-inset-bottom))]"
+                        >
+                            Cerrar
+                        </button>
+                    )}
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full max-h-[min(92vh,100dvh)] overflow-y-auto overscroll-y-contain shadow-xl ring-1 ring-black/5 touch-pan-y">
                 {/* Header */}
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center justify-between">

@@ -62,14 +62,16 @@ Si el QR viene del formato antiguo cifrado, el string tiene 7 partes. La app **n
 
 2. El backend:
    - Crea un registro en BD (token con `tokenId`, payload, `expiresAt`, etc.).
-   - Genera el string del QR con **porcentaje incluido**: `createReferenceQrToken(tokenId, discountPercentage)` → formato de **5 partes** `LINK4DEAL-DISCOUNT.v1.<id>.<pct>.<sig>`.
+   - Genera el string del QR con **porcentaje** en el prefijo **`QR_PREFIX-N`** (N = %, ej. 5, 10, 20): `createReferenceQrToken(tokenId, discountPercentage)` → **5 partes** `PREFIX.v1.<id>.<pct>.<sig>`; el mismo número aparece en N, en `<pct>` y en `luxaesRedeemed`.
 
 3. La respuesta incluye el valor exacto a meter en el QR:
    ```json
    {
      "ok": true,
-     "qrValue": "LINK4DEAL-DISCOUNT.v1.abc123.20.xYz...",
-     "prefix": "LINK4DEAL-DISCOUNT",
+     "qrValue": "link4deal-discount-20.v1.abc123.20.xYz...",
+     "prefix": "link4deal-discount-20",
+     "basePrefix": "link4deal-discount",
+     "luxaesRedeemed": 20,
      "version": "v1",
      "ttlSeconds": 300
    }

@@ -94,7 +94,15 @@
                   "promotionId": { "type": "string" },
                   "referralCode": { "type": "string" },
                   "discountPercentage": { "type": "number" },
-                  "walletAddress": { "type": "string" }
+                  "walletAddress": { "type": "string" },
+                  "brandId": { "type": "string", "description": "Opcional; atribución marca" },
+                  "shopId": { "type": "string", "description": "Opcional; tienda" },
+                  "productId": { "type": "string", "description": "Opcional; id catálogo externo (no confundir con promotionId)" },
+                  "gtmTag": { "type": "string", "description": "Opcional; GTM-XXXX o etiqueta" },
+                  "campaignId": { "type": "string" },
+                  "source": { "type": "string" },
+                  "medium": { "type": "string" },
+                  "metadata": { "type": "object", "additionalProperties": true, "description": "Objeto JSON libre" }
                 },
                 "required": ["deviceId", "promotionId", "referralCode", "discountPercentage"]
               }
@@ -113,9 +121,11 @@
                       "properties": {
                         "ok": { "type": "boolean" },
                         "qrValue": { "type": "string" },
-                        "prefix": { "type": "string" },
+                        "prefix": { "type": "string", "description": "QR_PREFIX o QR_PREFIX-N (N = % descuento)" },
+                        "basePrefix": { "type": "string", "description": "QR_PREFIX sin -N" },
                         "version": { "type": "string" },
                         "ttlSeconds": { "type": "integer" },
+                        "luxaesRedeemed": { "type": "integer", "description": "Mismo valor que discountPercentage y N del prefijo (%)" },
                         "businessWarnings": { "type": "array", "items": { "type": "object" } }
                       }
                     },
@@ -144,7 +154,15 @@
           { "name": "referralCode", "in": "query", "required": true, "schema": { "type": "string" } },
           { "name": "discountPercentage", "in": "query", "required": true, "schema": { "type": "number" } },
           { "name": "influencerId", "in": "query", "schema": { "type": "string" } },
-          { "name": "walletAddress", "in": "query", "schema": { "type": "string" } }
+          { "name": "walletAddress", "in": "query", "schema": { "type": "string" } },
+          { "name": "brandId", "in": "query", "schema": { "type": "string" } },
+          { "name": "shopId", "in": "query", "schema": { "type": "string" } },
+          { "name": "productId", "in": "query", "schema": { "type": "string" } },
+          { "name": "gtmTag", "in": "query", "schema": { "type": "string" } },
+          { "name": "campaignId", "in": "query", "schema": { "type": "string" } },
+          { "name": "source", "in": "query", "schema": { "type": "string" } },
+          { "name": "medium", "in": "query", "schema": { "type": "string" } },
+          { "name": "metadata", "in": "query", "description": "JSON string del objeto metadata", "schema": { "type": "string" } }
         ],
         "responses": {
           "200": { "description": "Mismo que POST" }

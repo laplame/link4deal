@@ -17,6 +17,11 @@ import {
     Smartphone
 } from 'lucide-react';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
+import PromotionOptionalAttributionSection, {
+    emptyPromotionOptionalAttribution,
+    type PromotionOptionalAttribution
+} from '../components/PromotionOptionalAttributionSection';
+import type { BizneShop } from '../components/BizneShopCard';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
@@ -40,6 +45,7 @@ interface QuickPromotionData {
     gpsRadiusMeters: number;
     storeLatitude: string;
     storeLongitude: string;
+    optionalAttribution: PromotionOptionalAttribution;
 }
 
 const OFFER_TYPES: { value: OfferType; label: string; description: string }[] = [
@@ -159,7 +165,8 @@ export default function QuickPromotionPage() {
         activateByGps: false,
         gpsRadiusMeters: 500,
         storeLatitude: '',
-        storeLongitude: ''
+        storeLongitude: '',
+        optionalAttribution: emptyPromotionOptionalAttribution()
     });
 
     const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
@@ -280,6 +287,28 @@ export default function QuickPromotionPage() {
             default:
                 return {};
         }
+    };
+
+    const patchOptionalAttribution = (patch: Partial<PromotionOptionalAttribution>) => {
+        setFormData((prev) => ({
+            ...prev,
+            optionalAttribution: { ...prev.optionalAttribution, ...patch }
+        }));
+    };
+
+    const applySelectedShopGps = (
+        shop: BizneShop,
+        coordinates: { latitude: number; longitude: number } | null
+    ) => {
+        if (!coordinates) return;
+        setFormData((prev) => ({
+            ...prev,
+            brand: prev.brand || shop.storeName || prev.brand,
+            storeCity: shop.city || prev.storeCity,
+            activateByGps: true,
+            storeLatitude: String(coordinates.latitude),
+            storeLongitude: String(coordinates.longitude)
+        }));
     };
 
     const handleInputChange = (field: keyof QuickPromotionData, value: any) => {
@@ -435,6 +464,16 @@ export default function QuickPromotionPage() {
             }
             if (formData.storeLongitude.trim()) {
                 formDataToSend.append('storeLongitude', formData.storeLongitude.trim());
+            }
+            const o = formData.optionalAttribution;
+            ['brandId', 'shopId', 'gtmTag', 'campaignId', 'source', 'medium'].forEach((k) => {
+                const v = o[k as keyof PromotionOptionalAttribution];
+                if (v !== undefined && v !== null && String(v).trim() !== '') {
+                    formDataToSend.append(k, String(v).trim());
+                }
+            });
+            if (o.externalProductId?.trim()) {
+                formDataToSend.append('externalProductId', o.externalProductId.trim());
             }
             // Tipo de promoción: redirección en lugar de QR
             formDataToSend.append('redirectInsteadOfQr', promotionType === 'quick-promotion' ? 'true' : 'false');
@@ -1183,6 +1222,13 @@ export default function QuickPromotionPage() {
                                 )}
                             </div>
                         </div>
+
+                        <PromotionOptionalAttributionSection
+                            idPrefix="quick-promo"
+                            value={formData.optionalAttribution}
+                            onChange={patchOptionalAttribution}
+                            onShopSelect={applySelectedShopGps}
+                        />
 
                         {/* Términos y condiciones (opcional; se puede rellenar con Gemini) */}
                         <div className="border-t border-gray-200 pt-6">

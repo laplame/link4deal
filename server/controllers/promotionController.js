@@ -357,6 +357,18 @@ class PromotionController {
             const numOriginal = (originalPrice !== undefined && originalPrice !== '') ? parseFloat(originalPrice) : 0;
             const numCurrent = (currentPrice !== undefined && currentPrice !== '') ? parseFloat(currentPrice) : 0;
 
+            const optionalAttribution = {};
+            ['brandId', 'shopId', 'gtmTag', 'campaignId', 'source', 'medium'].forEach((k) => {
+                const v = req.body[k];
+                if (v !== undefined && v !== null && String(v).trim() !== '') {
+                    optionalAttribution[k] = String(v).trim();
+                }
+            });
+            const extPid = req.body.externalProductId ?? req.body.productId;
+            if (extPid !== undefined && extPid !== null && String(extPid).trim() !== '') {
+                optionalAttribution.externalProductId = String(extPid).trim();
+            }
+
             // Crear la promoción (campos con valores por defecto para máxima flexibilidad)
             const promotionData = {
                 title: title.trim(),
@@ -436,7 +448,8 @@ class PromotionController {
                     name: 'Usuario del sistema',
                     email: 'system@link4deal.com',
                     verified: false
-                }
+                },
+                ...optionalAttribution
             };
 
             // Validar que los precios no sean negativos y que actual <= original (si hay precios)
@@ -1004,7 +1017,8 @@ class PromotionController {
                 'features', 'specifications', 'termsAndConditions', 'isHotOffer', 'hotness',
                 'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status',
                 'redirectInsteadOfQr', 'redirectToUrl',
-                'activateByGps', 'gpsRadiusMeters'
+                'activateByGps', 'gpsRadiusMeters',
+                'brandId', 'shopId', 'externalProductId', 'gtmTag', 'campaignId', 'source', 'medium'
             ];
 
             const filteredData = {};

@@ -41,9 +41,32 @@ function getQrConfig(options = {}) {
     return { prefix, version, ttlSeconds, encKey, signKey };
 }
 
-function getQrMetaConfig() {
-    const { prefix, version, ttlSeconds } = getQrConfig({ requireEncKey: false });
-    return { prefix, version, ttlSeconds };
+/**
+ * Prefijo efectivo: base (QR_PREFIX) o base-N con N = porcentaje de descuento (5, 10, 20, …).
+ * Mismo valor que `discountPercentage` / `luxaesRedeemed` en la API del cupón.
+ * @param {number} [discountPercent] - 0–100; si &gt; 0 se añade -N al prefijo (ej. link4deal-discount-20 → 20 %).
+ * @returns {{ prefix: string, luxaesRedeemed: number }}
+ */
+function buildPrefixWithDiscountPercent(basePrefix, discountPercent) {
+    const n = Number(discountPercent);
+    if (!Number.isFinite(n) || n <= 0) {
+        return { prefix: basePrefix, luxaesRedeemed: 0 };
+    }
+    const rounded = Math.min(100, Math.max(0, Math.round(n)));
+    return { prefix: `${basePrefix}-${rounded}`, luxaesRedeemed: rounded };
+}
+
+function isQrPrefixAllowed(incomingPrefix, basePrefix) {
+    if (incomingPrefix === basePrefix) return true;
+    const escaped = basePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escaped}-\\d+$`).test(incomingPrefix);
+}
+
+/** @param {number} [discountPercent] - Porcentaje 0–100 (mismo número en prefijo `-N` y en luxaesRedeemed). */
+function getQrMetaConfig(discountPercent) {
+    const { prefix: basePrefix, version, ttlSeconds } = getQrConfig({ requireEncKey: false });
+    const { prefix, luxaesRedeemed: lux } = buildPrefixWithDiscountPercent(basePrefix, discountPercent);
+    return { prefix, basePrefix, version, ttlSeconds, luxaesRedeemed: lux };
 }
 
 function createQrToken(data) {
@@ -146,15 +169,16 @@ function verifyAndDecodeQrToken(token) {
 /**
  * Crea el string del token QR por referencia.
  * @param {string} tokenId - Id único del token en BD
- * @param {number} [discountPercentage] - Porcentaje de descuento 0-100; si se pasa, el string tendrá 5 partes (id.pct.sig)
- * @returns {string} Ej: LINK4DEAL-DISCOUNT.v1.<id>.<sig> (4 partes) o LINK4DEAL-DISCOUNT.v1.<id>.<pct>.<sig> (5 partes)
+ * @param {number} [discountPercentage] - Porcentaje 0–100; el mismo número va en el prefijo `PREFIX-N` (N = %) y en el segmento .&lt;pct&gt;.
+ * @returns {string} PREFIX.v1.<id>.<pct>.<sig> (5 partes) o 4 partes si pct fuera inválido (compat.)
  */
 function createReferenceQrToken(tokenId, discountPercentage) {
-    const { prefix, version, signKey } = getQrConfig({ requireEncKey: false });
-    const pct = Number(discountPercentage);
-    const includePct = Number.isFinite(pct) && pct >= 0 && pct <= 100;
+    const { prefix: basePrefix, version, signKey } = getQrConfig({ requireEncKey: false });
+    const rounded = Math.min(100, Math.max(0, Math.round(Number(discountPercentage) || 0)));
+    const { prefix } = buildPrefixWithDiscountPercent(basePrefix, rounded);
+    const includePct = Number.isFinite(rounded) && rounded >= 0 && rounded <= 100;
     const body = includePct
-        ? `${prefix}.${version}.${tokenId}.${Math.round(pct)}`
+        ? `${prefix}.${version}.${tokenId}.${rounded}`
         : `${prefix}.${version}.${tokenId}`;
     const signature = crypto.createHmac('sha256', signKey).update(body).digest();
     return `${body}.${b64u(signature)}`;
@@ -162,10 +186,11 @@ function createReferenceQrToken(tokenId, discountPercentage) {
 
 /**
  * Verifica y decodifica token QR por referencia. Acepta formato de 4 partes (sin pct) o 5 partes (con pct).
- * @returns {{ tokenId: string, discountPercentage?: number, prefix: string, version: string }}
+ * Prefijo: base (QR_PREFIX) o base-N (N = porcentaje de descuento, mismo que luxaesRedeemed).
+ * @returns {{ tokenId: string, discountPercentage?: number, prefix: string, version: string, luxaesRedeemed?: number }}
  */
 function verifyReferenceQrToken(token) {
-    const { prefix, version, signKey } = getQrConfig({ requireEncKey: false });
+    const { prefix: basePrefix, version, signKey } = getQrConfig({ requireEncKey: false });
     const parts = String(token || '').split('.');
     if (parts.length !== 4 && parts.length !== 5) {
         throw new Error('QR reference format invalid');
@@ -175,7 +200,7 @@ function verifyReferenceQrToken(token) {
     const [incomingPrefix, incomingVersion, tokenId, pctOrSig, sigS] = parts;
     const sig = is5Part ? sigS : pctOrSig;
 
-    if (incomingPrefix !== prefix || incomingVersion !== version) {
+    if (incomingVersion !== version || !isQrPrefixAllowed(incomingPrefix, basePrefix)) {
         throw new Error('QR prefix/version invalid');
     }
 
@@ -189,6 +214,11 @@ function verifyReferenceQrToken(token) {
     }
 
     const result = { tokenId, prefix: incomingPrefix, version: incomingVersion };
+    const escapedBase = basePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const luxMatch = incomingPrefix.match(new RegExp(`^${escapedBase}-(\\d+)$`));
+    if (luxMatch) {
+        result.luxaesRedeemed = Number(luxMatch[1]); // puntos porcentuales (ej. 20 = 20 %)
+    }
     if (is5Part) {
         const pct = Number(pctOrSig);
         if (Number.isFinite(pct) && pct >= 0 && pct <= 100) {
@@ -202,6 +232,8 @@ module.exports = {
     b64u,
     getQrConfig,
     getQrMetaConfig,
+    buildPrefixWithDiscountPercent,
+    isQrPrefixAllowed,
     createQrToken,
     verifyAndDecodeQrToken,
     createReferenceQrToken,

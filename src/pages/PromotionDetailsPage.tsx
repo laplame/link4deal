@@ -975,6 +975,7 @@ export default function PromotionDetailsPage() {
                     productPrice={product.price}
                     productCurrency={product.currency}
                     productImage={product.image}
+                    brandId={product.brand}
                     discountPercentage={product.originalPrice && product.originalPrice > 0
                         ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
                         : undefined}

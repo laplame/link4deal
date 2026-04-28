@@ -14,6 +14,73 @@ const {
 const router = express.Router();
 const STRICT_CREATE_VALIDATION = process.env.QR_STRICT_CREATE_VALIDATION === 'true';
 
+/** Claves opcionales que se fusionan al payload del cupón si vienen informadas (sin validar contra BD). */
+const OPTIONAL_COUPON_PAYLOAD_KEYS = [
+    'brandId',
+    'shopId',
+    /** Id de producto en catálogo externo (opcional; distinto de promotionId). */
+    'productId',
+    /** Id de contenedor GTM (p. ej. GTM-XXXX) o etiqueta personalizada para analytics. */
+    'gtmTag',
+    'campaignId',
+    'source',
+    'medium'
+];
+
+function safeMetadataObject(obj) {
+    try {
+        const clone = JSON.parse(JSON.stringify(obj));
+        if (clone === null || typeof clone !== 'object' || Array.isArray(clone)) return null;
+        return clone;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Añade campos opcionales al payload del cupón. No obliga nada; ignora vacíos y metadata inválida.
+ * @param {object} basePayload - payload mínimo ya construido
+ * @param {object} rawSource - req.body o objeto derivado de query
+ * @returns {object}
+ */
+function mergeOptionalCouponFields(basePayload, rawSource) {
+    const out = { ...basePayload };
+    if (!rawSource || typeof rawSource !== 'object') return out;
+
+    for (const key of OPTIONAL_COUPON_PAYLOAD_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(rawSource, key)) continue;
+        const v = rawSource[key];
+        if (v === undefined || v === null) continue;
+        const str = typeof v === 'string' ? v.trim() : String(v);
+        if (str === '') continue;
+        out[key] = str;
+    }
+
+    if (rawSource.metadata != null && typeof rawSource.metadata === 'object' && !Array.isArray(rawSource.metadata)) {
+        const meta = safeMetadataObject(rawSource.metadata);
+        if (meta && Object.keys(meta).length > 0) {
+            out.metadata = meta;
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Parsea `metadata` desde query (JSON string). Devuelve null si falla o no viene.
+ * @param {string|undefined} metadataQuery
+ * @returns {object|null}
+ */
+function parseMetadataFromQuery(metadataQuery) {
+    if (metadataQuery === undefined || metadataQuery === null || metadataQuery === '') return null;
+    try {
+        const parsed = JSON.parse(String(metadataQuery));
+        return safeMetadataObject(parsed);
+    } catch {
+        return null;
+    }
+}
+
 /** URL por defecto para redirección a Amazon (afiliado) cuando la promoción usa redirectInsteadOfQr y no tiene redirectToUrl. */
 const DEFAULT_AMAZON_AFFILIATE_URL = 'https://amzn.to/3NfsW8K';
 /** Tag de afiliado Amazon para construir URLs de producto (ej. jalme-20). Se usa al combinar URL de afiliado + URL del producto. */
@@ -133,8 +200,10 @@ async function getRedirectInsteadOfQr(promotionId) {
 
 /**
  * Lógica compartida para crear un cupón QR. Usada por POST y GET /create.
- * @param {object} payloadInput - { deviceId, influencerId, promotionId, referralCode, discountPercentage, walletAddress }
- * @returns {Promise<{ qrValue, prefix, version, ttlSeconds, businessWarnings }|{ redirectToUrl, noQr }>}
+ * @param {object} payloadInput - Mínimo: deviceId, influencerId, promotionId, referralCode, discountPercentage, walletAddress.
+ *   Opcional (se persisten si vienen): brandId, shopId, productId, gtmTag, campaignId, source, medium, metadata.
+ *   `luxaesRedeemed` en payload = mismo entero que `discountPercentage` (%), y el prefijo del QR usa `-N` con ese N.
+ * @returns {Promise<{ qrValue, prefix, basePrefix, version, ttlSeconds, luxaesRedeemed, businessWarnings }|{ redirectToUrl, noQr }>}
  */
 async function createCouponToken(payloadInput) {
     const redirect = await getRedirectInsteadOfQr(payloadInput.promotionId);
@@ -149,19 +218,31 @@ async function createCouponToken(payloadInput) {
         throw err;
     }
 
-    const { prefix, version, ttlSeconds } = getQrMetaConfig();
+    /** Mismo valor que el % de descuento del cupón (ej. 20 = 20 %); va en prefijo `-N` y en payload como luxaesRedeemed. */
+    const discountPct = Math.min(100, Math.max(0, Math.round(Number(payloadInput.discountPercentage) || 0)));
+    const enrichedPayload = { ...payloadInput, discountPercentage: discountPct, luxaesRedeemed: discountPct };
+
+    const { prefix, basePrefix, version, ttlSeconds, luxaesRedeemed: luxOut } = getQrMetaConfig(discountPct);
     const tokenId = crypto.randomBytes(9).toString('base64url');
     const expiresAt = new Date(Date.now() + (ttlSeconds * 1000));
 
     await DiscountQrToken.create({
         tokenId,
-        payload: payloadInput,
+        payload: enrichedPayload,
         expiresAt,
         usedAt: null
     });
 
-    const qrValue = createReferenceQrToken(tokenId, payloadInput.discountPercentage);
-    return { qrValue, prefix, version, ttlSeconds, businessWarnings: businessErrors };
+    const qrValue = createReferenceQrToken(tokenId, discountPct);
+    return {
+        qrValue,
+        prefix,
+        basePrefix,
+        version,
+        ttlSeconds,
+        luxaesRedeemed: luxOut,
+        businessWarnings: businessErrors
+    };
 }
 
 // POST /api/discount-qr/create
@@ -183,7 +264,7 @@ router.post('/create', async (req, res) => {
             });
         }
 
-        const payloadInput = {
+        const basePayload = {
             deviceId: String(deviceId),
             influencerId: String(influencerId),
             promotionId: String(promotionId),
@@ -191,6 +272,7 @@ router.post('/create', async (req, res) => {
             discountPercentage: Number(discountPercentage || 0),
             walletAddress: String(walletAddress)
         };
+        const payloadInput = mergeOptionalCouponFields(basePayload, req.body || {});
 
         const result = await createCouponToken(payloadInput);
         return res.json({
@@ -217,14 +299,16 @@ router.post('/create', async (req, res) => {
 // Parámetros: deviceId, influencerId, promotionId, referralCode, discountPercentage (opcional, default 0), walletAddress (opcional, default "not-provided")
 router.get('/create', async (req, res) => {
     try {
+        const q = req.query || {};
         const {
             deviceId,
             influencerId,
             promotionId,
             referralCode,
             discountPercentage,
-            walletAddress
-        } = req.query || {};
+            walletAddress,
+            metadata: metadataQuery
+        } = q;
 
         if (!deviceId || !influencerId || !promotionId || !referralCode) {
             return res.status(400).json({
@@ -233,7 +317,13 @@ router.get('/create', async (req, res) => {
             });
         }
 
-        const payloadInput = {
+        const metaFromQuery = parseMetadataFromQuery(metadataQuery);
+        const queryExtras = { ...q };
+        if (metaFromQuery && Object.keys(metaFromQuery).length > 0) {
+            queryExtras.metadata = metaFromQuery;
+        }
+
+        const basePayload = {
             deviceId: String(deviceId),
             influencerId: String(influencerId),
             promotionId: String(promotionId),
@@ -241,6 +331,7 @@ router.get('/create', async (req, res) => {
             discountPercentage: Number(discountPercentage || 0),
             walletAddress: String(walletAddress || 'not-provided')
         };
+        const payloadInput = mergeOptionalCouponFields(basePayload, queryExtras);
 
         const result = await createCouponToken(payloadInput);
         return res.json({

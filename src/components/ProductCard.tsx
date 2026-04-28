@@ -376,6 +376,7 @@ export default function ProductCard({
                     productPrice={product.price}
                     productCurrency={product.currency}
                     productImage={product.image}
+                    brandId={product.brand}
                     discountPercentage={product.originalPrice ? discountPercentage : undefined}
                     autoGenerateOnOpen={!product.activateByGps}
                     activateByGps={product.activateByGps}

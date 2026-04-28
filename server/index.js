@@ -22,6 +22,8 @@ const influencerRoutes = require('./routes/influencers');
 const discountQrRoutes = require('./routes/discountQr');
 const analyzeProfileRoutes = require('./routes/analyzeProfile');
 const brandRoutes = require('./routes/brands');
+const kycWhatsappRoutes = require('./routes/kycWhatsapp');
+const loyaltyRoutes = require('./routes/loyalty');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -205,7 +207,9 @@ app.get('/api', (req, res) => {
             users: '/api/users',
             promotions: '/api/promotions',
             agencies: '/api/agencies',
-            discountQr: '/api/discount-qr'
+            discountQr: '/api/discount-qr',
+            kycWhatsapp: '/api/kyc/whatsapp',
+            loyalty: '/api/loyalty'
         },
         documentation: 'https://github.com/link4deal/api-docs', // Actualizar con tu doc
         support: 'support@link4deal.com'
@@ -239,6 +243,8 @@ app.use('/api/influencers', influencerRoutes);
 // Discount QR routes (issuer + scanner verifier)
 app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
 app.use('/api/analyze-profile-image', analyzeProfileRoutes);
+app.use('/api/kyc/whatsapp', strictLimiter, kycWhatsappRoutes);
+app.use('/api/loyalty', loyaltyRoutes);
 
 app.use('/api/brands', brandRoutes);
 
@@ -269,6 +275,10 @@ app.use('*', (req, res) => {
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
             'POST /api/discount-qr/redeem',
+            'POST /api/kyc/whatsapp/request-code',
+            'POST /api/kyc/whatsapp/verify-code',
+            'GET /api/loyalty/coffee',
+            'POST /api/loyalty/coffee/transactions',
             'GET /api/bizne-shops',
             'GET /api/bizne-shops/:id'
         ],

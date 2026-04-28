@@ -45,6 +45,10 @@ Body:
 }
 ```
 
+Campos **opcionales** (se persisten en el payload del token si se envían; no son obligatorios ni se validan contra catálogo): `brandId`, `shopId`, `productId` (id de producto externo, distinto de `promotionId`), `gtmTag` (p. ej. contenedor GTM o etiqueta propia), `campaignId`, `source`, `medium`, `metadata` (objeto JSON arbitrario).
+
+En la **respuesta** se incluyen `prefix` (puede ser `QR_PREFIX-N` donde **N** es el **porcentaje** de descuento: 5, 10, 20, …), `basePrefix`, `luxaesRedeemed` (mismo número que N y que `discountPercentage`) y el payload guarda ese valor en `luxaesRedeemed`.
+
 Respuesta:
 
 ```json
