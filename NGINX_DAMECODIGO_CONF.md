@@ -155,19 +155,20 @@ Luego: `sudo nginx -t && sudo systemctl reload nginx`
 
 ## Si la API devuelve "MongoDB no conectado - modo simulado"
 
-El backend debe cargar `server/.env` con `MONGODB_URI_ATLAS`. En el repo ya se carga desde `server/.env` aunque PM2 arranque desde la raíz.
+El backend carga **ambos** `.env` si existen: primero la **raíz del repo** (`link4deal/.env`), luego **`server/.env`** (este sobrescribe claves duplicadas). Puedes dejar `MONGODB_URI_ATLAS` en cualquiera de los dos; si solo lo pones en `server/.env`, ahora sí se aplicará. PM2 puede arrancar desde la raíz (`cwd` del `ecosystem.config.cjs`).
 
-1. **En el servidor:** Comprueba que exista `server/.env` con la URI de Atlas:
+1. **En el servidor:** Comprueba la URI (en **cualquiera** de los dos archivos):
    ```bash
    grep MONGODB_URI_ATLAS ~/project/link4deal/server/.env
+   grep MONGODB_URI_ATLAS ~/project/link4deal/.env
    ```
 
 2. **MongoDB Atlas → Network Access:** Añade la IP del servidor (o 0.0.0.0/0 para pruebas).
 
 3. **Reinicia el backend** para que cargue la variable y conecte:
    ```bash
-   pm2 restart server
-   # o el nombre del proceso: pm2 list
+   pm2 restart link4deal-backend
+   # o: pm2 restart all — según `pm2 list`
    ```
 
 4. Comprueba: la respuesta de `/api/promotions?limit=1` no debe incluir `"message": "MongoDB no conectado..."` y `docs` debe tener datos si hay promociones activas en la BD.

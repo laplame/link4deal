@@ -452,6 +452,21 @@ class PromotionController {
                 ...optionalAttribution
             };
 
+            // Sanear límites del esquema Mongoose (evita save() rechazado sin mensaje claro)
+            if (promotionData.title.length > 200) {
+                promotionData.title = promotionData.title.slice(0, 200);
+            }
+            const rawTerms = promotionData.termsAndConditions || '';
+            if (rawTerms.length > 5000) {
+                promotionData.termsAndConditions = rawTerms.slice(0, 5000);
+            }
+            const dp = Number(promotionData.discountPercentage);
+            promotionData.discountPercentage = Number.isFinite(dp)
+                ? Math.min(100, Math.max(0, Math.round(dp)))
+                : 0;
+            const hz = String(promotionData.hotness || 'warm').toLowerCase();
+            promotionData.hotness = ['fire', 'hot', 'warm'].includes(hz) ? hz : 'warm';
+
             // Validar que los precios no sean negativos y que actual <= original (si hay precios)
             if (promotionData.originalPrice < 0 || promotionData.currentPrice < 0) {
                 return res.status(400).json({
@@ -516,6 +531,9 @@ class PromotionController {
                     });
                 } catch (dbError) {
                     console.error('❌ Error guardando en MongoDB, intentando modo simulado:', dbError.message);
+                    if (dbError.name) console.error('   Tipo:', dbError.name);
+                    if (dbError.errors) console.error('   Validación:', JSON.stringify(dbError.errors, null, 2));
+                    if (dbError.stack) console.error(dbError.stack);
                     // Continuar con modo simulado si falla MongoDB
                 }
             }

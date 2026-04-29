@@ -170,16 +170,9 @@ class Database {
             this.isConnected = true;
         });
 
-        // Manejar señales de terminación
-        process.on('SIGINT', async () => {
-            await this.closeConnection();
-            process.exit(0);
-        });
-
-        process.on('SIGTERM', async () => {
-            await this.closeConnection();
-            process.exit(0);
-        });
+        // No registrar SIGINT/SIGTERM aquí: server/index.js hace el apagado ordenado
+        // (HTTP + Mongo). Duplicar handlers cerraba la BD y hacía process.exit antes
+        // de tiempo y en carrera con el graceful shutdown del servidor HTTP.
     }
 
     async closeConnection() {

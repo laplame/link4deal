@@ -410,10 +410,13 @@ async function startServer() {
             gracefulShutdown('uncaughtException');
         });
         
-        process.on('unhandledRejection', (reason, promise) => {
-            console.error('❌ Unhandled Rejection:', reason);
-            console.error('Promise:', promise);
-            gracefulShutdown('unhandledRejection');
+        // No apagar el proceso por promesas rechazadas sin catch: librerías / OCR / axios
+        // a veces las dejan escapar y reiniciar Node desconecta a todos los clientes de Mongo.
+        process.on('unhandledRejection', (reason) => {
+            console.error('❌ Unhandled Rejection (servidor sigue en marcha):', reason);
+            if (reason instanceof Error) {
+                console.error(reason.stack);
+            }
         });
         
     } catch (error) {
