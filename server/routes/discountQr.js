@@ -186,6 +186,128 @@ async function validateBusinessRules(payload, context = {}) {
 }
 
 /**
+ * Resuelve el cupón en BD por token corto firmado (qrValue) o por código alfanumérico en payload.referralCode (ej. L4D-...).
+ * @param {string} raw
+ * @returns {Promise<object|null>}
+ */
+async function findDiscountTokenDoc(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+
+    try {
+        const ref = verifyReferenceQrToken(s);
+        return await DiscountQrToken.findOne({ tokenId: ref.tokenId });
+    } catch {
+        // no es formato referencia corta
+    }
+
+    return DiscountQrToken.findOne({ 'payload.referralCode': s })
+        .sort({ createdAt: -1 })
+        .exec();
+}
+
+/**
+ * Lee identificador de cupón desde body o query (móvil / POS).
+ * @param {object} source
+ * @returns {string}
+ */
+function getCouponLookupInput(source) {
+    if (!source || typeof source !== 'object') return '';
+    const v =
+        source.qrValue ||
+        source.token ||
+        source.referralCode ||
+        source.couponCode;
+    return v != null && v !== '' ? String(v).trim() : '';
+}
+
+/**
+ * Construye objeto redeemedBy desde el body del canje (auditoría).
+ * @param {object} body
+ * @returns {object}
+ */
+function buildRedeemedByFromBody(body) {
+    if (!body || typeof body !== 'object') body = {};
+    const note = body.note ? String(body.note) : '';
+    const readerId = body.readerId != null && body.readerId !== '' ? String(body.readerId) : '';
+    const readerDeviceId = body.readerDeviceId != null && body.readerDeviceId !== ''
+        ? String(body.readerDeviceId)
+        : (body.posDeviceId != null && body.posDeviceId !== '' ? String(body.posDeviceId) : '');
+
+    const redeemedByUserId =
+        body.redeemedByUserId != null && body.redeemedByUserId !== ''
+            ? String(body.redeemedByUserId)
+            : body.cashierUserId != null && body.cashierUserId !== ''
+                ? String(body.cashierUserId)
+                : body.userId != null && body.userId !== ''
+                    ? String(body.userId)
+                    : '';
+
+    const redeemedByUserName =
+        body.redeemedByUserName != null && body.redeemedByUserName !== ''
+            ? String(body.redeemedByUserName)
+            : body.cashierUserName != null && body.cashierUserName !== ''
+                ? String(body.cashierUserName)
+                : body.userName != null && body.userName !== ''
+                    ? String(body.userName)
+                    : '';
+
+    const customerUserId = body.customerUserId != null && body.customerUserId !== '' ? String(body.customerUserId) : '';
+    const customerUserName =
+        body.customerUserName != null && body.customerUserName !== '' ? String(body.customerUserName) : '';
+    const customerDeviceId =
+        body.customerDeviceId != null && body.customerDeviceId !== ''
+            ? String(body.customerDeviceId)
+            : body.deviceId != null && body.deviceId !== ''
+                ? String(body.deviceId)
+                : '';
+
+    let termsAccepted = false;
+    if (body.termsAccepted === true || body.termsAccepted === 'true' || body.termsAccepted === 1 || body.termsAccepted === '1') {
+        termsAccepted = true;
+    }
+
+    let termsAcceptedAt;
+    if (body.termsAcceptedAt) {
+        const d = new Date(body.termsAcceptedAt);
+        if (!Number.isNaN(d.getTime())) termsAcceptedAt = d;
+    } else if (termsAccepted) {
+        termsAcceptedAt = new Date();
+    }
+
+    const termsSummary = body.termsSummary != null && String(body.termsSummary).trim()
+        ? String(body.termsSummary).trim().slice(0, 8000)
+        : (body.termsText != null && String(body.termsText).trim()
+            ? String(body.termsText).trim().slice(0, 8000)
+            : '');
+
+    let metadata = null;
+    if (body.redemptionMetadata != null && typeof body.redemptionMetadata === 'object' && !Array.isArray(body.redemptionMetadata)) {
+        metadata = safeMetadataObject(body.redemptionMetadata);
+    } else if (body.metadata != null && typeof body.metadata === 'object' && !Array.isArray(body.metadata)) {
+        metadata = safeMetadataObject(body.metadata);
+    }
+
+    const out = {
+        readerId,
+        readerDeviceId,
+        note: note.slice(0, 4000),
+        redeemedByUserId: redeemedByUserId.slice(0, 256),
+        redeemedByUserName: redeemedByUserName.slice(0, 256),
+        customerUserId: customerUserId.slice(0, 256),
+        customerUserName: customerUserName.slice(0, 256),
+        customerDeviceId: customerDeviceId.slice(0, 256),
+        termsAccepted,
+        termsAcceptedAt: termsAcceptedAt || undefined,
+        termsSummary
+    };
+    if (metadata && Object.keys(metadata).length > 0) {
+        out.metadata = metadata;
+    }
+    return out;
+}
+
+/**
  * Si la promoción tiene redirectInsteadOfQr, devuelve { redirectToUrl, noQr: true }. Si no, null.
  * @param {string} promotionId
  * @returns {Promise<{ redirectToUrl: string, noQr: true } | null>}
@@ -354,9 +476,8 @@ router.get('/create', async (req, res) => {
     }
 });
 
-async function runVerify(token, context = {}) {
-    const ref = verifyReferenceQrToken(String(token));
-    const tokenDoc = await DiscountQrToken.findOne({ tokenId: ref.tokenId });
+async function runVerify(tokenOrCode, context = {}) {
+    const tokenDoc = await findDiscountTokenDoc(tokenOrCode);
     if (!tokenDoc) {
         const err = new Error(ERROR_CODES.QR_INVALID);
         err.code = 'QR_INVALID';
@@ -396,14 +517,15 @@ async function runVerify(token, context = {}) {
 }
 
 // GET /api/discount-qr/verify?qrValue=<token>&shopId=...&productId=... — ver el JSON del cupón
+// También: ?referralCode= o ?couponCode= (mismo valor que payload.referralCode, ej. L4D-...)
 router.get('/verify', async (req, res) => {
     try {
-        const token = req.query?.qrValue || req.query?.token;
+        const token = getCouponLookupInput(req.query);
         if (!token) {
             return res.status(400).json({
                 ok: false,
                 errorCode: 'QR_INVALID',
-                message: ERROR_CODES.QR_INVALID
+                message: 'qrValue, token, referralCode o couponCode requerido'
             });
         }
         const context = {
@@ -432,14 +554,15 @@ router.get('/verify', async (req, res) => {
 });
 
 // POST /api/discount-qr/verify (lector/scanner). Opcional: body.shopId, body.productId para validar tienda/producto.
+// Body: qrValue | token | referralCode | couponCode (código alfanumérico del cupón).
 router.post('/verify', async (req, res) => {
     try {
-        const token = req.body?.qrValue || req.body?.token;
-        if (!token) {
+        const input = getCouponLookupInput(req.body);
+        if (!input) {
             return res.status(400).json({
                 ok: false,
                 errorCode: 'QR_INVALID',
-                message: 'qrValue/token requerido'
+                message: 'qrValue, token, referralCode o couponCode requerido'
             });
         }
 
@@ -451,16 +574,8 @@ router.post('/verify', async (req, res) => {
         let payload = null;
         let tokenDoc = null;
 
-        try {
-            const ref = verifyReferenceQrToken(String(token));
-            tokenDoc = await DiscountQrToken.findOne({ tokenId: ref.tokenId });
-            if (!tokenDoc) {
-                return res.status(400).json({
-                    ok: false,
-                    errorCode: 'QR_INVALID',
-                    message: ERROR_CODES.QR_INVALID
-                });
-            }
+        tokenDoc = await findDiscountTokenDoc(input);
+        if (tokenDoc) {
             if (tokenDoc.expiresAt && tokenDoc.expiresAt.getTime() < Date.now()) {
                 return res.status(400).json({
                     ok: false,
@@ -471,9 +586,9 @@ router.post('/verify', async (req, res) => {
             payload = tokenDoc.payload;
             tokenDoc.lastVerifiedAt = new Date();
             await tokenDoc.save();
-        } catch (referenceError) {
+        } else {
             try {
-                payload = verifyAndDecodeQrToken(String(token));
+                payload = verifyAndDecodeQrToken(String(input));
             } catch {
                 return res.status(400).json({
                     ok: false,
@@ -522,28 +637,41 @@ router.post('/verify', async (req, res) => {
 });
 
 // POST /api/discount-qr/redeem (one-time redemption)
+// Body: qrValue | token | referralCode | couponCode + opcional shopId, productId, datos de auditoría (redeemedBy*).
 router.post('/redeem', async (req, res) => {
     try {
-        const token = req.body?.qrValue || req.body?.token;
-        const readerId = req.body?.readerId ? String(req.body.readerId) : '';
-        const readerDeviceId = req.body?.readerDeviceId ? String(req.body.readerDeviceId) : '';
-        const note = req.body?.note ? String(req.body.note) : '';
-
-        if (!token) {
+        const input = getCouponLookupInput(req.body);
+        if (!input) {
             return res.status(400).json({
                 ok: false,
-                message: 'qrValue/token requerido'
+                message: 'qrValue, token, referralCode o couponCode requerido'
             });
         }
 
-        // Solo aplica one-time para formato referencia corto
-        const ref = verifyReferenceQrToken(String(token));
+        let tokenId;
+        try {
+            const ref = verifyReferenceQrToken(String(input));
+            tokenId = ref.tokenId;
+        } catch {
+            const doc = await DiscountQrToken.findOne({ 'payload.referralCode': String(input).trim() })
+                .sort({ createdAt: -1 });
+            if (!doc) {
+                return res.status(400).json({
+                    ok: false,
+                    errorCode: 'QR_INVALID',
+                    message: ERROR_CODES.QR_INVALID
+                });
+            }
+            tokenId = doc.tokenId;
+        }
+
         const now = new Date();
+        const redeemedBy = buildRedeemedByFromBody(req.body);
 
         // Redención atómica: solo si no se ha usado y no está expirado
         const redeemed = await DiscountQrToken.findOneAndUpdate(
             {
-                tokenId: ref.tokenId,
+                tokenId,
                 $or: [{ usedAt: null }, { usedAt: { $exists: false } }],
                 expiresAt: { $gt: now }
             },
@@ -551,18 +679,14 @@ router.post('/redeem', async (req, res) => {
                 $set: {
                     usedAt: now,
                     lastVerifiedAt: now,
-                    redeemedBy: {
-                        readerId,
-                        readerDeviceId,
-                        note
-                    }
+                    redeemedBy
                 }
             },
             { new: true }
         );
 
         if (!redeemed) {
-            const existing = await DiscountQrToken.findOne({ tokenId: ref.tokenId }).lean();
+            const existing = await DiscountQrToken.findOne({ tokenId }).lean();
             if (!existing) {
                 return res.status(404).json({
                     ok: false,
@@ -613,7 +737,8 @@ router.post('/redeem', async (req, res) => {
             message: 'QR redimido exitosamente',
             couponId: redeemed.tokenId,
             payload: redeemed.payload,
-            usedAt: redeemed.usedAt
+            usedAt: redeemed.usedAt,
+            redeemedBy: redeemed.redeemedBy || null
         });
     } catch (error) {
         return res.status(400).json({

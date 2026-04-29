@@ -30,11 +30,25 @@ const discountQrTokenSchema = new mongoose.Schema({
     redeemedBy: {
         readerId: String,
         readerDeviceId: String,
-        note: String
+        note: String,
+        /** Usuario del punto de venta que procesó el canje (cajero / cuenta POS). */
+        redeemedByUserId: String,
+        redeemedByUserName: String,
+        /** Usuario final titular del cupón, si la app lo conoce. */
+        customerUserId: String,
+        customerUserName: String,
+        /** Dispositivo del cliente (app móvil) al momento del canje. */
+        customerDeviceId: String,
+        termsAccepted: { type: Boolean, default: false },
+        termsAcceptedAt: Date,
+        /** Texto o resumen de términos aceptados en el canje (auditoría). */
+        termsSummary: String,
+        metadata: mongoose.Schema.Types.Mixed
     }
 });
 
 // TTL automático: Mongo borra el documento cuando expiresAt ya pasó.
 discountQrTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+discountQrTokenSchema.index({ 'payload.referralCode': 1 });
 
 module.exports = mongoose.model('DiscountQrToken', discountQrTokenSchema);
