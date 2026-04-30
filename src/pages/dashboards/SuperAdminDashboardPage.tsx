@@ -15,9 +15,13 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const SUPER_ADMIN_PIN = '8044';
-const PIN_STORAGE_KEY = 'super_admin_unlock';
+import {
+  clearAdminPinUnlockSession,
+  getAdminAccessPin,
+  isAdminPinUnlockSession,
+  setAdminPinUnlockSession,
+} from '../../config/adminAccess';
+import { getPromotionImageUrl } from '../../utils/promotionImage';
 
 interface PromotionDoc {
   _id: string;
@@ -56,7 +60,7 @@ export default function SuperAdminDashboardPage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const isSuperAdmin = user?.isSuperAdmin === true;
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(() => isAdminPinUnlockSession());
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
@@ -72,12 +76,17 @@ export default function SuperAdminDashboardPage() {
   const [editPromo, setEditPromo] = useState<PromotionDoc | null>(null);
   const [editForm, setEditForm] = useState<Partial<PromotionDoc>>({});
   const [saving, setSaving] = useState(false);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
 
   const limit = 50;
 
   // Redirects: only inside useEffect to avoid "setState during render" / navigate during render
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading && !isAdminPinUnlockSession()) return;
+    if (isAdminPinUnlockSession()) {
+      setUnlocked(true);
+      return;
+    }
     if (!isAuthenticated) {
       navigate('/signin', { replace: true });
       return;
@@ -86,19 +95,12 @@ export default function SuperAdminDashboardPage() {
       navigate('/dashboard', { replace: true });
       return;
     }
-    try {
-      if (sessionStorage.getItem(PIN_STORAGE_KEY) === '1') {
-        setUnlocked(true);
-      }
-    } catch {
-      // ignore
-    }
   }, [isAuthenticated, authLoading, isSuperAdmin, navigate]);
 
   useEffect(() => {
-    if (!unlocked || !isSuperAdmin) return;
+    if (!unlocked) return;
     fetchPromotions();
-  }, [unlocked, isSuperAdmin, page, statusFilter]);
+  }, [unlocked, page, statusFilter]);
 
   const fetchPromotions = async () => {
     setLoading(true);
@@ -140,12 +142,8 @@ export default function SuperAdminDashboardPage() {
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPinError(false);
-    if (pinInput === SUPER_ADMIN_PIN) {
-      try {
-        sessionStorage.setItem(PIN_STORAGE_KEY, '1');
-      } catch {
-        // ignore
-      }
+    if (pinInput === getAdminAccessPin()) {
+      setAdminPinUnlockSession();
       setUnlocked(true);
       setPinInput('');
     } else {
@@ -155,11 +153,7 @@ export default function SuperAdminDashboardPage() {
   };
 
   const handleLock = () => {
-    try {
-      sessionStorage.removeItem(PIN_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    clearAdminPinUnlockSession();
     setUnlocked(false);
   };
 
@@ -187,6 +181,7 @@ export default function SuperAdminDashboardPage() {
 
   const openEdit = (p: PromotionDoc) => {
     setEditPromo(p);
+    setEditNewFiles([]);
     setEditForm({
       title: p.title,
       productName: p.productName,
@@ -209,15 +204,37 @@ export default function SuperAdminDashboardPage() {
     if (!editPromo) return;
     setSaving(true);
     try {
-      const body: Record<string, unknown> = { ...editForm };
-      const res = await fetch(`/api/promotions/${editPromo._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error al guardar');
+      const hasFiles = editNewFiles.length > 0;
+      if (hasFiles) {
+        const fd = new FormData();
+        const body = { ...editForm } as Record<string, unknown>;
+        for (const [k, v] of Object.entries(body)) {
+          if (v === undefined || v === null) continue;
+          if (typeof v === 'boolean') {
+            fd.append(k, v ? 'true' : 'false');
+          } else {
+            fd.append(k, String(v));
+          }
+        }
+        editNewFiles.forEach((file) => fd.append('images', file));
+        const res = await fetch(`/api/promotions/${editPromo._id}`, {
+          method: 'PUT',
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error al guardar');
+      } else {
+        const body: Record<string, unknown> = { ...editForm };
+        const res = await fetch(`/api/promotions/${editPromo._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error al guardar');
+      }
       setEditPromo(null);
+      setEditNewFiles([]);
       fetchPromotions();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al guardar');
@@ -226,7 +243,7 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading && !isAdminPinUnlockSession()) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -234,20 +251,23 @@ export default function SuperAdminDashboardPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return null; // redirect to /signin is done in useEffect
-  }
-
-  if (!isSuperAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-6 max-w-md text-center">
-          <AlertTriangle className="h-12 w-12 text-amber-600 mx-auto mb-3" />
-          <p className="text-amber-800 font-medium">Solo super administrador puede acceder a esta página.</p>
-          <Link to="/dashboard" className="mt-4 inline-block text-amber-700 hover:text-amber-900 font-medium">Volver al dashboard</Link>
+  if (!isAdminPinUnlockSession()) {
+    if (!isAuthenticated) {
+      return null;
+    }
+    if (!isSuperAdmin) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-6 max-w-md text-center">
+            <AlertTriangle className="h-12 w-12 text-amber-600 mx-auto mb-3" />
+            <p className="text-amber-800 font-medium">Solo super administrador puede acceder a esta página.</p>
+            <Link to="/dashboard" className="mt-4 inline-block text-amber-700 hover:text-amber-900 font-medium">
+              Volver al dashboard
+            </Link>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   // Page lock: PIN
@@ -495,6 +515,36 @@ export default function SuperAdminDashboardPage() {
               </button>
             </div>
             <div className="space-y-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {!editPromo.images?.length ? (
+                    <p className="text-sm text-gray-500">Sin imágenes en esta promoción</p>
+                  ) : (
+                    editPromo.images.map((im, idx) => (
+                      <img
+                        key={idx}
+                        src={getPromotionImageUrl([im])}
+                        alt=""
+                        className="h-20 w-20 object-cover rounded-lg border border-gray-200 bg-white"
+                      />
+                    ))
+                  )}
+                </div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Añadir más fotos</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  onChange={(e) => setEditNewFiles(Array.from(e.target.files || []))}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:text-slate-900"
+                />
+                {editNewFiles.length > 0 && (
+                  <p className="text-xs text-amber-700 mt-1 font-medium">
+                    {editNewFiles.length} archivo(s) nuevos (se suben al guardar; no reemplazan las actuales)
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
                 <input

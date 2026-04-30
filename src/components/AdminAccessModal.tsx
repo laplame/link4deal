@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Lock, Shield, AlertCircle, CheckCircle } from 'lucide-react';
+import { getAdminAccessPin, setAdminPinUnlockSession } from '../config/adminAccess';
 
 interface AdminAccessModalProps {
     isOpen: boolean;
@@ -17,7 +18,6 @@ export default function AdminAccessModal({ isOpen, onClose }: AdminAccessModalPr
     const [isLocked, setIsLocked] = useState(false);
     const [lockoutTime, setLockoutTime] = useState(0);
     
-    const CORRECT_CODE = '6192';
     const MAX_ATTEMPTS = 3;
     const LOCKOUT_DURATION = 30; // segundos
 
@@ -72,13 +72,14 @@ export default function AdminAccessModal({ isOpen, onClose }: AdminAccessModalPr
 
         // Simular verificación
         setTimeout(() => {
-            if (enteredCode === CORRECT_CODE) {
+            if (enteredCode === getAdminAccessPin()) {
                 setSuccess(true);
                 setFailedAttempts(0);
+                setAdminPinUnlockSession();
                 setTimeout(() => {
-                    navigate('/admin');
+                    navigate('/admin/dashboard');
                     onClose();
-                }, 1000);
+                }, 400);
             } else {
                 const newFailedAttempts = failedAttempts + 1;
                 setFailedAttempts(newFailedAttempts);

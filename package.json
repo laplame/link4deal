@@ -27,7 +27,7 @@
     "delete:user": "node server/scripts/delete-user-by-email.js",
     "seed:roles": "node server/scripts/seed-roles.js",
     "cleanup:promo-images": "node server/scripts/cleanup-missing-promotion-images.js",
-    "qr:keys": "node server/scripts/generate-qr-keys.js"
+    "seed:influencer-auctions": "node server/scripts/seed-influencer-auctions.js"
   },
   "dependencies": {
     "axios": "^1.6.2",

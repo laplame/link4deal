@@ -240,6 +240,9 @@ app.use('/api/promotions', promotionRoutes);
 // Influencer routes (listado y detalle; datos compatibles con OCR de perfil)
 app.use('/api/influencers', influencerRoutes);
 
+const bidRoutes = require('./routes/bids');
+app.use('/api/bids', bidRoutes);
+
 // Discount QR routes (issuer + scanner verifier)
 app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
 app.use('/api/analyze-profile-image', analyzeProfileRoutes);

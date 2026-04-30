@@ -27,8 +27,10 @@ import PromotionsMarketplace from './pages/PromotionsMarketplace';
 import { BrandPage } from './pages/BrandPage';
 import BrandProfilePage from './pages/BrandProfilePage';
 import BizneShopProfilePage from './pages/BizneShopProfilePage';
+import BizneStoresPage from './pages/BizneStoresPage';
 import InfluencersMarketplace from './pages/InfluencersMarketplace';
 import InfluencerProfilePage from './pages/InfluencerProfilePage';
+import InfluencerAuctionsLivePage from './pages/InfluencerAuctionsLivePage';
 import InfluencerOCRProfile from './pages/InfluencerOCRProfile';
 import KYCForm from './pages/KYCForm';
 import KYCSuccess from './pages/KYCSuccess';
@@ -136,9 +138,11 @@ function App() {
                   <Route path="/add-promotion" element={<QuickPromotionPage />} />
                   <Route path="/marketplace" element={<PromotionsMarketplace />} />
                   <Route path="/brands" element={<BrandPage />} />
+                  <Route path="/tiendas" element={<BizneStoresPage />} />
                   <Route path="/brand/:brandId" element={<BrandProfilePage />} />
                   <Route path="/shop/bizne/:shopId" element={<BizneShopProfilePage />} />
                   <Route path="/influencers" element={<InfluencersMarketplace />} />
+                  <Route path="/subastas" element={<InfluencerAuctionsLivePage />} />
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />

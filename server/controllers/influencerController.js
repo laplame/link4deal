@@ -7,6 +7,7 @@ const database = require('../config/database');
 const mongoose = require('mongoose');
 const { getInfluencerUploadDir } = require('../middleware/upload');
 const cloudinaryConfig = require('../config/cloudinary');
+const { getDisplayContractAddress, getPolygonscanAddressUrl } = require('../utils/polygonContract');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -467,9 +468,15 @@ class InfluencerController {
                 const validFrom = promo.validFrom ? new Date(promo.validFrom) : now;
                 const validUntil = promo.validUntil ? new Date(promo.validUntil) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
                 const tags = Array.isArray(promo.tags) ? promo.tags : [];
+                const promoIdStr = (promo._id || promo.id).toString();
+                const smartContractAddress = getDisplayContractAddress(promoIdStr, promo.smartContract);
+                const polygonscanUrl = getPolygonscanAddressUrl(smartContractAddress);
                 out.push({
                     id: b._id.toString(),
-                    promotionId: (promo._id || promo.id).toString(),
+                    promotionId: promoIdStr,
+                    smartContractAddress,
+                    polygonscanUrl,
+                    smartContractPagePath: `/promocion/${promoIdStr}/smart-contract`,
                     campaignTitle: promo.title || 'Sin título',
                     brandName: promo.brand || 'Sin marca',
                     status: b.status || 'active',

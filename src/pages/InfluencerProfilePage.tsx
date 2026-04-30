@@ -32,8 +32,11 @@ import {
   Eye as EyeIcon,
   Users as UsersIcon,
   TrendingUp as TrendingUpIcon,
-  DollarSign as DollarSignIcon
+  DollarSign as DollarSignIcon,
+  FileCode2,
+  ExternalLink
 } from 'lucide-react';
+import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 
 interface Influencer {
   id: string;
@@ -592,7 +595,45 @@ export default function InfluencerProfilePage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <div className="flex flex-col gap-3 pt-4 border-t border-gray-200">
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <Link
+                      to={(bid as { smartContractPagePath?: string }).smartContractPagePath || `/promocion/${bid.promotionId}/smart-contract`}
+                      className="inline-flex items-center gap-1.5 text-purple-600 hover:text-purple-800 font-medium"
+                    >
+                      <FileCode2 className="h-4 w-4" />
+                      Smart contract (Polygon)
+                    </Link>
+                    <a
+                      href={
+                        (bid as { polygonscanUrl?: string }).polygonscanUrl ||
+                        getPolygonscanAddressUrl(
+                          (bid as { smartContractAddress?: string }).smartContractAddress ||
+                            getDisplayContractAddress(String(bid.promotionId))
+                        )
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900"
+                    >
+                      Ver en Polygonscan
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <span
+                      className="text-xs text-gray-400 font-mono"
+                      title={
+                        (bid as { smartContractAddress?: string }).smartContractAddress ||
+                        getDisplayContractAddress(String(bid.promotionId))
+                      }
+                    >
+                      {shortenAddress(
+                        (bid as { smartContractAddress?: string }).smartContractAddress ||
+                          getDisplayContractAddress(String(bid.promotionId)),
+                        5
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <span>Inicia: {formatDate(bid.startDate)}</span>
                     <span>•</span>
@@ -615,6 +656,7 @@ export default function InfluencerProfilePage() {
                         Pujar
                       </button>
                     )}
+                  </div>
                   </div>
                 </div>
               </div>

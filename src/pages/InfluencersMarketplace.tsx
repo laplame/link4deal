@@ -247,6 +247,12 @@ export default function InfluencersMarketplace() {
   const formatFollowers = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
   const formatEarnings = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n}`);
 
+  const profilePath = (inf: Influencer) => {
+    const u = (inf.username || '').trim().replace(/^@/, '');
+    if (u) return `/influencer/${encodeURIComponent(u)}`;
+    return `/influencer/${inf.id}`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'text-green-500 bg-green-100';
@@ -287,27 +293,27 @@ export default function InfluencersMarketplace() {
     <div className="min-h-screen bg-gray-50">
       {/* Header del Marketplace */}
       <div className="bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-700 text-white">
-        <div className="container mx-auto px-4 py-12">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold mb-4">Marketplace de Influencers</h1>
-            <p className="text-xl text-pink-100 mb-6">
-              Descubre influencers talentosos para tus campañas y promociones
+        <div className="container mx-auto px-4 py-10 md:py-14">
+          <div className="text-center max-w-3xl mx-auto">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 tracking-tight">Marketplace de influencers</h1>
+            <p className="text-lg sm:text-xl text-pink-100/95 mb-8 leading-relaxed">
+              Descubre perfiles, métricas y campañas para potenciar tus promociones en DameCodigo
             </p>
-            <div className="flex justify-center space-x-4">
-              <div className="bg-white/20 rounded-lg p-3">
-                <Users className="w-6 h-6 mx-auto mb-2" />
-                <p className="text-sm">Perfiles Verificados</p>
-                <p className="text-xs text-pink-200">Calidad garantizada</p>
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+              <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 min-w-[140px] border border-white/10">
+                <Users className="w-7 h-7 mx-auto mb-2 opacity-90" />
+                <p className="text-sm font-semibold">Perfiles verificados</p>
+                <p className="text-xs text-pink-200/90 mt-0.5">Calidad y transparencia</p>
               </div>
-              <div className="bg-white/20 rounded-lg p-3">
-                <BarChart3 className="w-6 h-6 mx-auto mb-2" />
-                <p className="text-sm">Estadísticas Reales</p>
-                <p className="text-xs text-pink-200">Métricas verificadas</p>
+              <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 min-w-[140px] border border-white/10">
+                <BarChart3 className="w-7 h-7 mx-auto mb-2 opacity-90" />
+                <p className="text-sm font-semibold">Métricas claras</p>
+                <p className="text-xs text-pink-200/90 mt-0.5">Seguidores y engagement</p>
               </div>
-              <div className="bg-white/20 rounded-lg p-3">
-                <DollarSign className="w-6 h-6 mx-auto mb-2" />
-                <p className="text-sm">Sistema de Comisiones</p>
-                <p className="text-xs text-pink-200">Pagos automáticos</p>
+              <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 min-w-[140px] border border-white/10">
+                <DollarSign className="w-7 h-7 mx-auto mb-2 opacity-90" />
+                <p className="text-sm font-semibold">Comisiones</p>
+                <p className="text-xs text-pink-200/90 mt-0.5">Cupones y resultados</p>
               </div>
             </div>
           </div>
@@ -485,15 +491,15 @@ export default function InfluencersMarketplace() {
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredInfluencers.map((influencer) => (
-            <div key={influencer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-              {/* Header con avatar y badges */}
+            <div key={influencer.id} className="group bg-white rounded-2xl shadow-sm border border-gray-200/90 overflow-hidden hover:shadow-xl hover:border-purple-200/80 transition-all duration-300 ring-1 ring-transparent hover:ring-purple-100">
+              <div className="h-1.5 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 opacity-90 group-hover:opacity-100 transition-opacity" />
               <div className="relative p-6 pb-4">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-4">
-                    <img 
-                      src={influencer.avatar} 
+                    <img
+                      src={influencer.avatar}
                       alt={influencer.name}
-                      className="w-16 h-16 rounded-full object-cover"
+                      className="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow-md"
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900 text-lg">{influencer.name}</h3>
@@ -544,7 +550,7 @@ export default function InfluencersMarketplace() {
                   <div className="text-center">
                     <p className="text-xs text-gray-500">Total Seguidores</p>
                     <p className="font-semibold text-gray-900">
-                      {(influencer.totalFollowers / 1000).toFixed(1)}K
+                      {formatFollowers(Number(influencer.totalFollowers) || 0)}
                     </p>
                   </div>
                   <div className="text-center">
@@ -558,7 +564,7 @@ export default function InfluencersMarketplace() {
                   <div className="text-center">
                     <p className="text-xs text-gray-500">Ganancias</p>
                     <p className="font-semibold text-green-600">
-                      ${(influencer.totalEarnings / 1000).toFixed(1)}K
+                      {formatEarnings(Number(influencer.totalEarnings) || 0)}
                     </p>
                   </div>
                 </div>
@@ -570,9 +576,7 @@ export default function InfluencersMarketplace() {
                     {Object.entries(influencer.followers).map(([platform, count]) => (
                       <div key={platform} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
                         {getSocialIcon(platform)}
-                        <span className="text-gray-700">
-                          {(count / 1000).toFixed(1)}K
-                        </span>
+                        <span className="text-gray-700">{formatFollowers(Number(count) || 0)}</span>
                       </div>
                     ))}
                   </div>
@@ -631,11 +635,11 @@ export default function InfluencersMarketplace() {
 
                 {/* Botón de ver perfil */}
                                         <Link
-                          to={`/influencer/${influencer.id}`}
-                          className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-pink-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2"
-                        >
+                  to={profilePath(influencer)}
+                  className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 px-4 rounded-xl font-medium hover:from-pink-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2 shadow-md shadow-purple-500/20"
+                >
                   <Eye className="w-5 h-5" />
-                  Ver Perfil Completo
+                  Ver perfil público
                 </Link>
 
                 {/* Acciones adicionales */}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isAdminPinUnlockSession } from '../config/adminAccess';
 import { getDownloadCount } from '../services/appDownloads';
 import { 
     ArrowLeft, 
@@ -71,6 +72,9 @@ export default function AdminPage() {
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
             </div>
         );
+    }
+    if (isAdminPinUnlockSession()) {
+        return <Navigate to="/admin/dashboard" replace />;
     }
     if (!isAuthenticated) {
         return <Navigate to="/signin" replace />;

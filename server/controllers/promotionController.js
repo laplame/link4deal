@@ -31,6 +31,78 @@ function getPromotionUploadFileGroups(req) {
     };
 }
 
+/**
+ * Procesa subidas en PUT (append) sin OCR — optimiza, guarda en disco y opcional Cloudinary.
+ * @returns {Promise<Array<Object>>} entradas para el array images del modelo
+ */
+async function processAppendPromotionImages(req) {
+    const { promo: promoFiles, terms: termsFiles } = getPromotionUploadFileGroups(req);
+    const filesToProcess = [...promoFiles, ...termsFiles];
+    if (!filesToProcess.length) return [];
+    const imageOptimizer = require('../utils/imageOptimizer');
+    const newEntries = [];
+    for (let fileIndex = 0; fileIndex < filesToProcess.length; fileIndex++) {
+        const file = filesToProcess[fileIndex];
+        const isTermsSlot = termsFiles.length > 0 && fileIndex >= promoFiles.length;
+        try {
+            let optimizedImage;
+            try {
+                optimizedImage = await imageOptimizer.optimizeImage(file.buffer, {
+                    maxWidth: parseInt(process.env.IMAGE_MAX_WIDTH) || 1920,
+                    maxHeight: parseInt(process.env.IMAGE_MAX_HEIGHT) || 1920,
+                    quality: parseInt(process.env.IMAGE_QUALITY) || 85,
+                    format: process.env.IMAGE_FORMAT || 'auto',
+                    progressive: true
+                });
+                file.buffer = optimizedImage.buffer;
+            } catch (optErr) {
+                console.warn(`⚠️ [update] optimizar imagen: ${optErr.message}`);
+            }
+            const uploadDir = getPromotionUploadDir();
+            await fs.mkdir(uploadDir, { recursive: true });
+            const optimizedFormat = optimizedImage?.format || path.extname(file.originalname).slice(1) || 'jpg';
+            const fileExtension = optimizedFormat === 'webp' ? '.webp' :
+                optimizedFormat === 'png' ? '.png' : '.jpg';
+            const uniqueFilename = `promotion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExtension}`;
+            const localPath = path.join(uploadDir, uniqueFilename);
+            await fs.writeFile(localPath, file.buffer);
+            let cloudinaryUrl = null;
+            let cloudinaryPublicId = null;
+            if (cloudinaryConfig.isConfigured) {
+                try {
+                    const cloudinaryFile = {
+                        ...file,
+                        buffer: file.buffer,
+                        mimetype: optimizedImage?.format === 'webp' ? 'image/webp' :
+                            optimizedImage?.format === 'png' ? 'image/png' : 'image/jpeg'
+                    };
+                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile);
+                    if (cloudinaryResult.success) {
+                        cloudinaryUrl = cloudinaryResult.data.secure_url;
+                        cloudinaryPublicId = cloudinaryResult.data.public_id;
+                    }
+                } catch (cErr) {
+                    console.warn(`⚠️ [update] Cloudinary: ${cErr.message}`);
+                }
+            }
+            const publicUrl = `/uploads/promotions/${uniqueFilename}`;
+            newEntries.push({
+                originalName: file.originalname,
+                filename: uniqueFilename,
+                path: localPath,
+                url: publicUrl,
+                cloudinaryUrl,
+                cloudinaryPublicId,
+                uploadedAt: new Date(),
+                imageRole: isTermsSlot ? 'terms' : 'promotional'
+            });
+        } catch (err) {
+            console.error('❌ [update] error procesando imagen:', err.message);
+        }
+    }
+    return newEntries;
+}
+
 class PromotionController {
     // Helper para verificar conexión a MongoDB
     isMongoConnected() {
@@ -1180,9 +1252,17 @@ class PromotionController {
             });
             if (valueUsd != null) filteredData.promotionalValueUsd = valueUsd;
 
+            const appendedImages = await processAppendPromotionImages(req);
+            const updatePayload = { ...filteredData };
+            if (appendedImages.length > 0) {
+                const prevImages = Array.isArray(existingPromotion.images) ? existingPromotion.images : [];
+                const asPlain = prevImages.map((img) => (img && img.toObject ? img.toObject() : { ...img }));
+                updatePayload.images = [...asPlain, ...appendedImages];
+            }
+
             const updatedPromotion = await Promotion.findByIdAndUpdate(
                 id,
-                filteredData,
+                updatePayload,
                 { new: true, runValidators: true }
             );
 
