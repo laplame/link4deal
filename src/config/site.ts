@@ -20,6 +20,8 @@ export const SITE_CONFIG = {
   email: 'contacto@damecodigo.com',
   supportEmail: 'soporte@damecodigo.com',
   website: 'https://damecodigo.com',
+  /** Sitio oficial para descargar la app BizneAI (POS / registro de negocios en la red). */
+  bizneAiWebsiteUrl: 'https://www.bizneai.com/',
   appStoreUrl: 'https://apps.apple.com/app/damecodigo',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=com.damecodigo.app',
   /** Descarga directa del APK (Android). Pasa por redirect para contabilizar descargas. */

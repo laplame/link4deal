@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
+import { BizneAiAuctionBusinessCta } from '../components/BizneAiAuctionBusinessCta';
+import { SITE_CONFIG } from '../config/site';
 
 const POLL_MS = 5000;
 
@@ -201,7 +203,19 @@ export default function InfluencerAuctionsLivePage() {
               <p className="text-gray-400 max-w-2xl text-lg">
                 Comisión actual pujada por venta (USD), agrupada por sector según categorías del influencer y la
                 campaña. Cada oferta enlaza al smart contract en Polygon (vista en app y Polygonscan). Actualización
-                cada {POLL_MS / 1000}s.
+                cada {POLL_MS / 1000}s.{' '}
+                <span className="text-gray-300">
+                  Si eres negocio, para participar en este ecosistema debes registrarte en la app BizneAI (
+                  <a
+                    href={SITE_CONFIG.bizneAiWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-200/90 hover:text-amber-100 underline underline-offset-2"
+                  >
+                    bizneai.com
+                  </a>
+                  ); así apareces en el listado de tiendas enlazado a campañas y subastas.
+                </span>
               </p>
               {generatedAt && (
                 <p className="text-xs text-gray-500 mt-3">
@@ -239,6 +253,8 @@ export default function InfluencerAuctionsLivePage() {
             {error}
           </div>
         )}
+
+        <BizneAiAuctionBusinessCta locale="es" />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-white/10 bg-gray-900/60 p-5 backdrop-blur-sm">

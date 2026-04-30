@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Search, Filter, Store, Building2, ArrowLeft } from 'lucide-react';
 import { BizneShopCard } from '../components/BizneShopCard';
 import { useBizneShops } from '../hooks/useBizneShops';
+import { BizneAiAuctionBusinessCta } from '../components/BizneAiAuctionBusinessCta';
+import { SITE_CONFIG } from '../config/site';
 
 export default function BizneStoresPage() {
   const { shops, loading, error, errorDetail } = useBizneShops();
@@ -50,8 +52,18 @@ export default function BizneStoresPage() {
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">Tiendas BizneAI</h1>
           <p className="text-gray-400 max-w-2xl text-lg">
-            Negocios conectados a la red BizneAI que puedes explorar y visitar. Las marcas registradas
-            directamente en DameCodigo están en el{' '}
+            Negocios conectados a la red BizneAI que puedes explorar y visitar. Para{' '}
+            <strong className="text-gray-200">dar de alta tu negocio</strong> y aparecer aquí (y en subastas /
+            campañas), descarga la app desde{' '}
+            <a
+              href={SITE_CONFIG.bizneAiWebsiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-400 hover:text-violet-300 underline underline-offset-2 font-medium"
+            >
+              bizneai.com
+            </a>
+            . Las marcas solo en DameCodigo están en el{' '}
             <Link to="/brands" className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
               directorio de marcas
             </Link>
@@ -87,6 +99,10 @@ export default function BizneStoresPage() {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="mb-8">
+          <BizneAiAuctionBusinessCta locale="es" />
         </div>
 
         {loading && filtered.length === 0 && !error && (

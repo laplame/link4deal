@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { RegisteredBrandCard, type RegisteredBrand } from '../components/RegisteredBrandCard';
 import { BizneShopCard, type BizneShop } from '../components/BizneShopCard';
 import { useBizneShops } from '../hooks/useBizneShops';
+import { BizneAiAuctionBusinessCta } from '../components/BizneAiAuctionBusinessCta';
 
 const titles = {
   en: 'Brands & businesses',
@@ -121,8 +122,8 @@ export function BrandPage() {
               </h1>
               <p className="text-gray-400 max-w-2xl">
                 {language === 'es'
-                  ? 'Marcas registradas en DameCodigo y tiendas de la red BizneAI en un solo lugar.'
-                  : 'DameCodigo-registered brands and BizneAI network stores in one place.'}
+                  ? 'Marcas registradas en DameCodigo y tiendas de la red BizneAI en un solo lugar. Los negocios que quieren el flujo de subastas y POS enlazado deben alta en la app BizneAI (bizneai.com) para aparecer como tienda aquí.'
+                  : 'DameCodigo-registered brands and BizneAI network stores in one place. Businesses that need the auction and POS workflow must onboard via the BizneAI app (bizneai.com) to appear as a store here.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -256,11 +257,14 @@ export function BrandPage() {
                   <Store className="h-6 w-6 text-violet-400" />
                   {language === 'es' ? 'Tiendas BizneAI' : 'BizneAI stores'}
                 </h2>
-                <p className="text-sm text-gray-500 mb-6">
+                <p className="text-sm text-gray-500 mb-4">
                   {language === 'es'
                     ? 'Negocios conectados a la red BizneAI (activos; sin tiendas modelo).'
                     : 'Businesses on the BizneAI network (active; model shops excluded).'}
                 </p>
+                <div className="mb-6">
+                  <BizneAiAuctionBusinessCta locale={language} />
+                </div>
                 {loadingBizne && filteredBizneShops.length === 0 && !bizneError && (
                   <p className="text-sm text-gray-500 py-4">
                     {language === 'es' ? 'Cargando tiendas BizneAI...' : 'Loading BizneAI stores...'}
