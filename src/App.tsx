@@ -31,6 +31,7 @@ import BizneStoresPage from './pages/BizneStoresPage';
 import InfluencersMarketplace from './pages/InfluencersMarketplace';
 import InfluencerProfilePage from './pages/InfluencerProfilePage';
 import InfluencerAuctionsLivePage from './pages/InfluencerAuctionsLivePage';
+import RedemptionsLivePage from './pages/RedemptionsLivePage';
 import InfluencerOCRProfile from './pages/InfluencerOCRProfile';
 import KYCForm from './pages/KYCForm';
 import KYCSuccess from './pages/KYCSuccess';
@@ -143,6 +144,7 @@ function App() {
                   <Route path="/shop/bizne/:shopId" element={<BizneShopProfilePage />} />
                   <Route path="/influencers" element={<InfluencersMarketplace />} />
                   <Route path="/subastas" element={<InfluencerAuctionsLivePage />} />
+                  <Route path="/redenciones-en-vivo" element={<RedemptionsLivePage />} />
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />

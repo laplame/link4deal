@@ -145,8 +145,18 @@ El backend persiste un objeto **`redeemedBy`** en el documento del token. Campos
 | `termsAcceptedAt` | ISO 8601; si omites y `termsAccepted` es true, se usa la hora del servidor |
 | `termsSummary` o `termsText` | Texto corto o resumen aceptado (auditoría) |
 | `redemptionMetadata` o `metadata` | Objeto JSON con datos extra (ticket fiscal, sucursal, versión app Bizne, etc.) |
+| `latitude` / `longitude` (o `lat` / `lng`) | Opcional en el body del `redeem`. También se aceptan dentro de `redemptionMetadata` o anidados en `location` / `gps`. Se guardan en `redeemedBy` para consultas. |
+| `accuracy` / `locationAccuracyM` | Precisión GPS en metros (opcional). |
+| `userId` | Id BizneAI del usuario que confirma el canje; se guarda en `redeemedBy.userId` (y alimenta `redeemedByUserId` si este viene vacío). |
+| `redeemedAtUnix` | Epoch Unix **en segundos** al confirmar en el dispositivo. Si está dentro de la ventana tolerada respecto al servidor, `usedAt` en BD se deriva de este valor. Si el reloj está muy descalibrado, el canje **no se rechaza**: se marca `redeemedAtUnixClockSkew` y `usedAt` es hora del servidor. |
+| `redeemGpsFixUnix` | Epoch Unix **en segundos** del instante del fix GPS (p. ej. `timestamp` del proveedor). |
+| `redeemLatitude` / `redeemLongitude` | Lat/lng WGS84; validan rango. Generan `redeemedBy.redeemLocation` tipo `Point` para consultas geoespaciales, además de campos duplicados legados (`latitude` / `longitude`). |
+| `redeemGpsAccuracyMeters` | Precisión horizontal en metros (OS / expo-location). |
+| `idempotencyKey` | Clave **estable por intento de canje** (recomendado: UUID v4). Reintentos tras error de red deben reutilizar la misma clave. Ver **5.4 Idempotencia**. |
 
-Ejemplo:
+Variables opcionales (`.env`): **`REDEEM_UNIX_MAX_DRIFT_PAST_SEC`** (default 300), **`REDEEM_UNIX_MAX_DRIFT_FUTURE_SEC`** (default 120) — ventana al validar `redeemedAtUnix` vs hora del servidor.
+
+Ejemplo (auditoría clásica):
 
 ```json
 {
@@ -162,12 +172,62 @@ Ejemplo:
   "redemptionMetadata": {
     "source": "bizneai_pos",
     "bizneVersion": "1.4.0",
-    "ticketFolio": "A-10294"
+    "ticketFolio": "A-10294",
+    "latitude": 19.432608,
+    "longitude": -99.133209,
+    "accuracy": 12.5
   }
 }
 ```
 
-### 5.3 Respuesta éxito
+Ejemplo **BizneAI** (GPS + Unix + idempotencia):
+
+```json
+{
+  "referralCode": "L4D-xxxxxxxx",
+  "shopId": "507f1f77bcf86cd799439011",
+  "productId": "sku-opcional-crypto-marketing",
+  "readerId": "bizne-pos-checkout",
+  "readerDeviceId": "uuid-dispositivo",
+  "redeemedByUserId": "42",
+  "userId": "42",
+  "redeemedByUserName": "María Pérez",
+  "termsAccepted": true,
+  "termsSummary": "Cliente aceptó términos mostrados en mostrador",
+  "redeemedAtUnix": 1738250000,
+  "redeemLatitude": 19.432608,
+  "redeemLongitude": -99.133209,
+  "redeemGpsAccuracyMeters": 12.5,
+  "redeemGpsFixUnix": 1738249992,
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000",
+  "redemptionMetadata": {
+    "source": "bizneai_crypto_marketing",
+    "bizneVersion": "1.24.0",
+    "storeNameSnapshot": "Mi tienda"
+  }
+}
+```
+
+### 5.3 Consultar redenciones recientes (auditoría)
+
+`GET /api/discount-qr/redemptions/recent?limit=50&promotionId=&shopId=`
+
+Respuesta: lista con `couponId`, `usedAt`, datos del `payload` relevantes, `devices`, `location`, `redemptionMetadata`, `cashier` (incl. `userId`), `redeemedAtUnix`, `redeemedAtUnixClockSkew`, `redeemGpsFixUnix`, `redeemGpsAccuracyMeters`, `idempotencyKey` / huella asociada.
+
+- Los documentos de cupón tienen **TTL** en `expiresAt`; si no configuras retención, pueden borrarse poco después de crearse. Tras un **canje exitoso**, el servidor puede alargar `expiresAt` si defines **`QR_REDEEM_RETENTION_DAYS`** (entero, días desde el canje), para conservar historial.
+- Opcional: **`REDEMPTIONS_LIST_API_KEY`**. Si está definida, el cliente debe enviar header **`x-redemptions-api-key`** con el mismo valor; si no, en desarrollo el listado queda abierto (ajusta en producción).
+
+### 5.4 Idempotencia (`idempotencyKey`)
+
+- El cliente envía **`idempotencyKey`** en el mismo JSON del `POST /api/discount-qr/redeem` (recomendado UUID v4; en servidor: hasta 256 caracteres, `[a-zA-Z0-9._-]`).
+- Se persisten **`redeemedBy.idempotencyKey`**, **`idempotencyShopId`** y **`idempotencyProductId`** (huella de `shopId` / `productId` del body) para validar replays.
+- **Misma clave + mismo `shopId` y `productId`** que el canje ya registrado → **HTTP 200** con el **mismo cuerpo** que el primer éxito (replay seguro, sin repetir efectos secundarios en el handler).
+- **Otra `idempotencyKey`** para un cupón **ya canjeado** → **409** `QR_ALREADY_REDEEMED`.
+- **Misma `idempotencyKey`** pero **`shopId` o `productId` distintos** al canje guardado → **409** `IDEMPOTENCY_KEY_MISMATCH`.
+- **Cliente sin clave**: comportamiento anterior (atomicidad del cupón; sin dedupe ante timeout de red).
+- Índice único parcial sugerido en BD: `{ tokenId: 1, 'redeemedBy.idempotencyKey': 1 }` (solo documentos con redención e idempotencia).
+
+### 5.5 Respuesta éxito
 
 Incluye `couponId`, `payload`, `usedAt` y **`redeemedBy`** reflejando lo guardado.
 

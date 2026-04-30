@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Users, User, LogOut, Home, ShoppingCart, Info, Gavel } from 'lucide-react';
+import { Users, User, LogOut, Home, ShoppingCart, Info, Gavel, Ticket } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { MobileMenu } from './MobileMenu';
 import { NavDropdown } from './NavDropdown';
@@ -72,6 +72,13 @@ export function NavigationHeader({ title }: Props) {
               <span className="flex items-center gap-1.5">
                 <Gavel className="h-4 w-4 shrink-0" />
                 Subastas
+              </span>
+            </NavLink>
+
+            <NavLink to="/redenciones-en-vivo" className={navLinkClass}>
+              <span className="flex items-center gap-1.5">
+                <Ticket className="h-4 w-4 shrink-0" />
+                Redenciones
               </span>
             </NavLink>
 

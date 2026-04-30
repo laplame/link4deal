@@ -278,6 +278,7 @@ app.use('*', (req, res) => {
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
             'POST /api/discount-qr/redeem',
+            'GET /api/discount-qr/redemptions/recent',
             'POST /api/kyc/whatsapp/request-code',
             'POST /api/kyc/whatsapp/verify-code',
             'GET /api/loyalty/coffee',

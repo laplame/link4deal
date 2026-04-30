@@ -14,6 +14,7 @@ import {
   Info,
   ShoppingCart,
   Gavel,
+  Ticket,
 } from 'lucide-react';
 import { MobileMenuButton } from './MobileMenuButton';
 import { useAuth } from '../../context/AuthContext';
@@ -150,6 +151,11 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             <MobileMenuButton to="/subastas" onClick={onClose}>
               <span className="flex items-center gap-2">
                 <Gavel className="h-4 w-4" /> Subastas en vivo
+              </span>
+            </MobileMenuButton>
+            <MobileMenuButton to="/redenciones-en-vivo" onClick={onClose}>
+              <span className="flex items-center gap-2">
+                <Ticket className="h-4 w-4" /> Cupones redimidos
               </span>
             </MobileMenuButton>
 

@@ -8,6 +8,7 @@ const pathTitles: Record<string, string> = {
   '/influencers': 'Influencers',
   '/marketplace': 'Ofertas',
   '/subastas': 'Subastas en vivo',
+  '/redenciones-en-vivo': 'Cupones redimidos',
   '/about': 'Nosotros',
   '/signin': 'Iniciar sesión',
   '/signup': 'Registro',

@@ -38,6 +38,202 @@ function safeMetadataObject(obj) {
 }
 
 /**
+ * Interpreta lat/lng desde body o metadata (POS / app).
+ * @param {object} source
+ * @returns {{ latitude: number, longitude: number, locationAccuracyM?: number } | null}
+ */
+function parseLatLngFromUnknown(source) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+    let lat = source.latitude ?? source.lat;
+    let lng = source.longitude ?? source.lng ?? source.lon;
+    let acc = source.accuracy ?? source.locationAccuracy ?? source.locationAccuracyM;
+    if (lat == null || lng == null) {
+        const loc = source.location;
+        if (loc && typeof loc === 'object' && !Array.isArray(loc)) {
+            lat = loc.latitude ?? loc.lat;
+            lng = loc.longitude ?? loc.lng ?? loc.lon;
+            if (acc == null) acc = loc.accuracy ?? loc.locationAccuracyM;
+        }
+    }
+    if (lat == null || lng == null) {
+        const gps = source.gps;
+        if (gps && typeof gps === 'object' && !Array.isArray(gps)) {
+            lat = gps.latitude ?? gps.lat;
+            lng = gps.longitude ?? gps.lng ?? gps.lon;
+            if (acc == null) acc = gps.accuracy ?? gps.locationAccuracyM;
+        }
+    }
+    const la = Number(lat);
+    const lo = Number(lng);
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    if (la < -90 || la > 90 || lo < -180 || lo > 180) return null;
+    const out = { latitude: la, longitude: lo };
+    const acn = Number(acc);
+    if (Number.isFinite(acn) && acn >= 0 && acn < 1e7) out.locationAccuracyM = acn;
+    return out;
+}
+
+/**
+ * Epoch Unix en segundos; rango razonable para timestamps actuales.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function parseUnixSeconds(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    const i = Math.trunc(n);
+    if (i < 1_000_000_000 || i > 10_000_000_000) return null;
+    return i;
+}
+
+/**
+ * Valida ventana de reloj cliente vs servidor; no bloquea el canje, marca skew en documento.
+ * @param {object} out - redeemedBy parcial
+ * @param {object} body
+ */
+function attachRedeemUnixToOut(out, body) {
+    const serverSec = Math.floor(Date.now() / 1000);
+    const maxPast = Number(process.env.REDEEM_UNIX_MAX_DRIFT_PAST_SEC) || 300;
+    const maxFuture = Number(process.env.REDEEM_UNIX_MAX_DRIFT_FUTURE_SEC) || 120;
+    const pastOk = maxPast >= 0 ? maxPast : 300;
+    const futOk = maxFuture >= 0 ? maxFuture : 120;
+
+    const ru = parseUnixSeconds(body.redeemedAtUnix);
+    if (ru != null) {
+        out.redeemedAtUnix = ru;
+        if (ru < serverSec - pastOk || ru > serverSec + futOk) {
+            out.redeemedAtUnixClockSkew = true;
+        }
+    }
+
+    const gf = parseUnixSeconds(body.redeemGpsFixUnix);
+    if (gf != null) {
+        out.redeemGpsFixUnix = gf;
+    }
+}
+
+/**
+ * @param {object} out
+ * @returns {Date|null}
+ */
+function preferredUsedAtFromRedeemedBy(out) {
+    if (out.redeemedAtUnix == null || out.redeemedAtUnixClockSkew) return null;
+    const d = new Date(out.redeemedAtUnix * 1000);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+}
+
+/**
+ * @param {object} out
+ * @param {number} la
+ * @param {number} lo
+ * @param {number} [accM]
+ */
+function applyRedeemGeo(out, la, lo, accM) {
+    out.redeemLatitude = la;
+    out.redeemLongitude = lo;
+    out.redeemLocation = { type: 'Point', coordinates: [lo, la] };
+    out.latitude = la;
+    out.longitude = lo;
+    if (accM != null && Number.isFinite(accM) && accM >= 0 && accM < 1e7) {
+        out.redeemGpsAccuracyMeters = accM;
+        out.locationAccuracyM = accM;
+    }
+}
+
+/**
+ * Rellena geo + redeemLocation desde body o metadata.
+ * @param {object} out
+ * @param {object} body
+ */
+function mergeGpsIntoRedeemedBy(out, body) {
+    if (!body || typeof body !== 'object') body = {};
+    const laRaw = body.redeemLatitude;
+    const loRaw = body.redeemLongitude;
+    if (laRaw != null && loRaw != null) {
+        const la = Number(laRaw);
+        const lo = Number(loRaw);
+        if (Number.isFinite(la) && Number.isFinite(lo) && la >= -90 && la <= 90 && lo >= -180 && lo <= 180) {
+            const accRaw = body.redeemGpsAccuracyMeters;
+            const acc = accRaw != null && accRaw !== '' ? Number(accRaw) : null;
+            const accOk =
+                acc != null && Number.isFinite(acc) && acc >= 0 && acc < 1e7 ? acc : undefined;
+            applyRedeemGeo(out, la, lo, accOk);
+            return;
+        }
+    }
+    const fromBody = parseLatLngFromUnknown(body);
+    if (fromBody) {
+        applyRedeemGeo(out, fromBody.latitude, fromBody.longitude, fromBody.locationAccuracyM);
+        return;
+    }
+    if (out.metadata && typeof out.metadata === 'object') {
+        const fromMeta = parseLatLngFromUnknown(out.metadata);
+        if (fromMeta) {
+            applyRedeemGeo(out, fromMeta.latitude, fromMeta.longitude, fromMeta.locationAccuracyM);
+        }
+    }
+}
+
+/**
+ * Devuelve coordenadas para APIs de lectura (campos propios o solo en metadata).
+ * @param {object|null} redeemedBy
+ * @returns {{ latitude: number, longitude: number, locationAccuracyM?: number } | null}
+ */
+function extractGpsForApi(redeemedBy) {
+    if (!redeemedBy || typeof redeemedBy !== 'object') return null;
+    if (typeof redeemedBy.redeemLatitude === 'number' && typeof redeemedBy.redeemLongitude === 'number') {
+        const o = { latitude: redeemedBy.redeemLatitude, longitude: redeemedBy.redeemLongitude };
+        if (typeof redeemedBy.redeemGpsAccuracyMeters === 'number') o.locationAccuracyM = redeemedBy.redeemGpsAccuracyMeters;
+        return o;
+    }
+    if (typeof redeemedBy.latitude === 'number' && typeof redeemedBy.longitude === 'number') {
+        const o = { latitude: redeemedBy.latitude, longitude: redeemedBy.longitude };
+        if (typeof redeemedBy.locationAccuracyM === 'number') o.locationAccuracyM = redeemedBy.locationAccuracyM;
+        return o;
+    }
+    return parseLatLngFromUnknown(redeemedBy.metadata) || null;
+}
+
+/**
+ * @param {object} doc - lean DiscountQrToken
+ * @returns {object}
+ */
+function formatRedemptionRow(doc) {
+    const p = doc.payload && typeof doc.payload === 'object' ? doc.payload : {};
+    const r = doc.redeemedBy && typeof doc.redeemedBy === 'object' ? doc.redeemedBy : {};
+    return {
+        couponId: doc.tokenId,
+        usedAt: doc.usedAt || null,
+        promotionId: p.promotionId != null ? String(p.promotionId) : null,
+        shopId: p.shopId != null ? String(p.shopId) : null,
+        referralCode: p.referralCode != null ? String(p.referralCode) : null,
+        discountPercentage: p.discountPercentage != null ? Number(p.discountPercentage) : null,
+        payloadDeviceId: p.deviceId != null ? String(p.deviceId) : null,
+        devices: {
+            readerId: r.readerId || null,
+            readerDeviceId: r.readerDeviceId || null,
+            customerDeviceId: r.customerDeviceId || null
+        },
+        location: extractGpsForApi(r),
+        redemptionMetadata: r.metadata && typeof r.metadata === 'object' ? r.metadata : null,
+        cashier: {
+            redeemedByUserId: r.redeemedByUserId || null,
+            redeemedByUserName: r.redeemedByUserName || null,
+            userId: r.userId || null
+        },
+        redeemedAtUnix: typeof r.redeemedAtUnix === 'number' ? r.redeemedAtUnix : null,
+        redeemedAtUnixClockSkew: r.redeemedAtUnixClockSkew === true,
+        redeemGpsFixUnix: typeof r.redeemGpsFixUnix === 'number' ? r.redeemGpsFixUnix : null,
+        redeemGpsAccuracyMeters: typeof r.redeemGpsAccuracyMeters === 'number' ? r.redeemGpsAccuracyMeters : null,
+        idempotencyKey: r.idempotencyKey != null && String(r.idempotencyKey).trim() !== '' ? String(r.idempotencyKey) : null,
+        idempotencyShopId: r.idempotencyShopId != null ? String(r.idempotencyShopId) : null,
+        idempotencyProductId: r.idempotencyProductId != null ? String(r.idempotencyProductId) : null
+    };
+}
+
+/**
  * Añade campos opcionales al payload del cupón. No obliga nada; ignora vacíos y metadata inválida.
  * @param {object} basePayload - payload mínimo ya construido
  * @param {object} rawSource - req.body o objeto derivado de query
@@ -118,7 +314,8 @@ const ERROR_CODES = {
     PROMO_EXPIRED: 'La promoción ha expirado.',
     PROMO_NOT_FOUND: 'Promoción no encontrada.',
     QR_INVALID: 'Código QR inválido o expirado.',
-    QR_ALREADY_REDEEMED: 'Este cupón ya fue redimido.'
+    QR_ALREADY_REDEEMED: 'Este cupón ya fue redimido.',
+    IDEMPOTENCY_KEY_MISMATCH: 'La misma idempotencyKey se reutiliza con shopId o productId distintos al canje original.'
 };
 
 function isValidObjectId(id) {
@@ -221,13 +418,114 @@ function getCouponLookupInput(source) {
     return v != null && v !== '' ? String(v).trim() : '';
 }
 
+const IDEMPOTENCY_KEY_MAX_LEN = 256;
+
+/**
+ * Normaliza idempotencyKey del wire (UUID u otra cadena estable).
+ * @param {unknown} raw
+ * @returns {string|null}
+ */
+function normalizeIdempotencyKey(raw) {
+    if (raw == null || raw === '') return null;
+    const s = String(raw).trim();
+    if (s.length === 0 || s.length > IDEMPOTENCY_KEY_MAX_LEN) return null;
+    if (!/^[a-zA-Z0-9._\-]+$/.test(s)) return null;
+    return s;
+}
+
+/**
+ * @param {object} body
+ * @returns {{ shopId: string, productId: string }}
+ */
+function buildIdempotencyFingerprint(body) {
+    if (!body || typeof body !== 'object') return { shopId: '', productId: '' };
+    return {
+        shopId: body.shopId != null && body.shopId !== '' ? String(body.shopId).trim() : '',
+        productId: body.productId != null && body.productId !== '' ? String(body.productId).trim() : ''
+    };
+}
+
+/**
+ * @param {object} storedRedeemedBy
+ * @param {object} body
+ * @returns {boolean}
+ */
+function idempotencyFingerprintMatches(storedRedeemedBy, body) {
+    const fp = buildIdempotencyFingerprint(body);
+    const sShop = storedRedeemedBy && storedRedeemedBy.idempotencyShopId != null
+        ? String(storedRedeemedBy.idempotencyShopId).trim()
+        : '';
+    const sProd = storedRedeemedBy && storedRedeemedBy.idempotencyProductId != null
+        ? String(storedRedeemedBy.idempotencyProductId).trim()
+        : '';
+    return sShop === fp.shopId && sProd === fp.productId;
+}
+
+/**
+ * Persistencia: huella shop/product junto a la clave (replay seguro).
+ * @param {object} out - redeemedBy
+ * @param {object} body
+ */
+function attachIdempotencyFieldsToRedeemedBy(out, body) {
+    const idKey = normalizeIdempotencyKey(body && body.idempotencyKey);
+    if (!idKey) return;
+    out.idempotencyKey = idKey;
+    const fp = buildIdempotencyFingerprint(body);
+    out.idempotencyShopId = fp.shopId;
+    out.idempotencyProductId = fp.productId;
+}
+
+/**
+ * @param {object} doc - lean o documento con tokenId, payload, usedAt, redeemedBy
+ * @returns {object}
+ */
+function buildRedeemSuccessPayload(doc) {
+    return {
+        ok: true,
+        message: 'QR redimido exitosamente',
+        couponId: doc.tokenId,
+        payload: doc.payload,
+        usedAt: doc.usedAt,
+        redeemedBy: doc.redeemedBy || null
+    };
+}
+
+/**
+ * El cupón ya está usado: replay idempotente HTTP 200 o 409.
+ */
+function sendRedeemResponseForUsedToken(res, existing, body, idemKeyNorm) {
+    const rb = existing.redeemedBy && typeof existing.redeemedBy === 'object' ? existing.redeemedBy : {};
+    if (idemKeyNorm && rb.idempotencyKey === idemKeyNorm) {
+        if (idempotencyFingerprintMatches(rb, body)) {
+            return res.json(buildRedeemSuccessPayload(existing));
+        }
+        return res.status(409).json({
+            ok: false,
+            errorCode: 'IDEMPOTENCY_KEY_MISMATCH',
+            message: ERROR_CODES.IDEMPOTENCY_KEY_MISMATCH,
+            usedAt: existing.usedAt
+        });
+    }
+    return res.status(409).json({
+        ok: false,
+        errorCode: 'QR_ALREADY_REDEEMED',
+        message: ERROR_CODES.QR_ALREADY_REDEEMED,
+        usedAt: existing.usedAt
+    });
+}
+
 /**
  * Construye objeto redeemedBy desde el body del canje (auditoría).
+ * Incluye campos BizneAI: redeemedAtUnix, redeemGpsFixUnix, redeemLatitude/Longitude, userId.
  * @param {object} body
- * @returns {object}
+ * @returns {{ redeemedBy: object, preferredUsedAt: Date | null }}
  */
 function buildRedeemedByFromBody(body) {
     if (!body || typeof body !== 'object') body = {};
+    const userIdFromBody =
+        body.userId != null && body.userId !== ''
+            ? String(body.userId).trim().slice(0, 256)
+            : '';
     const note = body.note ? String(body.note) : '';
     const readerId = body.readerId != null && body.readerId !== '' ? String(body.readerId) : '';
     const readerDeviceId = body.readerDeviceId != null && body.readerDeviceId !== ''
@@ -236,12 +534,10 @@ function buildRedeemedByFromBody(body) {
 
     const redeemedByUserId =
         body.redeemedByUserId != null && body.redeemedByUserId !== ''
-            ? String(body.redeemedByUserId)
+            ? String(body.redeemedByUserId).trim().slice(0, 256)
             : body.cashierUserId != null && body.cashierUserId !== ''
-                ? String(body.cashierUserId)
-                : body.userId != null && body.userId !== ''
-                    ? String(body.userId)
-                    : '';
+                ? String(body.cashierUserId).trim().slice(0, 256)
+                : userIdFromBody;
 
     const redeemedByUserName =
         body.redeemedByUserName != null && body.redeemedByUserName !== ''
@@ -301,10 +597,20 @@ function buildRedeemedByFromBody(body) {
         termsAcceptedAt: termsAcceptedAt || undefined,
         termsSummary
     };
+
+    if (userIdFromBody) {
+        out.userId = userIdFromBody;
+    } else if (redeemedByUserId) {
+        out.userId = redeemedByUserId.slice(0, 256);
+    }
+
     if (metadata && Object.keys(metadata).length > 0) {
         out.metadata = metadata;
     }
-    return out;
+    mergeGpsIntoRedeemedBy(out, body);
+    attachRedeemUnixToOut(out, body);
+    attachIdempotencyFieldsToRedeemedBy(out, body);
+    return { redeemedBy: out, preferredUsedAt: preferredUsedAtFromRedeemedBy(out) };
 }
 
 /**
@@ -665,20 +971,32 @@ router.post('/redeem', async (req, res) => {
             tokenId = doc.tokenId;
         }
 
-        const now = new Date();
-        const redeemedBy = buildRedeemedByFromBody(req.body);
+        const idemKeyNorm = normalizeIdempotencyKey(req.body && req.body.idempotencyKey);
+        if (idemKeyNorm) {
+            const preUsed = await DiscountQrToken.findOne({ tokenId }).lean();
+            if (preUsed && preUsed.usedAt) {
+                return sendRedeemResponseForUsedToken(res, preUsed, req.body || {}, idemKeyNorm);
+            }
+        }
+
+        const serverNow = new Date();
+        const { redeemedBy, preferredUsedAt } = buildRedeemedByFromBody(req.body);
+        const redeemInstant =
+            preferredUsedAt instanceof Date && !Number.isNaN(preferredUsedAt.getTime())
+                ? preferredUsedAt
+                : serverNow;
 
         // Redención atómica: solo si no se ha usado y no está expirado
         const redeemed = await DiscountQrToken.findOneAndUpdate(
             {
                 tokenId,
                 $or: [{ usedAt: null }, { usedAt: { $exists: false } }],
-                expiresAt: { $gt: now }
+                expiresAt: { $gt: serverNow }
             },
             {
                 $set: {
-                    usedAt: now,
-                    lastVerifiedAt: now,
+                    usedAt: redeemInstant,
+                    lastVerifiedAt: serverNow,
                     redeemedBy
                 }
             },
@@ -694,7 +1012,7 @@ router.post('/redeem', async (req, res) => {
                     message: ERROR_CODES.QR_INVALID
                 });
             }
-            if (existing.expiresAt && new Date(existing.expiresAt).getTime() <= now.getTime()) {
+            if (existing.expiresAt && new Date(existing.expiresAt).getTime() <= serverNow.getTime()) {
                 return res.status(400).json({
                     ok: false,
                     errorCode: 'PROMO_EXPIRED',
@@ -702,12 +1020,7 @@ router.post('/redeem', async (req, res) => {
                 });
             }
             if (existing.usedAt) {
-                return res.status(409).json({
-                    ok: false,
-                    errorCode: 'QR_ALREADY_REDEEMED',
-                    message: ERROR_CODES.QR_ALREADY_REDEEMED,
-                    usedAt: existing.usedAt
-                });
+                return sendRedeemResponseForUsedToken(res, existing, req.body || {}, idemKeyNorm);
             }
             return res.status(400).json({
                 ok: false,
@@ -732,19 +1045,73 @@ router.post('/redeem', async (req, res) => {
             });
         }
 
-        return res.json({
-            ok: true,
-            message: 'QR redimido exitosamente',
-            couponId: redeemed.tokenId,
-            payload: redeemed.payload,
-            usedAt: redeemed.usedAt,
-            redeemedBy: redeemed.redeemedBy || null
-        });
+        const retentionDays = Number(process.env.QR_REDEEM_RETENTION_DAYS || '');
+        if (Number.isFinite(retentionDays) && retentionDays > 0) {
+            const anchor = redeemed.usedAt && !Number.isNaN(new Date(redeemed.usedAt).getTime())
+                ? new Date(redeemed.usedAt)
+                : serverNow;
+            const newExp = new Date(anchor.getTime() + retentionDays * 86400000);
+            await DiscountQrToken.updateOne({ tokenId: redeemed.tokenId }, { $set: { expiresAt: newExp } });
+        }
+
+        return res.json(buildRedeemSuccessPayload(redeemed));
     } catch (error) {
         return res.status(400).json({
             ok: false,
             errorCode: 'QR_INVALID',
             message: error.message || ERROR_CODES.QR_INVALID
+        });
+    }
+});
+
+// GET /api/discount-qr/redemptions/recent — cupones redimidos recientes (auditoría).
+// Query: limit (default 50, max 200), promotionId, shopId.
+// Si existe env REDEMPTIONS_LIST_API_KEY, header x-redemptions-api-key debe coincidir.
+// Nota: solo existen filas mientras el documento siga en MongoDB (TTL por expiresAt).
+//       Tras un canje exitoso, QR_REDEEM_RETENTION_DAYS alarga expiresAt para conservar historial.
+router.get('/redemptions/recent', async (req, res) => {
+    try {
+        const secret = process.env.REDEMPTIONS_LIST_API_KEY;
+        if (secret) {
+            const sent = req.get('x-redemptions-api-key') || req.get('X-Redemptions-Api-Key') || '';
+            if (sent !== secret) {
+                return res.status(401).json({ ok: false, message: 'No autorizado' });
+            }
+        }
+
+        const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+        const promotionId = req.query.promotionId != null ? String(req.query.promotionId).trim() : '';
+        const shopId = req.query.shopId != null ? String(req.query.shopId).trim() : '';
+
+        const filter = {
+            usedAt: { $exists: true, $ne: null, $type: 'date' }
+        };
+        if (promotionId && isValidObjectId(promotionId)) {
+            filter['payload.promotionId'] = promotionId;
+        }
+        if (shopId) {
+            filter['payload.shopId'] = shopId;
+        }
+
+        const docs = await DiscountQrToken.find(filter)
+            .sort({ usedAt: -1 })
+            .limit(limit)
+            .select('tokenId usedAt expiresAt payload redeemedBy')
+            .lean();
+
+        const data = docs.map(formatRedemptionRow);
+        return res.json({
+            ok: true,
+            count: data.length,
+            data,
+            hint: process.env.QR_REDEEM_RETENTION_DAYS
+                ? null
+                : 'Configura QR_REDEEM_RETENTION_DAYS (días) para no perder redenciones al expirar el TTL del cupón.'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error al listar redenciones'
         });
     }
 });
