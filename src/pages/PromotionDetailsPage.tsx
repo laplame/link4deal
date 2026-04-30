@@ -22,11 +22,38 @@ import {
     Zap,
     Lock,
     MessageCircle,
-    Info
+    Info,
+    ZoomIn,
+    X
 } from 'lucide-react';
 import CouponRequestForm from '../components/CouponRequestForm';
 import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
 import { getPromotionImageUrl } from '../utils/promotionImage';
+import { findNearestChainBranch, resolveBranchMapsUrl, type ChainBranch } from '../utils/geo';
+
+function normalizeChainBranches(raw: unknown): ChainBranch[] {
+    if (!Array.isArray(raw)) return [];
+    const out: ChainBranch[] = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const c = (item as { coordinates?: { latitude?: unknown; longitude?: unknown } }).coordinates;
+        if (!c) continue;
+        const lat = typeof c.latitude === 'number' ? c.latitude : parseFloat(String(c.latitude).replace(',', '.'));
+        const lng = typeof c.longitude === 'number' ? c.longitude : parseFloat(String(c.longitude).replace(',', '.'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const o = item as Record<string, unknown>;
+        out.push({
+            branchName: o.branchName != null ? String(o.branchName) : undefined,
+            address: o.address != null ? String(o.address) : undefined,
+            city: o.city != null ? String(o.city) : undefined,
+            state: o.state != null ? String(o.state) : undefined,
+            country: o.country != null ? String(o.country) : undefined,
+            coordinates: { latitude: lat, longitude: lng },
+            mapsUrl: o.mapsUrl != null ? String(o.mapsUrl) : undefined
+        });
+    }
+    return out;
+}
 
 interface SmartContract {
     address: string;
@@ -85,6 +112,10 @@ interface ProductDetails {
     gpsRadiusMeters?: number;
     promotionLat?: number | null;
     promotionLng?: number | null;
+    /** Cadena (varias sucursales); GPS usa la más cercana si hay permiso de ubicación */
+    isChainStore?: boolean;
+    chainBrandName?: string;
+    chainLocations?: ChainBranch[];
 }
 
 export default function PromotionDetailsPage() {
@@ -99,6 +130,14 @@ export default function PromotionDetailsPage() {
     const [showAddedToCart, setShowAddedToCart] = useState(false);
     const [priceHistory, setPriceHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+    const [nearestBranchInfo, setNearestBranchInfo] = useState<{
+        branch: ChainBranch;
+        distanceMeters: number;
+    } | null>(null);
+    const [chainGeoStatus, setChainGeoStatus] = useState<
+        'idle' | 'loading' | 'ok' | 'denied' | 'unavailable'
+    >('idle');
     const { addItem, state } = useCart();
 
     // Cargar promoción desde la API
@@ -212,7 +251,10 @@ export default function PromotionDetailsPage() {
                     activateByGps: !!promo.activateByGps,
                     gpsRadiusMeters: typeof promo.gpsRadiusMeters === 'number' ? promo.gpsRadiusMeters : 500,
                     promotionLat: promo.storeLocation?.coordinates?.latitude ?? null,
-                    promotionLng: promo.storeLocation?.coordinates?.longitude ?? null
+                    promotionLng: promo.storeLocation?.coordinates?.longitude ?? null,
+                    isChainStore: !!promo.isChainStore,
+                    chainBrandName: promo.chainBrandName ? String(promo.chainBrandName) : '',
+                    chainLocations: normalizeChainBranches(promo.chainLocations)
                 };
 
                 setProduct(transformedProduct);
@@ -226,6 +268,33 @@ export default function PromotionDetailsPage() {
 
         fetchPromotion();
     }, [id]);
+
+    useEffect(() => {
+        if (!product?.isChainStore || !product.chainLocations?.length) {
+            setChainGeoStatus('idle');
+            setNearestBranchInfo(null);
+            return;
+        }
+        setChainGeoStatus('loading');
+        setNearestBranchInfo(null);
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            setChainGeoStatus('unavailable');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const r = findNearestChainBranch(
+                    pos.coords.latitude,
+                    pos.coords.longitude,
+                    product.chainLocations!
+                );
+                if (r) setNearestBranchInfo(r);
+                setChainGeoStatus('ok');
+            },
+            () => setChainGeoStatus('denied'),
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 }
+        );
+    }, [product?.id, product?.isChainStore, product?.chainLocations]);
 
     // Cargar historial de precios
     useEffect(() => {
@@ -251,6 +320,20 @@ export default function PromotionDetailsPage() {
             fetchPriceHistory();
         }
     }, [id, product]);
+
+    useEffect(() => {
+        if (!imageLightboxOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setImageLightboxOpen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [imageLightboxOpen]);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -297,6 +380,21 @@ export default function PromotionDetailsPage() {
     const discountPercentage = product.originalPrice 
         ? calculateDiscountPercentage(product.originalPrice, product.price)
         : 0;
+
+    const couponLat =
+        nearestBranchInfo?.branch.coordinates.latitude ??
+        (product.promotionLat != null ? product.promotionLat : undefined) ??
+        product.chainLocations?.[0]?.coordinates.latitude;
+    const couponLng =
+        nearestBranchInfo?.branch.coordinates.longitude ??
+        (product.promotionLng != null ? product.promotionLng : undefined) ??
+        product.chainLocations?.[0]?.coordinates.longitude;
+
+    const waitingForNearest =
+        !!product.activateByGps &&
+        !!product.isChainStore &&
+        (product.chainLocations?.length ?? 0) > 0 &&
+        chainGeoStatus === 'loading';
 
     const handleAddToCart = () => {
         addItem({
@@ -365,11 +463,22 @@ export default function PromotionDetailsPage() {
                         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div>
-                                    <img
-                                        src={product.image}
-                                        alt={product.name}
-                                        className="w-full h-80 object-cover rounded-lg"
-                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setImageLightboxOpen(true)}
+                                        className="relative w-full rounded-lg overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 group"
+                                        aria-label={`Ver foto ampliada: ${product.name}`}
+                                    >
+                                        <img
+                                            src={product.image}
+                                            alt={product.name}
+                                            className="w-full h-80 object-cover rounded-lg transition-opacity group-hover:opacity-95 cursor-zoom-in"
+                                        />
+                                        <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/65 text-white text-xs font-medium px-2.5 py-1.5 pointer-events-none shadow-sm">
+                                            <ZoomIn className="h-4 w-4 shrink-0" aria-hidden />
+                                            Ampliar
+                                        </span>
+                                    </button>
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2 mb-4">
@@ -423,6 +532,62 @@ export default function PromotionDetailsPage() {
                                         </div>
                                     </div>
 
+                                    {product.isChainStore &&
+                                        product.chainLocations &&
+                                        product.chainLocations.length > 0 && (
+                                            <div className="mb-6 p-4 rounded-lg border border-indigo-200 bg-indigo-50/90">
+                                                <p className="text-sm font-semibold text-indigo-900">
+                                                    Cadena:{' '}
+                                                    {product.chainBrandName || product.seller.name}
+                                                </p>
+                                                <p className="text-xs text-indigo-800 mt-1">
+                                                    {product.chainLocations.length} sucursales incluidas en esta
+                                                    promoción.
+                                                </p>
+                                                {chainGeoStatus === 'loading' && (
+                                                    <p className="text-xs text-indigo-700 mt-2">
+                                                        Detectando la sucursal más cercana a tu ubicación…
+                                                    </p>
+                                                )}
+                                                {nearestBranchInfo && (
+                                                    <div className="mt-2 text-sm text-indigo-900">
+                                                        <p>
+                                                            Sucursal más cercana:{' '}
+                                                            <strong>
+                                                                {nearestBranchInfo.branch.branchName ||
+                                                                    nearestBranchInfo.branch.city ||
+                                                                    'Sucursal'}
+                                                            </strong>{' '}
+                                                            (
+                                                            {(nearestBranchInfo.distanceMeters / 1000).toFixed(1)}{' '}
+                                                            km)
+                                                        </p>
+                                                        <a
+                                                            href={resolveBranchMapsUrl(nearestBranchInfo.branch)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 text-indigo-600 font-medium mt-1 hover:underline"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                            Cómo llegar (mapa)
+                                                        </a>
+                                                    </div>
+                                                )}
+                                                {chainGeoStatus === 'denied' && (
+                                                    <p className="text-xs text-amber-900 mt-2">
+                                                        Activa el permiso de ubicación para ver la sucursal más cercana
+                                                        y validar el cupón en la tienda correcta.
+                                                    </p>
+                                                )}
+                                                {chainGeoStatus === 'unavailable' && (
+                                                    <p className="text-xs text-gray-600 mt-2">
+                                                        Tu navegador no expone ubicación; se usará la primera sucursal
+                                                        de la lista para el radio del cupón si aplica GPS.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
                                     {product.activateByGps && (
                                         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                                             <div className="flex items-start gap-2">
@@ -432,9 +597,11 @@ export default function PromotionDetailsPage() {
                                                     <p className="text-sm text-amber-800 mt-1">
                                                         Para obtener el cupón debes permitir acceso a tu ubicación y estar dentro de{' '}
                                                         <strong>{product.gpsRadiusMeters ?? 500} m</strong>
-                                                        {product.promotionLat != null && product.promotionLng != null
-                                                            ? ' del punto configurado para esta promoción.'
-                                                            : ' del punto de la tienda (coordenadas pendientes en la promoción).'}
+                                                        {product.isChainStore && nearestBranchInfo
+                                                            ? ' de la sucursal más cercana a ti.'
+                                                            : product.promotionLat != null && product.promotionLng != null
+                                                              ? ' del punto configurado para esta promoción.'
+                                                              : ' del punto de la tienda (coordenadas pendientes en la promoción).'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -443,11 +610,13 @@ export default function PromotionDetailsPage() {
                                     
                                     <div className="flex gap-3">
                                         <button
+                                            type="button"
+                                            disabled={waitingForNearest}
                                             onClick={() => setShowCouponForm(true)}
-                                            className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                                            className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <MessageCircle className="h-5 w-5" />
-                                            Solicitar Cupón
+                                            {waitingForNearest ? 'Ubicando sucursal…' : 'Solicitar Cupón'}
                                         </button>
                                         <button
                                             onClick={() => setIsWishlisted(!isWishlisted)}
@@ -982,10 +1151,38 @@ export default function PromotionDetailsPage() {
                     autoGenerateOnOpen={!product.activateByGps}
                     activateByGps={product.activateByGps}
                     gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
-                    promotionLat={product.promotionLat ?? undefined}
-                    promotionLng={product.promotionLng ?? undefined}
+                    promotionLat={couponLat}
+                    promotionLng={couponLng}
                     onClose={() => setShowCouponForm(false)}
                 />
+            )}
+
+            {imageLightboxOpen && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-black/85"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Foto de la promoción"
+                    onClick={() => setImageLightboxOpen(false)}
+                >
+                    <button
+                        type="button"
+                        className="absolute top-4 right-4 z-10 rounded-full p-2 text-white hover:bg-white/15 transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setImageLightboxOpen(false);
+                        }}
+                        aria-label="Cerrar vista ampliada"
+                    >
+                        <X className="h-7 w-7" />
+                    </button>
+                    <img
+                        src={product.image}
+                        alt={product.name}
+                        className="max-h-[min(90vh,900px)] max-w-full w-auto object-contain rounded-lg shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
             )}
         </div>
     );

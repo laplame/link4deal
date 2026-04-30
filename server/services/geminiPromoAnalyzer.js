@@ -1,18 +1,32 @@
 /**
  * Analiza imágenes de promoción con Gemini y extrae datos estructurados
- * (título, precios, descuento, términos y condiciones si aparecen en alguna imagen).
+ * (cartel principal + imágenes solo de términos y condiciones).
  * Variable de entorno: gemini-api-key
  */
 
 const GEMINI_API_KEY = process.env['gemini-api-key'] || process.env.GEMINI_API_KEY;
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-const ANALYSIS_PROMPT = `Eres un asistente que analiza imágenes de promociones u ofertas comerciales.
-Analiza TODAS las imágenes que te envío y extrae la información de la promoción.
-
-Reglas:
-- Los precios deben estar en USD. Si en la imagen aparecen en otra moneda (MXN, EUR, etc.), conviértelos a USD de forma aproximada (usa tasas razonables: MXN ~17 por USD, EUR ~1.05 por USD) e indica que son aproximados.
-- Si en alguna de las imágenes aparece texto de "términos y condiciones", "bases legales", "condiciones de la promoción" o similar, extrae ese texto completo en el campo termsAndConditions. Si no hay tal texto en ninguna imagen, deja termsAndConditions como string vacío.
+function buildPrompt(hasPromo, hasTerms) {
+    let intro = `Eres un asistente que analiza imágenes de promociones u ofertas comerciales.
+`;
+    if (hasPromo) {
+        intro += `
+Recibirás primero una o más imágenes del CARTEL o ANUNCIO PRINCIPAL (producto, precios visibles, marca, diseño publicitario).
+De estas imágenes extrae: título, descripción breve, producto, marca, categoría, precios, descuento, tipo de oferta.
+`;
+    }
+    if (hasTerms) {
+        intro += `
+Luego recibirás una o más imágenes que corresponden SOLO a TÉRMINOS Y CONDICIONES, letra pequeña, bases legales o reverso del cupón.
+Para esas imágenes: transcribe TODO el texto legal visible. NO resumas. Concatena en un solo string en el campo termsAndConditions.
+Si el cartel principal ya mostraba algo de términos, combina sin duplicar párrafos idénticos cuando sea obvio.
+`;
+    }
+    intro += `
+Reglas generales:
+- Los precios deben estar en USD. Si en la imagen aparecen en otra moneda (MXN, EUR, etc.), conviértelos a USD de forma aproximada (MXN ~17 por USD, EUR ~1.05 por USD) e indica en description que son aproximados si aplica.
+- Si no hay imágenes de términos, termsAndConditions puede quedar vacío o con lo extraído solo del cartel si allí aparece texto legal.
 - offerType debe ser exactamente uno de: "percentage", "bogo", "cashback_fixed", "cashback_percentage". Si no se puede determinar, usa "percentage".
 - category debe ser uno de: "electronics", "fashion", "home", "beauty", "sports", "books", "food", "other".
 
@@ -28,8 +42,10 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown, sin comentarios) con est
   "discountPercentage": number 0-100 o 0,
   "offerType": "percentage|bogo|cashback_fixed|cashback_percentage",
   "cashbackValue": number o null,
-  "termsAndConditions": "string con el texto de términos si aparece en alguna imagen, o vacío"
+  "termsAndConditions": "string con todo el texto legal (especialmente de imágenes de T&C), o vacío"
 }`;
+    return intro;
+}
 
 /**
  * Convierte un buffer de imagen a parte inline_data para Gemini
@@ -41,22 +57,39 @@ function toInlineData(file) {
 }
 
 /**
- * Analiza una o más imágenes de promoción con Gemini y devuelve datos estructurados
- * @param {Express.Multer.File[]} files - Array de archivos (req.files)
+ * Analiza imágenes: cartel(s) promocional(es) y opcionalmente imágenes solo de términos.
+ * @param {Express.Multer.File[]} promotionalFiles
+ * @param {Express.Multer.File[]} termsFiles
  * @returns {Promise<{ success: boolean, data?: object, message?: string }>}
  */
-async function analyzePromotionImages(files) {
+async function analyzePromotionImages(promotionalFiles = [], termsFiles = []) {
+    const promos = Array.isArray(promotionalFiles) ? promotionalFiles : [];
+    const terms = Array.isArray(termsFiles) ? termsFiles : [];
+
     if (!GEMINI_API_KEY) {
         return { success: false, message: 'Gemini API key no configurada (gemini-api-key o GEMINI_API_KEY)' };
     }
-    if (!files || files.length === 0) {
-        return { success: false, message: 'Se requiere al menos una imagen' };
+    if (promos.length === 0 && terms.length === 0) {
+        return { success: false, message: 'Se requiere al menos una imagen (promoción o términos)' };
     }
 
-    const parts = [{ text: ANALYSIS_PROMPT }];
-    for (const file of files) {
-        if (file.buffer && file.mimetype) {
-            parts.push(toInlineData(file));
+    const parts = [{ text: buildPrompt(promos.length > 0, terms.length > 0) }];
+
+    if (promos.length > 0) {
+        parts.push({
+            text: `=== INICIO: imágenes del CARTEL / ANUNCIO DE LA PROMOCIÓN (${promos.length} archivo(s)) ===`
+        });
+        for (const file of promos) {
+            if (file.buffer && file.mimetype) parts.push(toInlineData(file));
+        }
+    }
+
+    if (terms.length > 0) {
+        parts.push({
+            text: `=== INICIO: imágenes SOLO DE TÉRMINOS Y CONDICIONES / BASE LEGAL (${terms.length} archivo(s)) ===\nTranscribe el texto completo.`
+        });
+        for (const file of terms) {
+            if (file.buffer && file.mimetype) parts.push(toInlineData(file));
         }
     }
 
@@ -65,7 +98,7 @@ async function analyzePromotionImages(files) {
         generationConfig: {
             response_mime_type: 'application/json',
             temperature: 0.2,
-            max_output_tokens: 2048
+            max_output_tokens: 8192
         }
     };
 
@@ -95,7 +128,6 @@ async function analyzePromotionImages(files) {
         const cleaned = text.replace(/^[\s\n]*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
         const data = JSON.parse(cleaned);
 
-        // Normalizar tipos
         if (typeof data.originalPrice !== 'number') data.originalPrice = parseFloat(data.originalPrice) || 0;
         if (typeof data.currentPrice !== 'number') data.currentPrice = parseFloat(data.currentPrice) || 0;
         if (typeof data.discountPercentage !== 'number') data.discountPercentage = parseFloat(data.discountPercentage) || 0;

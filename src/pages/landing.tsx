@@ -7,6 +7,7 @@ import CartIcon from '../components/CartIcon';
 import Toast from '../components/Toast';
 import DownloadApp from '../components/DownloadApp';
 import NewsSection from '../components/NewsSection';
+import SpotifyPodcastEmbed from '../components/SpotifyPodcastEmbed';
 import LocationSelector from '../components/LocationSelector';
 import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
@@ -1054,6 +1055,8 @@ export default function LandingPage() {
 
                 {/* Download App Section */}
                 <DownloadApp />
+
+                <SpotifyPodcastEmbed className="mb-8" />
 
                 {/* News Section */}
                 <NewsSection />

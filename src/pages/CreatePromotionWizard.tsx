@@ -64,6 +64,18 @@ interface PromotionData {
         gpsRadiusMeters: number;
         storeLatitude: string;
         storeLongitude: string;
+        /** Misma promoción en varias sucursales (cadena); el cliente usa la más cercana con GPS */
+        isChainStore: boolean;
+        chainBrandName: string;
+        chainBranches: Array<{
+            key: string;
+            branchName: string;
+            address: string;
+            city: string;
+            latitude: string;
+            longitude: string;
+            mapsUrl: string;
+        }>;
     };
     smartContract: {
         network: string;
@@ -153,7 +165,10 @@ export default function CreatePromotionWizard() {
             activateByGps: false,
             gpsRadiusMeters: 500,
             storeLatitude: '',
-            storeLongitude: ''
+            storeLongitude: '',
+            isChainStore: false,
+            chainBrandName: '',
+            chainBranches: []
         },
         smartContract: {
             network: 'Ethereum',
@@ -179,6 +194,13 @@ export default function CreatePromotionWizard() {
 
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
     const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
+
+    const [promotionalImageFiles, setPromotionalImageFiles] = useState<File[]>([]);
+    const [promotionalPreviewUrls, setPromotionalPreviewUrls] = useState<string[]>([]);
+    const [termsImageFiles, setTermsImageFiles] = useState<File[]>([]);
+    const [termsPreviewUrls, setTermsPreviewUrls] = useState<string[]>([]);
+    const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
+    const [analyzeMediaError, setAnalyzeMediaError] = useState<string | null>(null);
 
     const updatePromotionData = (section: keyof PromotionData, data: Partial<PromotionData[keyof PromotionData]>) => {
         setPromotionData(prev => ({
@@ -255,7 +277,7 @@ export default function CreatePromotionWizard() {
         const step = steps[stepIndex];
         switch (step.id) {
             case 'media':
-                return promotionData.media.images.length > 0;
+                return promotionalImageFiles.length > 0;
             case 'basicInfo':
                 return !!(promotionData.basicInfo.title && promotionData.basicInfo.category && promotionData.basicInfo.brand);
             case 'pricing':
@@ -584,6 +606,214 @@ export default function CreatePromotionWizard() {
 
     const renderTargetingStep = () => (
         <div className="space-y-6">
+            <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/60 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={promotionData.targeting.isChainStore}
+                        onChange={(e) =>
+                            updatePromotionData('targeting', {
+                                isChainStore: e.target.checked,
+                                ...(e.target.checked
+                                    ? {}
+                                    : { chainBrandName: '', chainBranches: [] })
+                            })
+                        }
+                        className="mt-1 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                        <span className="block text-sm font-medium text-gray-900">
+                            Cadena de tiendas (varias sucursales)
+                        </span>
+                        <span className="block text-sm text-gray-600 mt-0.5">
+                            Misma oferta en todas las sucursales que agregues. Con GPS, el usuario valida el cupón contra
+                            la <strong>sucursal más cercana</strong>.
+                        </span>
+                    </span>
+                </label>
+
+                {promotionData.targeting.isChainStore && (
+                    <div className="space-y-4 pl-1">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Nombre de la cadena (ej. Starbucks)
+                            </label>
+                            <input
+                                type="text"
+                                value={promotionData.targeting.chainBrandName}
+                                onChange={(e) =>
+                                    updatePromotionData('targeting', {
+                                        chainBrandName: e.target.value
+                                    })
+                                }
+                                placeholder={promotionData.basicInfo.brand || 'Marca o cadena'}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                            />
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-sm font-medium text-gray-800">Sucursales</span>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    updatePromotionData('targeting', {
+                                        chainBranches: [
+                                            ...promotionData.targeting.chainBranches,
+                                            {
+                                                key: `br-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                                branchName: '',
+                                                address: '',
+                                                city: '',
+                                                latitude: '',
+                                                longitude: '',
+                                                mapsUrl: ''
+                                            }
+                                        ]
+                                    })
+                                }
+                                className="text-sm px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                            >
+                                + Agregar sucursal
+                            </button>
+                        </div>
+
+                        {promotionData.targeting.chainBranches.length === 0 ? (
+                            <p className="text-sm text-amber-900 bg-amber-100/80 border border-amber-200 rounded-lg px-3 py-2">
+                                Añade al menos una sucursal con coordenadas (lat / long).
+                            </p>
+                        ) : (
+                            <div className="space-y-4">
+                                {promotionData.targeting.chainBranches.map((row) => (
+                                    <div
+                                        key={row.key}
+                                        className="border border-gray-200 rounded-lg p-3 bg-white space-y-2"
+                                    >
+                                        <div className="flex justify-between items-center gap-2">
+                                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Sucursal
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updatePromotionData('targeting', {
+                                                        chainBranches:
+                                                            promotionData.targeting.chainBranches.filter(
+                                                                (b) => b.key !== row.key
+                                                            )
+                                                    })
+                                                }
+                                                className="text-red-600 hover:text-red-800 p-1"
+                                                aria-label="Quitar sucursal"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre (ej. Starbucks Reforma)"
+                                            value={row.branchName}
+                                            onChange={(e) =>
+                                                updatePromotionData('targeting', {
+                                                    chainBranches: promotionData.targeting.chainBranches.map((b) =>
+                                                        b.key === row.key
+                                                            ? { ...b, branchName: e.target.value }
+                                                            : b
+                                                    )
+                                                })
+                                            }
+                                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                        />
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Ciudad"
+                                                value={row.city}
+                                                onChange={(e) =>
+                                                    updatePromotionData('targeting', {
+                                                        chainBranches:
+                                                            promotionData.targeting.chainBranches.map((b) =>
+                                                                b.key === row.key
+                                                                    ? { ...b, city: e.target.value }
+                                                                    : b
+                                                            )
+                                                    })
+                                                }
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Dirección (opcional)"
+                                                value={row.address}
+                                                onChange={(e) =>
+                                                    updatePromotionData('targeting', {
+                                                        chainBranches:
+                                                            promotionData.targeting.chainBranches.map((b) =>
+                                                                b.key === row.key
+                                                                    ? { ...b, address: e.target.value }
+                                                                    : b
+                                                            )
+                                                    })
+                                                }
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="Latitud"
+                                                value={row.latitude}
+                                                onChange={(e) =>
+                                                    updatePromotionData('targeting', {
+                                                        chainBranches:
+                                                            promotionData.targeting.chainBranches.map((b) =>
+                                                                b.key === row.key
+                                                                    ? { ...b, latitude: e.target.value }
+                                                                    : b
+                                                            )
+                                                    })
+                                                }
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                            />
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="Longitud"
+                                                value={row.longitude}
+                                                onChange={(e) =>
+                                                    updatePromotionData('targeting', {
+                                                        chainBranches:
+                                                            promotionData.targeting.chainBranches.map((b) =>
+                                                                b.key === row.key
+                                                                    ? { ...b, longitude: e.target.value }
+                                                                    : b
+                                                            )
+                                                    })
+                                                }
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                            />
+                                        </div>
+                                        <input
+                                            type="url"
+                                            placeholder="Link mapa o tienda (opcional)"
+                                            value={row.mapsUrl}
+                                            onChange={(e) =>
+                                                updatePromotionData('targeting', {
+                                                    chainBranches: promotionData.targeting.chainBranches.map((b) =>
+                                                        b.key === row.key ? { ...b, mapsUrl: e.target.value } : b
+                                                    )
+                                                })
+                                            }
+                                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                     Audiencia Objetivo
@@ -773,9 +1003,9 @@ export default function CreatePromotionWizard() {
         </div>
     );
 
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
-    const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
-    const [analyzeMediaError, setAnalyzeMediaError] = useState<string | null>(null);
+    const syncCombinedMediaPreviews = (promoUrls: string[], termUrls: string[]) => {
+        updatePromotionData('media', { images: [...promoUrls, ...termUrls] });
+    };
 
     const categoryNameFromSlug = (slug: string): string => {
         const map: Record<string, string> = {
@@ -791,18 +1021,20 @@ export default function CreatePromotionWizard() {
         return map[slug] || slug;
     };
 
-    /** Analiza imágenes con Gemini. Si se pasan `files`, se usan esos; si no, imageFiles. */
-    const handleAnalyzeWithGemini = async (files?: File[]) => {
-        const toUse = files && files.length > 0 ? files : imageFiles;
-        if (toUse.length === 0) {
-            setAnalyzeMediaError('Sube al menos una imagen para analizar.');
+    /** Analiza con Gemini: cartel(es) en `images`, T&C en `termsImages`. */
+    const handleAnalyzeWithGemini = async (promoFiles?: File[], termsFiles?: File[]) => {
+        const promos = promoFiles ?? promotionalImageFiles;
+        const terms = termsFiles ?? termsImageFiles;
+        if (promos.length === 0 && terms.length === 0) {
+            setAnalyzeMediaError('Sube al menos una imagen (promoción y/o términos) para analizar.');
             return;
         }
         setIsAnalyzingMedia(true);
         setAnalyzeMediaError(null);
         try {
             const fd = new FormData();
-            toUse.forEach((file) => fd.append('images', file));
+            promos.forEach((file) => fd.append('images', file));
+            terms.forEach((file) => fd.append('termsImages', file));
             const res = await fetch('/api/promotions/analyze-image', { method: 'POST', body: fd });
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
@@ -833,99 +1065,183 @@ export default function CreatePromotionWizard() {
         }
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePromotionalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
             const fileArray = Array.from(files);
-            const newFiles = [...imageFiles, ...fileArray].slice(0, 5);
-            setImageFiles(newFiles);
-            const imageUrls = newFiles.map(file => URL.createObjectURL(file));
-            updatePromotionData('media', { images: imageUrls });
+            const merged = [...promotionalImageFiles, ...fileArray].slice(0, 8);
+            promotionalPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+            const urls = merged.map((file) => URL.createObjectURL(file));
+            setPromotionalImageFiles(merged);
+            setPromotionalPreviewUrls(urls);
+            syncCombinedMediaPreviews(urls, termsPreviewUrls);
             e.target.value = '';
-            // Prioridad foto: analizar con Gemini y rellenar los siguientes pasos
-            handleAnalyzeWithGemini(newFiles);
+            handleAnalyzeWithGemini(merged, termsImageFiles);
         }
     };
 
-    const removeImage = (index: number) => {
-        const newFiles = imageFiles.filter((_, i) => i !== index);
-        setImageFiles(newFiles);
-        
-        const newImages = promotionData.media.images.filter((_, i) => i !== index);
-        // Revocar URL para liberar memoria
-        URL.revokeObjectURL(promotionData.media.images[index]);
-        updatePromotionData('media', { images: newImages });
+    const handleTermsImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const fileArray = Array.from(files);
+            const merged = [...termsImageFiles, ...fileArray].slice(0, 8);
+            termsPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+            const urls = merged.map((file) => URL.createObjectURL(file));
+            setTermsImageFiles(merged);
+            setTermsPreviewUrls(urls);
+            syncCombinedMediaPreviews(promotionalPreviewUrls, urls);
+            e.target.value = '';
+            handleAnalyzeWithGemini(promotionalImageFiles, merged);
+        }
+    };
+
+    const removePromotionalImage = (index: number) => {
+        const newFiles = promotionalImageFiles.filter((_, i) => i !== index);
+        promotionalPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+        const urls = newFiles.map((f) => URL.createObjectURL(f));
+        setPromotionalImageFiles(newFiles);
+        setPromotionalPreviewUrls(urls);
+        syncCombinedMediaPreviews(urls, termsPreviewUrls);
+    };
+
+    const removeTermsImage = (index: number) => {
+        const newFiles = termsImageFiles.filter((_, i) => i !== index);
+        termsPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+        const urls = newFiles.map((f) => URL.createObjectURL(f));
+        setTermsImageFiles(newFiles);
+        setTermsPreviewUrls(urls);
+        syncCombinedMediaPreviews(promotionalPreviewUrls, urls);
     };
 
     const renderMediaStep = () => (
         <div className="space-y-6">
             <p className="text-sm text-gray-600 bg-purple-50 border border-purple-100 rounded-lg px-4 py-3">
-                <strong>Prioridad: sube la foto de la promoción.</strong> Con Gemini extraemos título, precios, marca y términos. En los siguientes pasos solo completa lo que falte.
+                <strong>Imagen(es) del cartel o anuncio</strong> (precios, producto, marca) y, si las tienes,{' '}
+                <strong>foto(s) aparte de términos y condiciones</strong> o letra pequeña. Todo se envía al OCR del
+                servidor y, si configuras Gemini, también al análisis inteligente para rellenar el formulario y el texto
+                legal.
             </p>
+
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Imágenes de la Promoción * (mínimo 1, máx. 5)
+                    Cartel / promoción * (mínimo 1, máx. 8)
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
+                <div className="border-2 border-dashed border-purple-200 rounded-lg p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/30">
                     <input
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={handleImageUpload}
+                        onChange={handlePromotionalImageUpload}
                         className="hidden"
-                        id="image-upload"
+                        id="promo-image-upload"
                     />
-                    <label htmlFor="image-upload" className="cursor-pointer">
+                    <label htmlFor="promo-image-upload" className="cursor-pointer">
                         <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-600">Arrastra y suelta imágenes aquí o haz clic para seleccionar</p>
-                        <p className="mt-1 text-xs text-gray-500">Máximo 5 imágenes</p>
+                        <p className="mt-2 text-sm text-gray-600">
+                            Sube el arte principal de la oferta (pueden ser varias si es un carrusel).
+                        </p>
                     </label>
                 </div>
-                {promotionData.media.images.length > 0 && (
-                    <>
-                        <div className="mt-4 grid grid-cols-3 gap-4">
-                            {promotionData.media.images.map((image, index) => (
-                                <div key={index} className="relative group">
-                                    <img 
-                                        src={image} 
-                                        alt={`Preview ${index + 1}`}
-                                        className="w-full h-32 object-cover rounded-lg"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeImage(index)}
-                                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={handleAnalyzeWithGemini}
-                                disabled={isAnalyzingMedia}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                                {isAnalyzingMedia ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                                        Analizando con Gemini...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="h-5 w-5" />
-                                        Volver a analizar
-                                    </>
-                                )}
-                            </button>
-                            <span className="text-xs text-gray-500">Se analizó al subir. Reanaliza si cambiaste la imagen.</span>
-                        </div>
-                        {analyzeMediaError && <p className="mt-2 text-sm text-red-600">{analyzeMediaError}</p>}
-                    </>
+                {promotionalPreviewUrls.length > 0 && (
+                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {promotionalPreviewUrls.map((image, index) => (
+                            <div key={`p-${index}`} className="relative group">
+                                <span className="absolute top-2 left-2 z-10 text-[10px] font-semibold uppercase tracking-wide bg-purple-600 text-white px-2 py-0.5 rounded">
+                                    Promo
+                                </span>
+                                <img
+                                    src={image}
+                                    alt={`Promoción ${index + 1}`}
+                                    className="w-full h-32 object-cover rounded-lg"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removePromotionalImage(index)}
+                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Quitar imagen"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Términos y condiciones (opcional, máx. 8)
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                    Foto del reverso, letra chica o pantalla solo de bases legales. El OCR acumula este texto en los
+                    términos de la promoción.
+                </p>
+                <div className="border-2 border-dashed border-amber-200 rounded-lg p-6 text-center hover:border-amber-500 transition-colors bg-amber-50/30">
+                    <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleTermsImageUpload}
+                        className="hidden"
+                        id="terms-image-upload"
+                    />
+                    <label htmlFor="terms-image-upload" className="cursor-pointer">
+                        <Upload className="mx-auto h-12 w-12 text-amber-600/80" />
+                        <p className="mt-2 text-sm text-gray-600">Añadir imágenes solo de T&amp;C / legal</p>
+                    </label>
+                </div>
+                {termsPreviewUrls.length > 0 && (
+                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {termsPreviewUrls.map((image, index) => (
+                            <div key={`t-${index}`} className="relative group">
+                                <span className="absolute top-2 left-2 z-10 text-[10px] font-semibold uppercase tracking-wide bg-amber-600 text-white px-2 py-0.5 rounded">
+                                    T&amp;C
+                                </span>
+                                <img
+                                    src={image}
+                                    alt={`Términos ${index + 1}`}
+                                    className="w-full h-32 object-cover rounded-lg"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removeTermsImage(index)}
+                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Quitar imagen de términos"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {(promotionalPreviewUrls.length > 0 || termsPreviewUrls.length > 0) && (
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => handleAnalyzeWithGemini()}
+                        disabled={isAnalyzingMedia}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {isAnalyzingMedia ? (
+                            <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                Analizando con Gemini...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="h-5 w-5" />
+                                Analizar todas las fotos (Gemini)
+                            </>
+                        )}
+                    </button>
+                    <span className="text-xs text-gray-500">
+                        Incluye cartel(es) y fotos de términos en un solo análisis.
+                    </span>
+                </div>
+            )}
+            {analyzeMediaError && <p className="text-sm text-red-600">{analyzeMediaError}</p>}
 
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -934,7 +1250,7 @@ export default function CreatePromotionWizard() {
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                     <Upload className="mx-auto h-12 w-12 text-gray-400" />
                     <p className="mt-2 text-sm text-gray-600">Arrastra y suelta videos aquí o haz clic para seleccionar</p>
-                    </div>
+                </div>
             </div>
         </div>
     );
@@ -1010,10 +1326,25 @@ export default function CreatePromotionWizard() {
             return;
         }
 
-        if (promotionData.media.images.length === 0) {
-            setSubmitError('Por favor sube al menos una foto de la promoción (paso 1)');
+        if (promotionalImageFiles.length === 0) {
+            setSubmitError('Por favor sube al menos una foto del cartel o promoción (paso 1)');
             setCurrentStep(0);
             return;
+        }
+
+        if (promotionData.targeting.isChainStore) {
+            const validBranches = promotionData.targeting.chainBranches.filter((b) => {
+                const la = parseFloat(String(b.latitude).replace(',', '.'));
+                const lo = parseFloat(String(b.longitude).replace(',', '.'));
+                return Number.isFinite(la) && Number.isFinite(lo);
+            });
+            if (validBranches.length === 0) {
+                setSubmitError(
+                    'Cadena de tiendas: agrega al menos una sucursal con latitud y longitud válidas (paso Audiencia y GPS).'
+                );
+                setCurrentStep(steps.findIndex((s) => s.id === 'targeting'));
+                return;
+            }
         }
 
         setIsSubmitting(true);
@@ -1065,6 +1396,38 @@ export default function CreatePromotionWizard() {
                 formData.append('storeLongitude', promotionData.targeting.storeLongitude.trim());
             }
 
+            formData.append(
+                'isChainStore',
+                promotionData.targeting.isChainStore ? 'true' : 'false'
+            );
+            if (promotionData.targeting.isChainStore) {
+                const brandChain =
+                    promotionData.targeting.chainBrandName.trim() ||
+                    promotionData.basicInfo.brand;
+                if (brandChain) formData.append('chainBrandName', brandChain);
+                const locs = promotionData.targeting.chainBranches
+                    .map((b) => ({
+                        branchName: b.branchName.trim(),
+                        address: b.address.trim(),
+                        city: b.city.trim(),
+                        latitude: parseFloat(String(b.latitude).replace(',', '.')),
+                        longitude: parseFloat(String(b.longitude).replace(',', '.')),
+                        mapsUrl: b.mapsUrl.trim() || undefined
+                    }))
+                    .filter((b) => Number.isFinite(b.latitude) && Number.isFinite(b.longitude));
+                if (locs.length > 0) {
+                    formData.append('chainLocations', JSON.stringify(locs));
+                }
+            }
+            const storeNameVal = promotionData.targeting.isChainStore
+                ? promotionData.targeting.chainBrandName.trim() ||
+                  promotionData.basicInfo.brand ||
+                  promotionData.basicInfo.title
+                : promotionData.basicInfo.brand || promotionData.basicInfo.title;
+            if (storeNameVal) {
+                formData.append('storeName', storeNameVal);
+            }
+
             // Tags
             if (promotionData.targeting.interests.length > 0) {
                 formData.append('tags', JSON.stringify(promotionData.targeting.interests));
@@ -1095,13 +1458,16 @@ export default function CreatePromotionWizard() {
             const categorySlug = categoryToSlug[promotionData.basicInfo.category] || 'other';
             formData.set('category', categorySlug);
 
-            // Imágenes (usar los archivos directamente)
-            if (imageFiles.length === 0) {
-                throw new Error('Por favor sube al menos una imagen');
+            // Imágenes: cartel (images) + términos (termsImages) para OCR / Gemini en servidor
+            if (promotionalImageFiles.length === 0) {
+                throw new Error('Por favor sube al menos una imagen de la promoción');
             }
-            
-            imageFiles.forEach((file, index) => {
+
+            promotionalImageFiles.forEach((file) => {
                 formData.append('images', file);
+            });
+            termsImageFiles.forEach((file) => {
+                formData.append('termsImages', file);
             });
 
             // Enviar a la API

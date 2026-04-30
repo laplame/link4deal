@@ -96,6 +96,19 @@ const memoryUpload = multer({
     }
 });
 
+const promotionImageUpload = multer({
+    storage: memoryStorage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
+        files: 24,
+        fieldSize: 10 * 1024 * 1024
+    }
+}).fields([
+    { name: 'images', maxCount: 8 },
+    { name: 'termsImages', maxCount: 8 }
+]);
+
 // Configuración de Multer para almacenamiento en disco (para respaldo local)
 const diskUpload = multer({
     storage: diskStorage,
@@ -272,6 +285,7 @@ module.exports = {
     getInfluencerUploadDir,
     upload,
     memoryUpload,
+    promotionImageUpload,
     diskUpload,
     validateFiles,
     cleanupTempFiles,

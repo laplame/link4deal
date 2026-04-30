@@ -40,6 +40,8 @@ interface QuickPromotionData {
     validUntil: string;
     totalQuantity: number;
     images: File[];
+    /** Fotos solo de términos y condiciones (OCR aparte en servidor). */
+    termsImages: File[];
     termsAndConditions: string;
     activateByGps: boolean;
     gpsRadiusMeters: number;
@@ -161,6 +163,7 @@ export default function QuickPromotionPage() {
         offerType: 'percentage',
         cashbackValue: 0,
         images: [],
+        termsImages: [],
         termsAndConditions: '',
         activateByGps: false,
         gpsRadiusMeters: 500,
@@ -171,6 +174,7 @@ export default function QuickPromotionPage() {
 
     const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const [termsImagePreviews, setTermsImagePreviews] = useState<string[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -222,23 +226,27 @@ export default function QuickPromotionPage() {
             ...emptyQuickForm(),
             ...template.data,
             images: [],
+            termsImages: [],
             termsAndConditions: formData.termsAndConditions
         });
         setImagePreviews([]);
+        setTermsImagePreviews([]);
     };
 
     /** Analiza imágenes con Gemini. Si se pasan `files`, se usan esos; si no, formData.images. */
-    const handleAnalyzeWithGemini = async (files?: File[]) => {
-        const toUse = files && files.length > 0 ? files : formData.images;
-        if (toUse.length === 0) {
-            setAnalyzeError('Sube al menos una imagen para analizar.');
+    const handleAnalyzeWithGemini = async (promoFiles?: File[], termsFiles?: File[]) => {
+        const promos = promoFiles ?? formData.images;
+        const terms = termsFiles ?? formData.termsImages;
+        if (promos.length === 0 && terms.length === 0) {
+            setAnalyzeError('Sube al menos una imagen (promoción y/o términos) para analizar.');
             return;
         }
         setIsAnalyzing(true);
         setAnalyzeError(null);
         try {
             const fd = new FormData();
-            toUse.forEach((file) => fd.append('images', file));
+            promos.forEach((file) => fd.append('images', file));
+            terms.forEach((file) => fd.append('termsImages', file));
             const res = await fetch('/api/promotions/analyze-image', { method: 'POST', body: fd });
             const json = await res.json();
             if (!res.ok) {
@@ -330,31 +338,57 @@ export default function QuickPromotionPage() {
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
-            const fileArray = Array.from(files).slice(0, 5);
-            const newFiles = [...formData.images, ...fileArray].slice(0, 5);
-            
-            setFormData(prev => ({
+            const fileArray = Array.from(files);
+            const merged = [...formData.images, ...fileArray].slice(0, 8);
+            imagePreviews.forEach((u) => URL.revokeObjectURL(u));
+            const urls = merged.map((file) => URL.createObjectURL(file));
+
+            setFormData((prev) => ({
                 ...prev,
-                images: newFiles
+                images: merged
             }));
 
-            const newPreviews = fileArray.map(file => URL.createObjectURL(file));
-            setImagePreviews(prev => [...prev, ...newPreviews].slice(0, 5));
+            setImagePreviews(urls);
             e.target.value = '';
-            // Prioridad foto: analizar con Gemini en cuanto haya imágenes y rellenar el formulario
-            handleAnalyzeWithGemini(newFiles);
+            handleAnalyzeWithGemini(merged, formData.termsImages);
+        }
+    };
+
+    const handleTermsImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const fileArray = Array.from(files);
+            const merged = [...formData.termsImages, ...fileArray].slice(0, 8);
+            termsImagePreviews.forEach((u) => URL.revokeObjectURL(u));
+            const urls = merged.map((file) => URL.createObjectURL(file));
+
+            setFormData((prev) => ({
+                ...prev,
+                termsImages: merged
+            }));
+
+            setTermsImagePreviews(urls);
+            e.target.value = '';
+            handleAnalyzeWithGemini(formData.images, merged);
         }
     };
 
     const removeImage = (index: number) => {
         const newImages = formData.images.filter((_, i) => i !== index);
-        const newPreviews = imagePreviews.filter((_, i) => i !== index);
-        
-        // Revocar URL
-        URL.revokeObjectURL(imagePreviews[index]);
-        
-        setFormData(prev => ({ ...prev, images: newImages }));
-        setImagePreviews(newPreviews);
+        imagePreviews.forEach((u) => URL.revokeObjectURL(u));
+        const urls = newImages.map((f) => URL.createObjectURL(f));
+
+        setFormData((prev) => ({ ...prev, images: newImages }));
+        setImagePreviews(urls);
+    };
+
+    const removeTermsImage = (index: number) => {
+        const newFiles = formData.termsImages.filter((_, i) => i !== index);
+        termsImagePreviews.forEach((u) => URL.revokeObjectURL(u));
+        const urls = newFiles.map((f) => URL.createObjectURL(f));
+
+        setFormData((prev) => ({ ...prev, termsImages: newFiles }));
+        setTermsImagePreviews(urls);
     };
 
     const calculateDiscount = () => {
@@ -485,9 +519,11 @@ export default function QuickPromotionPage() {
                 }
             }
             
-            // Imágenes
             formData.images.forEach((file) => {
                 formDataToSend.append('images', file);
+            });
+            formData.termsImages.forEach((file) => {
+                formDataToSend.append('termsImages', file);
             });
 
             const response = await fetch('/api/promotions', {
@@ -579,6 +615,7 @@ export default function QuickPromotionPage() {
                             setSubmitSuccess(false);
                             setFormData(emptyQuickForm());
                             setImagePreviews([]);
+                            setTermsImagePreviews([]);
                             setCreatedPromotionId(null);
                             setPromotionType('coupon');
                             setRedirectDestination('amazon');
@@ -618,6 +655,7 @@ export default function QuickPromotionPage() {
                                                     setSubmitSuccess(false);
                                                     setFormData(emptyQuickForm());
                                                     setImagePreviews([]);
+                            setTermsImagePreviews([]);
                                                     setCreatedPromotionId(null);
                                                     setPromotionType('coupon');
                                                     setRedirectDestination('amazon');
@@ -638,6 +676,7 @@ export default function QuickPromotionPage() {
                                                     setSubmitSuccess(false);
                                                     setFormData(emptyQuickForm());
                                                     setImagePreviews([]);
+                            setTermsImagePreviews([]);
                                                     setCreatedPromotionId(null);
                                                     setPromotionType('coupon');
                                                     setRedirectDestination('amazon');
@@ -656,6 +695,7 @@ export default function QuickPromotionPage() {
                                             setSubmitSuccess(false);
                                             setFormData(emptyQuickForm());
                                             setImagePreviews([]);
+                                            setTermsImagePreviews([]);
                                             setCreatedPromotionId(null);
                                             setPromotionType('coupon');
                                             setRedirectDestination('amazon');
@@ -701,12 +741,13 @@ export default function QuickPromotionPage() {
                     <div className="mb-8 pb-8 border-b border-gray-200">
                         <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
                             <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">1</span>
-                            Foto primero (opcional)
+                            Fotos: promoción y términos
                         </h2>
                         <p className="text-sm text-gray-600 mb-4">
-                            Sube 1–5 imágenes de la promoción. Opcional: la app llama a <strong>POST /api/promotions/analyze-image</strong> (Gemini) para rellenar título, precios, marca y términos. Luego completa lo que falte.
+                            Sube el <strong>cartel</strong> (una o varias fotos). Opcional: fotos <strong>solo de términos y condiciones</strong>.
+                            El servidor ejecuta OCR en todas; con Gemini se rellenan datos y texto legal.
                         </p>
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors">
+                        <div className="border-2 border-dashed border-purple-200 rounded-lg p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/30">
                             <input
                                 type="file"
                                 accept="image/*"
@@ -717,54 +758,92 @@ export default function QuickPromotionPage() {
                             />
                             <label htmlFor="image-upload" className="cursor-pointer">
                                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-                                <p className="text-sm text-gray-600">Haz clic o arrastra aquí la foto (máx. 5)</p>
-                                <p className="text-xs text-gray-500 mt-1">Se analizará con AI (Gemini) al subir</p>
+                                <p className="text-sm text-gray-600">Cartel / promoción (máx. 8)</p>
                             </label>
                         </div>
                         {imagePreviews.length > 0 && (
-                            <>
-                                <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    {imagePreviews.map((preview, index) => (
-                                        <div key={index} className="relative group">
-                                            <img
-                                                src={preview}
-                                                alt={`Preview ${index + 1}`}
-                                                className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeImage(index)}
-                                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="mt-4 flex flex-wrap items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAnalyzeWithGemini()}
-                                        disabled={isAnalyzing}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                                    >
-                                        {isAnalyzing ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                                                Analizando con AI (Gemini)...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="h-5 w-5" />
-                                                Analizar imagen con AI (Gemini)
-                                            </>
-                                        )}
-                                    </button>
-                                    <span className="text-xs text-gray-500">Reanaliza si cambiaste la imagen.</span>
-                                </div>
-                                {analyzeError && <p className="mt-2 text-sm text-red-600">{analyzeError}</p>}
-                            </>
+                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {imagePreviews.map((preview, index) => (
+                                    <div key={index} className="relative group">
+                                        <span className="absolute top-2 left-2 z-10 text-[10px] font-bold uppercase bg-purple-600 text-white px-2 py-0.5 rounded">Promo</span>
+                                        <img
+                                            src={preview}
+                                            alt={`Preview ${index + 1}`}
+                                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(index)}
+                                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         )}
+
+                        <p className="text-sm font-medium text-gray-700 mt-6 mb-2">Términos y condiciones (opcional)</p>
+                        <div className="border-2 border-dashed border-amber-200 rounded-lg p-6 text-center hover:border-amber-500 transition-colors bg-amber-50/30">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleTermsImageUpload}
+                                className="hidden"
+                                id="terms-image-upload-quick"
+                            />
+                            <label htmlFor="terms-image-upload-quick" className="cursor-pointer">
+                                <Upload className="mx-auto h-12 w-12 text-amber-600/80 mb-2" />
+                                <p className="text-sm text-gray-600">Fotos solo de letra legal / reverso (máx. 8)</p>
+                            </label>
+                        </div>
+                        {termsImagePreviews.length > 0 && (
+                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {termsImagePreviews.map((preview, index) => (
+                                    <div key={`t-${index}`} className="relative group">
+                                        <span className="absolute top-2 left-2 z-10 text-[10px] font-bold uppercase bg-amber-600 text-white px-2 py-0.5 rounded">T&amp;C</span>
+                                        <img
+                                            src={preview}
+                                            alt={`Términos ${index + 1}`}
+                                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeTermsImage(index)}
+                                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {(imagePreviews.length > 0 || termsImagePreviews.length > 0) && (
+                            <div className="mt-4 flex flex-wrap items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => handleAnalyzeWithGemini()}
+                                    disabled={isAnalyzing}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {isAnalyzing ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                            Analizando con AI (Gemini)...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="h-5 w-5" />
+                                            Analizar todas las fotos (Gemini)
+                                        </>
+                                    )}
+                                </button>
+                                <span className="text-xs text-gray-500">Incluye cartel y fotos de T&amp;C en un solo envío.</span>
+                            </div>
+                        )}
+                        {analyzeError && <p className="mt-2 text-sm text-red-600">{analyzeError}</p>}
                     </div>
 
                     {/* 2. Bloque de datos mínimos (doc: CREAR_PROMOCION_APP_REFERENCIA) */}

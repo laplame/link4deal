@@ -27,6 +27,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
+import SpotifyPodcastEmbed from '../components/SpotifyPodcastEmbed';
 
 const BusinessLanding: React.FC = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -541,6 +542,10 @@ const BusinessLanding: React.FC = () => {
                     </div>
                 </div>
             </section>
+
+            <SpotifyPodcastEmbed
+                description="Saul Sánchez y el equipo hablan de cryptomarketing, Link4Deal, DameCódigo y la economía tokenizada. Escúchalo aquí."
+            />
 
             {/* CTA Final */}
             <section className="py-20 bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white">

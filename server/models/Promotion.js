@@ -116,6 +116,33 @@ const promotionSchema = new mongoose.Schema({
         trim: true
     }],
 
+    /**
+     * Cadena de tiendas: misma promoción en todas las sucursales listadas.
+     * Con activateByGps, la validación puede usar la sucursal más cercana al usuario.
+     */
+    isChainStore: {
+        type: Boolean,
+        default: false
+    },
+    /** Nombre comercial de la cadena (ej. Starbucks); puede coincidir con storeName. */
+    chainBrandName: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    chainLocations: [{
+        branchName: { type: String, trim: true },
+        address: { type: String, trim: true },
+        city: { type: String, trim: true },
+        state: { type: String, trim: true },
+        country: { type: String, trim: true, default: 'México' },
+        coordinates: {
+            latitude: Number,
+            longitude: Number
+        },
+        mapsUrl: { type: String, trim: true }
+    }],
+
     // Imágenes y archivos
     images: [{
         originalName: String,
@@ -124,6 +151,12 @@ const promotionSchema = new mongoose.Schema({
         url: String,           // URL pública para el frontend (ej: /uploads/promotions/promotion-xxx.jpg)
         cloudinaryUrl: String,
         cloudinaryPublicId: String,
+        /** Origen del archivo: cartel promocional o imagen solo de términos y condiciones */
+        imageRole: {
+            type: String,
+            enum: ['promotional', 'terms'],
+            default: 'promotional'
+        },
         uploadedAt: {
             type: Date,
             default: Date.now
@@ -133,6 +166,8 @@ const promotionSchema = new mongoose.Schema({
     // Información de OCR
     ocrData: {
         extractedText: String,
+        /** Texto legal acumulado solo desde imágenes enviadas como términos (OCR). */
+        termsFromAttachments: String,
         confidence: Number,
         ocrProvider: String,
         processedAt: Date

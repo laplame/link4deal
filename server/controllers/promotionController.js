@@ -8,6 +8,7 @@ const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
+const { parseChainLocations } = require('../utils/chainStore');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -18,6 +19,17 @@ Esta oferta de 90 días de periodo de prueba gratis de un Plan Individual mensua
 
 /** Términos genéricos cuando la promoción no tiene términos (ej. no extraídos de imagen). */
 const DEFAULT_TERMS_GENERIC = '1 promoción por cliente. Válido hasta agotar existencias o fin de los cupones, lo que suceda primero.';
+
+/** Agrupa archivos multer: campos `images` (promo) y `termsImages` (T&C), o legacy array. */
+function getPromotionUploadFileGroups(req) {
+    const f = req.files;
+    if (Array.isArray(f)) return { promo: f, terms: [] };
+    if (!f || typeof f !== 'object') return { promo: [], terms: [] };
+    return {
+        promo: Array.isArray(f.images) ? f.images : [],
+        terms: Array.isArray(f.termsImages) ? f.termsImages : []
+    };
+}
 
 class PromotionController {
     // Helper para verificar conexión a MongoDB
@@ -169,16 +181,24 @@ class PromotionController {
                 });
             }
 
-            // Procesar imágenes con OCR (opcional: se puede crear promoción sin imagen)
+            // Procesar imágenes con OCR en todas (promo + T&C); términos legales vienen de `termsImages`.
             const processedImages = [];
             let ocrData = null;
+            const ocrAllChunks = [];
+            const ocrTermsChunks = [];
+            let lastOcrMeta = { confidence: 0, provider: 'unknown' };
 
-            if (req.files && req.files.length > 0) {
+            const { promo: promoFiles, terms: termsFiles } = getPromotionUploadFileGroups(req);
+            const filesToProcess = [...promoFiles, ...termsFiles];
+
+            if (filesToProcess.length > 0) {
             const imageOptimizer = require('../utils/imageOptimizer');
 
-            for (const file of req.files) {
+            for (let fileIndex = 0; fileIndex < filesToProcess.length; fileIndex++) {
+                const file = filesToProcess[fileIndex];
                 try {
-                    console.log(`🔄 Procesando imagen: ${file.originalname}`);
+                    const isTermsSlot = termsFiles.length > 0 && fileIndex >= promoFiles.length;
+                    console.log(`🔄 Procesando imagen: ${file.originalname} (${isTermsSlot ? 'términos' : 'promoción'})`);
                     
                     // Guardar buffer original para OCR (mejor calidad)
                     const originalBuffer = Buffer.from(file.buffer);
@@ -231,13 +251,11 @@ class PromotionController {
                     console.log(`✅ Imagen optimizada guardada localmente: ${localPath}`);
                     
                     // Intentar subir a Cloudinary si está configurado (opcional)
-                    // Nota: Cloudinary también optimiza imágenes automáticamente
                     let cloudinaryUrl = null;
                     let cloudinaryPublicId = null;
                     
                     if (cloudinaryConfig.isConfigured) {
                         try {
-                            // Usar la imagen optimizada para Cloudinary
                             const cloudinaryFile = {
                                 ...file,
                                 buffer: file.buffer,
@@ -258,48 +276,56 @@ class PromotionController {
                         console.log(`ℹ️ Cloudinary no configurado, usando solo almacenamiento local`);
                     }
 
-                    // Procesar OCR solo en la primera imagen
-                    // Usar imagen original (no optimizada) para mejor precisión del OCR
-                    if (processedImages.length === 0) {
-                        console.log('🔍 Procesando OCR de la imagen principal...');
+                    // OCR en cada imagen; texto de `termsImages` alimenta términos legales
+                    try {
+                        console.log(`🔍 OCR (${isTermsSlot ? 'términos' : 'promo'}) ${file.originalname}...`);
                         const ocrResult = await ocrService.processImageWithPython(originalBuffer);
-                        
-                        if (ocrResult.success) {
-                            // Extraer datos de promoción del OCR
-                            const extractedData = await ocrService.extractPromotionData(ocrResult);
-                            
-                            if (extractedData.success) {
-                                ocrData = {
-                                    extractedText: extractedData.rawText,
-                                    confidence: extractedData.confidence,
-                                    ocrProvider: ocrResult.provider,
-                                    processedAt: new Date()
-                                };
 
-                                // Usar datos del OCR si no se proporcionaron manualmente
-                                if (!productName && extractedData.data.productName) {
-                                    req.body.productName = extractedData.data.productName;
-                                }
-                                if (!brand && extractedData.data.brand) {
-                                    req.body.brand = extractedData.data.brand;
-                                }
-                                if (!category && extractedData.data.category) {
-                                    req.body.category = extractedData.data.category;
-                                }
-                                if (!originalPrice && extractedData.data.originalPrice) {
-                                    req.body.originalPrice = extractedData.data.originalPrice;
-                                }
-                                if (!currentPrice && extractedData.data.price) {
-                                    req.body.currentPrice = extractedData.data.price;
-                                }
-                                if (!storeName && extractedData.data.storeName) {
-                                    req.body.storeName = extractedData.data.storeName;
-                                }
-                                if (!tags && extractedData.data.tags) {
-                                    req.body.tags = extractedData.data.tags;
+                        if (ocrResult.success && ocrResult.data && ocrResult.data.text) {
+                            const raw = String(ocrResult.data.text).trim();
+                            if (raw.length > 0) {
+                                ocrAllChunks.push(
+                                    `--- Imagen ${fileIndex + 1}/${filesToProcess.length}${isTermsSlot ? ' · términos y condiciones' : ' · material promocional'} ---\n${raw}`
+                                );
+                                if (isTermsSlot) ocrTermsChunks.push(raw);
+                            }
+                            if (ocrResult.data.confidence != null) {
+                                lastOcrMeta.confidence = ocrResult.data.confidence;
+                            }
+                            if (ocrResult.provider) lastOcrMeta.provider = ocrResult.provider;
+
+                            const firstPromotionalOcr =
+                                promoFiles.length > 0 && fileIndex === 0 && !isTermsSlot;
+                            if (firstPromotionalOcr) {
+                                const extractedData = await ocrService.extractPromotionData(ocrResult);
+
+                                if (extractedData.success) {
+                                    if (!productName && extractedData.data.productName) {
+                                        req.body.productName = extractedData.data.productName;
+                                    }
+                                    if (!brand && extractedData.data.brand) {
+                                        req.body.brand = extractedData.data.brand;
+                                    }
+                                    if (!category && extractedData.data.category) {
+                                        req.body.category = extractedData.data.category;
+                                    }
+                                    if (!originalPrice && extractedData.data.originalPrice) {
+                                        req.body.originalPrice = extractedData.data.originalPrice;
+                                    }
+                                    if (!currentPrice && extractedData.data.price) {
+                                        req.body.currentPrice = extractedData.data.price;
+                                    }
+                                    if (!storeName && extractedData.data.storeName) {
+                                        req.body.storeName = extractedData.data.storeName;
+                                    }
+                                    if (!tags && extractedData.data.tags) {
+                                        req.body.tags = extractedData.data.tags;
+                                    }
                                 }
                             }
                         }
+                    } catch (ocrErr) {
+                        console.warn(`⚠️ OCR omitido o falló para ${file.originalname}:`, ocrErr.message);
                     }
 
                     // URL pública: única ruta para todas las imágenes de promociones
@@ -309,9 +335,9 @@ class PromotionController {
                         originalName: file.originalname,
                         filename: uniqueFilename,
                         path: localPath,
-                        url: publicUrl, // URL pública para acceder desde el frontend
-                        cloudinaryUrl: cloudinaryUrl, // Opcional, solo si Cloudinary está configurado
-                        cloudinaryPublicId: cloudinaryPublicId, // Opcional
+                        url: publicUrl,
+                        cloudinaryUrl: cloudinaryUrl,
+                        cloudinaryPublicId: cloudinaryPublicId,
                         uploadedAt: new Date(),
                         optimized: file.optimized || false,
                         optimizationStats: file.optimizationStats || null,
@@ -319,7 +345,8 @@ class PromotionController {
                         dimensions: optimizedImage ? {
                             width: optimizedImage.width,
                             height: optimizedImage.height
-                        } : null
+                        } : null,
+                        imageRole: isTermsSlot ? 'terms' : 'promotional'
                     });
 
                 } catch (error) {
@@ -328,6 +355,17 @@ class PromotionController {
                     // Continuar con otras imágenes
                     continue;
                 }
+            }
+
+            if (ocrAllChunks.length > 0) {
+                const termsJoined = ocrTermsChunks.join('\n\n---\n\n');
+                ocrData = {
+                    extractedText: ocrAllChunks.join('\n\n').slice(0, 120000),
+                    termsFromAttachments: termsJoined ? termsJoined.slice(0, 50000) : '',
+                    confidence: lastOcrMeta.confidence,
+                    ocrProvider: lastOcrMeta.provider,
+                    processedAt: new Date()
+                };
             }
             }
 
@@ -353,6 +391,8 @@ class PromotionController {
                     parsedSpecifications = {};
                 }
             }
+
+            const parsedChainLocations = parseChainLocations(req.body.chainLocations);
 
             const numOriginal = (originalPrice !== undefined && originalPrice !== '') ? parseFloat(originalPrice) : 0;
             const numCurrent = (currentPrice !== undefined && currentPrice !== '') ? parseFloat(currentPrice) : 0;
@@ -417,6 +457,11 @@ class PromotionController {
                     if (!Number.isFinite(r)) return 500;
                     return Math.min(50000, Math.max(50, r));
                 })(),
+                isChainStore: req.body.isChainStore === true || req.body.isChainStore === 'true',
+                chainBrandName: (req.body.chainBrandName && String(req.body.chainBrandName).trim())
+                    ? String(req.body.chainBrandName).trim()
+                    : '',
+                chainLocations: parsedChainLocations,
                 images: processedImages,
                 ocrData: ocrData || undefined,
                 tags: parsedTags,
@@ -425,6 +470,10 @@ class PromotionController {
                 termsAndConditions: (() => {
                     const provided = (termsAndConditions && String(termsAndConditions).trim()) ? String(termsAndConditions).trim() : '';
                     if (provided) return provided;
+                    const fromTermsImgs = ocrTermsChunks.length
+                        ? ocrTermsChunks.join('\n\n').trim().slice(0, 5000)
+                        : '';
+                    if (fromTermsImgs) return fromTermsImgs;
                     const isAmazonRedirect = (req.body.redirectInsteadOfQr === 'true' || req.body.redirectInsteadOfQr === true) && !(req.body.redirectToUrl && String(req.body.redirectToUrl).trim());
                     return isAmazonRedirect ? DEFAULT_TERMS_AMAZON : DEFAULT_TERMS_GENERIC;
                 })(),
@@ -451,6 +500,31 @@ class PromotionController {
                 },
                 ...optionalAttribution
             };
+
+            if (promotionData.isChainStore && parsedChainLocations.length > 0) {
+                const first = parsedChainLocations[0];
+                const hasMainCoords =
+                    promotionData.storeLocation &&
+                    promotionData.storeLocation.coordinates &&
+                    typeof promotionData.storeLocation.coordinates.latitude === 'number' &&
+                    Number.isFinite(promotionData.storeLocation.coordinates.latitude);
+                if (!hasMainCoords) {
+                    promotionData.storeLocation = {
+                        address: first.address || (promotionData.storeLocation && promotionData.storeLocation.address) || '',
+                        city: first.city || (promotionData.storeLocation && promotionData.storeLocation.city) || '',
+                        state: first.state || (promotionData.storeLocation && promotionData.storeLocation.state) || '',
+                        country: first.country || (promotionData.storeLocation && promotionData.storeLocation.country) || 'México',
+                        coordinates: {
+                            latitude: first.coordinates.latitude,
+                            longitude: first.coordinates.longitude
+                        }
+                    };
+                }
+                const brandLabel = promotionData.chainBrandName || promotionData.brand || '';
+                if (brandLabel && !(promotionData.storeName && String(promotionData.storeName).trim())) {
+                    promotionData.storeName = brandLabel;
+                }
+            }
 
             // Sanear límites del esquema Mongoose (evita save() rechazado sin mensaje claro)
             if (promotionData.title.length > 200) {
@@ -768,6 +842,14 @@ class PromotionController {
         try {
             const { id } = req.params;
 
+            const geoEnrichOpts = {};
+            const uLa = parseFloat(req.query.userLat);
+            const uLo = parseFloat(req.query.userLng);
+            if (Number.isFinite(uLa) && Number.isFinite(uLo)) {
+                geoEnrichOpts.userLatitude = uLa;
+                geoEnrichOpts.userLongitude = uLo;
+            }
+
             // Si el ID no es ObjectId (ej. sim-xxx de modo simulado), buscar en memoria o devolver 404
             if (!this.isValidObjectId(id)) {
                 if (global.simulatedPromotions) {
@@ -775,7 +857,7 @@ class PromotionController {
                     if (promo) {
                         return res.json({
                             success: true,
-                            data: enrichPromotionClientFields(promo),
+                            data: enrichPromotionClientFields(promo, geoEnrichOpts),
                             message: 'Promoción obtenida (modo simulado)'
                         });
                     }
@@ -793,7 +875,7 @@ class PromotionController {
                     if (promo) {
                         return res.json({
                             success: true,
-                            data: enrichPromotionClientFields(promo),
+                            data: enrichPromotionClientFields(promo, geoEnrichOpts),
                             message: 'Promoción obtenida (modo simulado)'
                         });
                     }
@@ -828,7 +910,7 @@ class PromotionController {
                 fxRateUsed: contractValues.fxRateUsed,
                 currencyDisplay: promoObj.currency || 'USD',
                 normalizedCurrency: contractValues.normalizedCurrency || 'USD'
-            });
+            }, geoEnrichOpts);
 
             res.json({
                 success: true,
@@ -947,14 +1029,18 @@ class PromotionController {
      */
     async analyzePromotionImage(req, res) {
         try {
-            const files = req.files;
-            if (!files || files.length === 0) {
+            const { promo: promoFiles, terms: termsFiles } = getPromotionUploadFileGroups(req);
+            const legacy = Array.isArray(req.files) ? req.files : null;
+            const promos = legacy && legacy.length ? legacy : promoFiles;
+            const terms = legacy && legacy.length ? [] : termsFiles;
+
+            if ((!promos || promos.length === 0) && (!terms || terms.length === 0)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Sube al menos una imagen para analizar'
+                    message: 'Sube al menos una imagen (campo images y/o termsImages)'
                 });
             }
-            const result = await analyzePromotionImages(files);
+            const result = await analyzePromotionImages(promos, terms);
             if (!result.success) {
                 return res.status(400).json({
                     success: false,
@@ -1036,7 +1122,8 @@ class PromotionController {
                 'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status',
                 'redirectInsteadOfQr', 'redirectToUrl',
                 'activateByGps', 'gpsRadiusMeters',
-                'brandId', 'shopId', 'externalProductId', 'gtmTag', 'campaignId', 'source', 'medium'
+                'brandId', 'shopId', 'externalProductId', 'gtmTag', 'campaignId', 'source', 'medium',
+                'isChainStore', 'chainBrandName', 'chainLocations'
             ];
 
             const filteredData = {};
@@ -1054,10 +1141,16 @@ class PromotionController {
                             console.warn(`⚠️ Error parseando ${field}:`, error.message);
                             filteredData[field] = updateData[field];
                         }
+                    } else if (field === 'isChainStore') {
+                        const v = updateData[field];
+                        if (v === false || v === 'false') filteredData[field] = false;
+                        else filteredData[field] = v === true || v === 'true';
                     } else if (field === 'redirectInsteadOfQr' || field === 'activateByGps') {
                         filteredData[field] = updateData[field] === true || updateData[field] === 'true';
-                    } else if (field === 'redirectToUrl') {
+                    } else if (field === 'chainBrandName' || field === 'redirectToUrl') {
                         filteredData[field] = (updateData[field] && String(updateData[field]).trim()) ? String(updateData[field]).trim() : '';
+                    } else if (field === 'chainLocations') {
+                        filteredData[field] = parseChainLocations(updateData[field]);
                     } else if (field === 'gpsRadiusMeters') {
                         const r = parseInt(updateData[field], 10);
                         filteredData[field] = Number.isFinite(r) ? Math.min(50000, Math.max(50, r)) : 500;

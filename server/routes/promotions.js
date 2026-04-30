@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const promotionController = require('../controllers/promotionController');
-const { memoryUpload } = require('../middleware/upload');
+const { promotionImageUpload } = require('../middleware/upload');
 const auth = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 
@@ -91,20 +91,20 @@ router.get('/:id', (req, res) => promotionController.getPromotionById(req, res))
 
 // POST /api/promotions/analyze-image - Analizar imágenes con Gemini (extraer datos + términos)
 router.post('/analyze-image',
-    memoryUpload.array('images', 5),
+    promotionImageUpload,
     (req, res) => promotionController.analyzePromotionImage(req, res)
 );
 
 // POST /api/promotions - Crear nueva promoción
 router.post('/', 
     createPromotionLimiter,
-    memoryUpload.array('images', 5), // máximo 5 imágenes
+    promotionImageUpload,
     (req, res) => promotionController.createPromotion(req, res)
 );
 
 // PUT /api/promotions/:id - Actualizar promoción
 router.put('/:id', 
-    memoryUpload.array('images', 5),
+    promotionImageUpload,
     (req, res) => promotionController.updatePromotion(req, res)
 );
 
