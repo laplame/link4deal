@@ -1,4 +1,5 @@
 const { findNearestBranch } = require('./geoDistance');
+const { findPresetMatchingPromotion } = require('./chainLocationPresets');
 
 function resolveBranchMapsUrl(branch) {
     if (!branch || typeof branch !== 'object') return '';
@@ -44,6 +45,30 @@ function enrichPromotionClientFields(promo, opts = {}) {
     }
     if (o.storeLocation && o.storeLocation.country) {
         o.storeCountry = o.storeLocation.country;
+    }
+
+    /**
+     * Una misma marca en catálogo (chainLocationPresets) incluye todas las geocercas;
+     * unificamos chainLocations en respuestas API para GPS / sucursal más cercana / mapas.
+     */
+    const presetForBrand = findPresetMatchingPromotion(o);
+    if (presetForBrand && presetForBrand.chainLocations.length > 0) {
+        o.chainLocations = presetForBrand.chainLocations.map((loc) => ({
+            branchName: loc.branchName,
+            address: loc.address,
+            city: loc.city,
+            state: loc.state,
+            country: loc.country,
+            coordinates: {
+                latitude: loc.coordinates.latitude,
+                longitude: loc.coordinates.longitude
+            },
+            mapsUrl: loc.mapsUrl
+        }));
+        if (o.chainLocations.length > 1) {
+            o.isChainStore = true;
+        }
+        o.chainBrandName = presetForBrand.chainBrandName || o.chainBrandName;
     }
 
     if (o.isChainStore && Array.isArray(o.chainLocations) && o.chainLocations.length > 0) {

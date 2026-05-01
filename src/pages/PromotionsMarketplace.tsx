@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  TrendingUp, 
-  Clock, 
-  Users, 
-  DollarSign, 
-  Target, 
+import { Link } from 'react-router-dom';
+import {
+  Search,
+  Filter,
+  TrendingUp,
+  Clock,
+  Users,
+  DollarSign,
+  Target,
   BarChart3,
   ArrowUp,
   ArrowDown,
@@ -22,7 +23,9 @@ import {
   Award,
   TrendingDown,
   TrendingUp as TrendingUpIcon,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  Store
 } from 'lucide-react';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
 import { getPromotionImageUrl } from '../utils/promotionImage';
@@ -84,6 +87,13 @@ interface FilterState {
   activationType: 'all' | 'gps' | 'standard';
 }
 
+type ChainPresetMeta = {
+  id: string;
+  label: string;
+  chainBrandName: string;
+  branchCount: number;
+};
+
 export default function PromotionsMarketplace() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
@@ -103,6 +113,25 @@ export default function PromotionsMarketplace() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [apiMessage, setApiMessage] = useState<string | null>(null);
+  const [chainPresetList, setChainPresetList] = useState<ChainPresetMeta[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/geo/chain-presets');
+        const data = await res.json();
+        if (!cancelled && data.success && Array.isArray(data.presets)) {
+          setChainPresetList(data.presets);
+        }
+      } catch {
+        /* catálogo opcional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Cargar promociones desde la API
   useEffect(() => {
@@ -328,7 +357,15 @@ export default function PromotionsMarketplace() {
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-4">Marketplace de Promociones</h1>
             <p className="text-xl text-purple-100 mb-6">
-              Descubre las mejores promociones de marcas y aplica para colaboraciones exclusivas
+              Descubre promociones de marcas, aplica para colaboraciones y explora el directorio de{' '}
+              <Link to="/brands" className="underline decoration-white/60 hover:text-white font-medium">
+                marcas y negocios
+              </Link>{' '}
+              o{' '}
+              <Link to="/tiendas" className="underline decoration-white/60 hover:text-white font-medium">
+                tiendas BizneAI
+              </Link>
+              .
             </p>
             <div className="flex justify-center space-x-4">
               <div className="bg-white/20 rounded-lg p-3">
@@ -347,6 +384,63 @@ export default function PromotionsMarketplace() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Directorio: marcas registradas y tiendas BizneAI */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <Link
+            to="/brands"
+            className="group flex items-center gap-4 rounded-xl border border-violet-200 bg-white p-5 shadow-sm hover:border-violet-400 hover:shadow-md transition-all"
+          >
+            <div className="rounded-xl bg-violet-100 p-3.5 text-violet-700 group-hover:bg-violet-200 transition-colors">
+              <Building2 className="h-7 w-7" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900">Marcas y negocios</p>
+              <p className="text-sm text-gray-600 mt-0.5">
+                Directorio DameCodigo: marcas registradas y tiendas de la red BizneAI.
+              </p>
+            </div>
+          </Link>
+          <Link
+            to="/tiendas"
+            className="group flex items-center gap-4 rounded-xl border border-indigo-200 bg-white p-5 shadow-sm hover:border-indigo-400 hover:shadow-md transition-all"
+          >
+            <div className="rounded-xl bg-indigo-100 p-3.5 text-indigo-700 group-hover:bg-indigo-200 transition-colors">
+              <Store className="h-7 w-7" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900">Tiendas BizneAI</p>
+              <p className="text-sm text-gray-600 mt-0.5">
+                Tiendas físicas conectadas; campañas y POS enlazados a promociones.
+              </p>
+            </div>
+          </Link>
+        </div>
+
+        {chainPresetList.length > 0 && (
+          <div className="mb-8 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50/90 to-orange-50/50 px-4 py-4">
+            <p className="text-sm font-medium text-amber-950 mb-1">Cadenas con catálogo de sucursales</p>
+            <p className="text-xs text-amber-900/80 mb-3">
+              Pulsa una cadena para filtrar ofertas por nombre de marca (coincide con el campo marca de la promoción).
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {chainPresetList.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSearchTerm(p.chainBrandName)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white/90 px-3 py-1.5 text-sm font-medium text-amber-950 shadow-sm hover:bg-amber-100/80 hover:border-amber-300 transition-colors"
+                >
+                  <MapPin className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                  <span>{p.label}</span>
+                  {p.branchCount > 0 && (
+                    <span className="text-xs font-normal text-amber-800/70">({p.branchCount})</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Barra de búsqueda y filtros */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex flex-col lg:flex-row gap-4">

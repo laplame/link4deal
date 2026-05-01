@@ -1,0 +1,337 @@
+{
+  "presets": [
+    {
+      "id": "sams",
+      "label": "Sam's Club",
+      "chainBrandName": "Sam's Club",
+      "chainLocations": [
+        {
+          "branchName": "Sam's Club Jacarandas",
+          "address": "Paseo de las Jacarandas 375, Ciudad de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4643197,
+            "longitude": -99.1565095
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4643197%2C-99.1565095"
+        },
+        {
+          "branchName": "Sam's Club",
+          "address": "Av. Canal de Tezontle 1520, Ciudad de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3832832,
+            "longitude": -99.0818604
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3832832%2C-99.0818604"
+        },
+        {
+          "branchName": "Sam's Club Río de los Remedios",
+          "address": "Tlalnepantla de Baz, Estado de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5195815,
+            "longitude": -99.1154478
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5195815%2C-99.1154478"
+        },
+        {
+          "branchName": "Sam's Club",
+          "address": "Prolongación Paseo de la Reforma 400, Ciudad de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3770935,
+            "longitude": -99.2548971
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3770935%2C-99.2548971"
+        },
+        {
+          "branchName": "Sam's Club",
+          "address": "Ecatepec de Morelos, Estado de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5809159,
+            "longitude": -99.0205993
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5809159%2C-99.0205993"
+        },
+        {
+          "branchName": "Sam's",
+          "address": "Av. El Rosario 1025, Azcapotzalco, Ciudad de México",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5025492,
+            "longitude": -99.203498
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5025492%2C-99.203498"
+        }
+      ]
+    },
+    {
+      "id": "comfort",
+      "label": "Comfort Jeans",
+      "chainBrandName": "Comfort Jeans",
+      "matchNames": [
+        "Comfort",
+        "Comfort Jeans",
+        "COMFORTJEANS",
+        "comfortjeans"
+      ],
+      "chainLocations": [
+        {
+          "branchName": "comfortjeans Pino Suarez 1",
+          "address": "José María Pino Suárez No. 43-A",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3961144,
+            "longitude": -99.1981474
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3961144%2C-99.1981474"
+        },
+        {
+          "branchName": "Comfort Jeans",
+          "address": "José María Izazaga 166-Piso 2",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4260248,
+            "longitude": -99.131231
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4260248%2C-99.131231"
+        },
+        {
+          "branchName": "Comfort Jeans Rodríguez Puebla 2",
+          "address": "Rodríguez Puebla No. 11 Local \"G\" Colonia Centro, delegación Cuauhtémoc C.P. 06000",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4374587,
+            "longitude": -99.1272248
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4374587%2C-99.1272248"
+        },
+        {
+          "branchName": "Kid´S OK",
+          "address": "José María Izazaga 160",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4260308,
+            "longitude": -99.1314215
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4260308%2C-99.1314215"
+        },
+        {
+          "branchName": "COMFORTJEANS MIGUEL ALEMAN",
+          "address": "Miguel Alemán No.14 Loc. L Col. Centro Del. Cuauhtemoc",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4367573,
+            "longitude": -99.1254013
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4367573%2C-99.1254013"
+        },
+        {
+          "branchName": "comfortjeans Izazaga 2",
+          "address": "José María Izazaga 111-Local A",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4258633,
+            "longitude": -99.1318042
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4258633%2C-99.1318042"
+        },
+        {
+          "branchName": "Comfort Jeans Parque Tezontle",
+          "address": "Av. Canal de Tezontle 1512",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3840797,
+            "longitude": -99.082707
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3840797%2C-99.082707"
+        },
+        {
+          "branchName": "Comfort Kids",
+          "address": "José María Pino Suárez 66",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3961144,
+            "longitude": -99.1981474
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3961144%2C-99.1981474"
+        },
+        {
+          "branchName": "Comfort Jeans Parque Las Antenas",
+          "address": "Mexico City",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.3207722,
+            "longitude": -99.1514678
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.3207722%2C-99.1514678"
+        },
+        {
+          "branchName": "Comfort Jeans",
+          "address": "Tlalnepantla de Baz, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5464903,
+            "longitude": -99.1899352
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5464903%2C-99.1899352"
+        },
+        {
+          "branchName": "COMFORTJEANS PLAZA CHIMALHUACAN",
+          "address": "Chimalhuacán, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4177511,
+            "longitude": -98.9575169
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4177511%2C-98.9575169"
+        },
+        {
+          "branchName": "Comfort Kids Las Américas",
+          "address": "Ecatepec de Morelos, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5994083,
+            "longitude": -99.0487281
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5994083%2C-99.0487281"
+        },
+        {
+          "branchName": "Comfort Jeans Plaza Cd. Jardín",
+          "address": "Ciudad Nezahualcóyotl, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4079028,
+            "longitude": -99.0181547
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4079028%2C-99.0181547"
+        },
+        {
+          "branchName": "Comfort Kids",
+          "address": "Gral. Miguel Alemán 38",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4366911,
+            "longitude": -99.1241722
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4366911%2C-99.1241722"
+        },
+        {
+          "branchName": "Outlet de Pantalones",
+          "address": "José María Pino Suárez 56",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4270856,
+            "longitude": -99.1325325
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4270856%2C-99.1325325"
+        },
+        {
+          "branchName": "Comfort Jeans • Sendero Ixtapaluca",
+          "address": "Ixtapaluca, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.32929,
+            "longitude": -98.8082745
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.32929%2C-98.8082745"
+        },
+        {
+          "branchName": "COMFORTJEANS",
+          "address": "Cuautitlán, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.7055182,
+            "longitude": -99.1666257
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.7055182%2C-99.1666257"
+        },
+        {
+          "branchName": "Comfort Jeans Puerta Texcoco",
+          "address": "Santiago Cuautlalpan, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4298988,
+            "longitude": -98.895338
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4298988%2C-98.895338"
+        },
+        {
+          "branchName": "Lee Outlet Izazaga",
+          "address": "José María Izazaga 160",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.4260308,
+            "longitude": -99.1314215
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.4260308%2C-99.1314215"
+        },
+        {
+          "branchName": "Comfort Jeans",
+          "address": "Tlalnepantla de Baz, State of Mexico",
+          "city": "",
+          "state": "",
+          "country": "México",
+          "coordinates": {
+            "latitude": 19.5464903,
+            "longitude": -99.1899352
+          },
+          "mapsUrl": "https://www.google.com/maps/search/?api=1&query=19.5464903%2C-99.1899352"
+        }
+      ]
+    }
+  ],
+  "_comment": "Comfort: pegado UX Comfort Jeans + server/scripts/geocodeComfortPreset.js. Sam: geocodePresetSeed.js."
+}

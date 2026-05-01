@@ -22,6 +22,7 @@ import CategoryPage from './pages/CategoryPage';
 import CategoriesPage from './pages/CategoriesPage';
 import ReferralSystemPage from './pages/ReferralSystemPage';
 import CreatePromotionWizard from './pages/CreatePromotionWizard';
+import ChainLocationsBulkPage from './pages/ChainLocationsBulkPage';
 import QuickPromotionPage from './pages/QuickPromotionPage';
 import PromotionsMarketplace from './pages/PromotionsMarketplace';
 import { BrandPage } from './pages/BrandPage';
@@ -135,6 +136,7 @@ function App() {
                   <Route path="/category/:categorySlug" element={<CategoryPage />} />
                   <Route path="/referral-system" element={<ReferralSystemPage />} />
                   <Route path="/create-promotion" element={<CreatePromotionWizard />} />
+                  <Route path="/importar-sucursales" element={<ChainLocationsBulkPage />} />
                   <Route path="/quick-promotion" element={<QuickPromotionPage />} />
                   <Route path="/add-promotion" element={<QuickPromotionPage />} />
                   <Route path="/marketplace" element={<PromotionsMarketplace />} />

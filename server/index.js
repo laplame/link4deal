@@ -24,6 +24,7 @@ const analyzeProfileRoutes = require('./routes/analyzeProfile');
 const brandRoutes = require('./routes/brands');
 const kycWhatsappRoutes = require('./routes/kycWhatsapp');
 const loyaltyRoutes = require('./routes/loyalty');
+const geoToolsRoutes = require('./routes/geoTools');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -256,6 +257,9 @@ app.use('/api/app-downloads', appDownloadsRoutes);
 
 const bizneShopsRoutes = require('./routes/bizneShops');
 app.use('/api/bizne-shops', bizneShopsRoutes);
+
+// Geocodificación masiva (parse de pegado + Nominatim): límite estricto por IP
+app.use('/api/geo', strictLimiter, geoToolsRoutes);
 
 // ===== MANEJO DE ERRORES =====
 

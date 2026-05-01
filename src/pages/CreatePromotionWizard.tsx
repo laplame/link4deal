@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
     ArrowLeft, 
     ArrowRight, 
@@ -17,7 +17,8 @@ import {
     Smartphone,
     Globe,
     Zap,
-    Sparkles
+    Sparkles,
+    Loader2
 } from 'lucide-react';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 import PromotionOptionalAttributionSection, {
@@ -99,6 +100,13 @@ interface PromotionData {
     optionalAttribution: PromotionOptionalAttribution;
 }
 
+type ChainPresetMeta = {
+    id: string;
+    label: string;
+    chainBrandName: string;
+    branchCount: number;
+};
+
 const categories = [
     { name: "Electrónica", subcategories: ["Smartphones", "Laptops", "Auriculares", "Smartwatches", "Tablets"] },
     { name: "Moda", subcategories: ["Ropa", "Zapatos", "Accesorios", "Bolsos", "Joyería"] },
@@ -125,6 +133,7 @@ const steps = [
 
 export default function CreatePromotionWizard() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [currentStep, setCurrentStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -191,6 +200,81 @@ export default function CreatePromotionWizard() {
         },
         optionalAttribution: emptyPromotionOptionalAttribution()
     });
+
+    useEffect(() => {
+        if (searchParams.get('importChain') !== '1') return;
+        const raw = sessionStorage.getItem('link4deal_chain_import');
+        if (!raw) return;
+        try {
+            const data = JSON.parse(raw) as {
+                chainBrandName?: string;
+                chainLocations?: Array<{
+                    branchName?: string;
+                    address?: string;
+                    city?: string;
+                    coordinates?: { latitude?: number; longitude?: number };
+                    mapsUrl?: string;
+                }>;
+            };
+            const locs = Array.isArray(data.chainLocations) ? data.chainLocations : [];
+            const branches = locs.map((loc, i) => ({
+                key: `imp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+                branchName: loc.branchName != null ? String(loc.branchName) : '',
+                address: loc.address != null ? String(loc.address) : '',
+                city: loc.city != null ? String(loc.city) : '',
+                latitude:
+                    loc.coordinates?.latitude != null && Number.isFinite(loc.coordinates.latitude)
+                        ? String(loc.coordinates.latitude)
+                        : '',
+                longitude:
+                    loc.coordinates?.longitude != null && Number.isFinite(loc.coordinates.longitude)
+                        ? String(loc.coordinates.longitude)
+                        : '',
+                mapsUrl: loc.mapsUrl != null ? String(loc.mapsUrl) : ''
+            }));
+            if (branches.length === 0) return;
+            setPromotionData((prev) => ({
+                ...prev,
+                targeting: {
+                    ...prev.targeting,
+                    isChainStore: true,
+                    chainBrandName:
+                        (data.chainBrandName != null && String(data.chainBrandName).trim()) ||
+                        prev.targeting.chainBrandName,
+                    chainBranches: branches
+                }
+            }));
+            sessionStorage.removeItem('link4deal_chain_import');
+            setSearchParams({}, { replace: true });
+            const targetingIdx = steps.findIndex((s) => s.id === 'targeting');
+            if (targetingIdx >= 0) setCurrentStep(targetingIdx);
+        } catch {
+            /* ignore */
+        }
+    }, [searchParams, setSearchParams]);
+
+    const [chainPresets, setChainPresets] = useState<ChainPresetMeta[]>([]);
+    const [chainPresetId, setChainPresetId] = useState('');
+    const [chainPresetApplying, setChainPresetApplying] = useState(false);
+    const [chainPresetLoadError, setChainPresetLoadError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/geo/chain-presets');
+                const data = await res.json();
+                if (!cancelled && data.success && Array.isArray(data.presets)) {
+                    setChainPresets(data.presets);
+                }
+            } catch {
+                /* ignore */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
     const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
@@ -611,14 +695,17 @@ export default function CreatePromotionWizard() {
                     <input
                         type="checkbox"
                         checked={promotionData.targeting.isChainStore}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                            const on = e.target.checked;
+                            setChainPresetId('');
+                            setChainPresetLoadError(null);
                             updatePromotionData('targeting', {
-                                isChainStore: e.target.checked,
-                                ...(e.target.checked
+                                isChainStore: on,
+                                ...(on
                                     ? {}
                                     : { chainBrandName: '', chainBranches: [] })
-                            })
-                        }
+                            });
+                        }}
                         className="mt-1 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                     />
                     <span>
@@ -634,6 +721,119 @@ export default function CreatePromotionWizard() {
 
                 {promotionData.targeting.isChainStore && (
                     <div className="space-y-4 pl-1">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Catálogo de sucursales
+                            </label>
+                            <p className="text-xs text-gray-600 mb-2">
+                                Carga coordenadas guardadas para cadenas conocidas (Sam&apos;s, Comfort, …).{' '}
+                                <strong>Sustituye</strong> la tabla de sucursales actual. Puedes ampliar el catálogo en{' '}
+                                <code className="text-[11px] bg-white/80 px-1 rounded">server/data/chainLocationPresets.json</code>
+                                .
+                            </p>
+                            <div className="relative">
+                                <select
+                                    value={chainPresetId}
+                                    disabled={chainPresetApplying || chainPresets.length === 0}
+                                    onChange={async (e) => {
+                                        const id = e.target.value;
+                                        setChainPresetId(id);
+                                        setChainPresetLoadError(null);
+                                        if (!id) return;
+                                        setChainPresetApplying(true);
+                                        try {
+                                            const res = await fetch(
+                                                `/api/geo/chain-presets/${encodeURIComponent(id)}`
+                                            );
+                                            const data = await res.json();
+                                            if (!data.success || !data.preset) {
+                                                setChainPresetLoadError(
+                                                    data.message || 'No se pudo cargar el catálogo'
+                                                );
+                                                return;
+                                            }
+                                            const preset = data.preset as {
+                                                chainBrandName?: string;
+                                                chainLocations?: Array<{
+                                                    branchName?: string;
+                                                    address?: string;
+                                                    city?: string;
+                                                    coordinates?: { latitude?: number; longitude?: number };
+                                                    mapsUrl?: string;
+                                                }>;
+                                            };
+                                            const locs = Array.isArray(preset.chainLocations)
+                                                ? preset.chainLocations
+                                                : [];
+                                            const branches = locs.map((loc, i) => ({
+                                                key: `cat-${id}-${i}-${Math.random().toString(36).slice(2, 9)}`,
+                                                branchName:
+                                                    loc.branchName != null ? String(loc.branchName) : '',
+                                                address: loc.address != null ? String(loc.address) : '',
+                                                city: loc.city != null ? String(loc.city) : '',
+                                                latitude:
+                                                    loc.coordinates?.latitude != null &&
+                                                    Number.isFinite(loc.coordinates.latitude)
+                                                        ? String(loc.coordinates.latitude)
+                                                        : '',
+                                                longitude:
+                                                    loc.coordinates?.longitude != null &&
+                                                    Number.isFinite(loc.coordinates.longitude)
+                                                        ? String(loc.coordinates.longitude)
+                                                        : '',
+                                                mapsUrl: loc.mapsUrl != null ? String(loc.mapsUrl) : ''
+                                            }));
+                                            setPromotionData((prev) => ({
+                                                ...prev,
+                                                targeting: {
+                                                    ...prev.targeting,
+                                                    isChainStore: true,
+                                                    chainBrandName:
+                                                        (preset.chainBrandName != null &&
+                                                            String(preset.chainBrandName).trim()) ||
+                                                        prev.targeting.chainBrandName,
+                                                    chainBranches: branches
+                                                }
+                                            }));
+                                            if (branches.length === 0) {
+                                                setChainPresetLoadError(
+                                                    'Este catálogo aún no tiene sucursales con coordenadas. Edita chainLocationPresets.json o usa Importar desde listado.'
+                                                );
+                                            }
+                                        } catch {
+                                            setChainPresetLoadError('Error de red al cargar el catálogo');
+                                        } finally {
+                                            setChainPresetApplying(false);
+                                        }
+                                    }}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white text-sm appearance-none"
+                                >
+                                    <option value="">
+                                        — Elegir tipo de tienda / cadena ({chainPresets.length} en catálogo) —
+                                    </option>
+                                    {chainPresets.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.label} ({p.branchCount} sucursales)
+                                        </option>
+                                    ))}
+                                </select>
+                                {chainPresetApplying && (
+                                    <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-amber-600 pointer-events-none" />
+                                )}
+                            </div>
+                            {chainPresets.length === 0 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    No hay entradas en el catálogo del servidor. Asegúrate de desplegar{' '}
+                                    <code className="text-[11px]">server/data/chainLocationPresets.json</code>.
+                                </p>
+                            )}
+                            {chainPresetLoadError && (
+                                <p className="text-sm text-amber-900 mt-2 bg-amber-100/80 border border-amber-200 rounded-lg px-3 py-2">
+                                    {chainPresetLoadError}
+                                </p>
+                            )}
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Nombre de la cadena (ej. Starbucks)
@@ -653,28 +853,36 @@ export default function CreatePromotionWizard() {
 
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-sm font-medium text-gray-800">Sucursales</span>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    updatePromotionData('targeting', {
-                                        chainBranches: [
-                                            ...promotionData.targeting.chainBranches,
-                                            {
-                                                key: `br-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                                                branchName: '',
-                                                address: '',
-                                                city: '',
-                                                latitude: '',
-                                                longitude: '',
-                                                mapsUrl: ''
-                                            }
-                                        ]
-                                    })
-                                }
-                                className="text-sm px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-                            >
-                                + Agregar sucursal
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                                <Link
+                                    to="/importar-sucursales?returnTo=/create-promotion"
+                                    className="text-sm px-3 py-1.5 border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-100/80"
+                                >
+                                    Importar desde listado
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        updatePromotionData('targeting', {
+                                            chainBranches: [
+                                                ...promotionData.targeting.chainBranches,
+                                                {
+                                                    key: `br-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                                    branchName: '',
+                                                    address: '',
+                                                    city: '',
+                                                    latitude: '',
+                                                    longitude: '',
+                                                    mapsUrl: ''
+                                                }
+                                            ]
+                                        })
+                                    }
+                                    className="text-sm px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                                >
+                                    + Agregar sucursal
+                                </button>
+                            </div>
                         </div>
 
                         {promotionData.targeting.chainBranches.length === 0 ? (

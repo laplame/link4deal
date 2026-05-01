@@ -1020,9 +1020,33 @@ export default function LandingPage() {
                     </div>
                 ) : (
                     <section id="ofertas">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-semibold text-gray-900">Promociones Activas</h3>
-                            <span className="text-sm text-gray-500">{products.length} ofertas desde la API</span>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+                            <div>
+                                <h3 className="text-xl font-semibold text-gray-900">Promociones activas</h3>
+                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                    <Link
+                                        to="/marketplace"
+                                        className="text-purple-600 hover:text-purple-800 font-medium"
+                                    >
+                                        Marketplace de ofertas
+                                    </Link>
+                                    <span className="text-gray-300 hidden sm:inline" aria-hidden>
+                                        ·
+                                    </span>
+                                    <Link to="/brands" className="text-violet-600 hover:text-violet-800">
+                                        Marcas y negocios
+                                    </Link>
+                                    <span className="text-gray-300 hidden sm:inline" aria-hidden>
+                                        ·
+                                    </span>
+                                    <Link to="/tiendas" className="text-indigo-600 hover:text-indigo-800">
+                                        Tiendas BizneAI
+                                    </Link>
+                                </div>
+                            </div>
+                            <span className="text-sm text-gray-500 shrink-0">
+                                {products.length} ofertas desde la API
+                            </span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {products.length > 0 ? (

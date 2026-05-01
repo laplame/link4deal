@@ -21,6 +21,7 @@ const pathTitles: Record<string, string> = {
   '/referral-system': 'Referidos',
   '/quick-promotion': 'Crear oferta',
   '/create-promotion': 'Crear promoción',
+  '/importar-sucursales': 'Importar sucursales',
   '/admin': 'Admin'
 };
 
