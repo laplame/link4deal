@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, 
@@ -14,8 +14,11 @@ import {
     Sparkles,
     QrCode,
     ExternalLink,
-    Smartphone
+    Smartphone,
+    Plus,
+    Trash2
 } from 'lucide-react';
+import { brands as catalogBrands } from '../data/brands';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 import PromotionOptionalAttributionSection, {
     emptyPromotionOptionalAttribution,
@@ -24,6 +27,28 @@ import PromotionOptionalAttributionSection, {
 import type { BizneShop } from '../components/BizneShopCard';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
+
+const BRAND_CUSTOM = '__custom__';
+
+interface RedemptionLocationRow {
+    branchName: string;
+    address: string;
+    city: string;
+    state: string;
+    latitude: string;
+    longitude: string;
+    mapsUrl: string;
+}
+
+const emptyRedemptionRow = (): RedemptionLocationRow => ({
+    branchName: '',
+    address: '',
+    city: '',
+    state: '',
+    latitude: '',
+    longitude: '',
+    mapsUrl: '',
+});
 
 interface QuickPromotionData {
     title: string;
@@ -48,6 +73,8 @@ interface QuickPromotionData {
     storeLatitude: string;
     storeLongitude: string;
     optionalAttribution: PromotionOptionalAttribution;
+    /** Sucursales / puntos donde se puede canjear (se envían como chainLocations). */
+    redemptionLocations: RedemptionLocationRow[];
 }
 
 const OFFER_TYPES: { value: OfferType; label: string; description: string }[] = [
@@ -169,7 +196,8 @@ export default function QuickPromotionPage() {
         gpsRadiusMeters: 500,
         storeLatitude: '',
         storeLongitude: '',
-        optionalAttribution: emptyPromotionOptionalAttribution()
+        optionalAttribution: emptyPromotionOptionalAttribution(),
+        redemptionLocations: []
     });
 
     const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
@@ -192,6 +220,15 @@ export default function QuickPromotionPage() {
     const [customRedirectUrl, setCustomRedirectUrl] = useState('');
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
     const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
+
+    const catalogBrandNames = useMemo(
+        () => [...new Set(catalogBrands.map((b) => b.name))].sort((a, b) => a.localeCompare(b, 'es')),
+        []
+    );
+
+    const brandSelectValue = catalogBrandNames.includes(formData.brand.trim())
+        ? formData.brand.trim()
+        : BRAND_CUSTOM;
 
     const fillStoreCoordsFromDevice = () => {
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -219,6 +256,29 @@ export default function QuickPromotionPage() {
             },
             { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
         );
+    };
+
+    const addRedemptionRow = () => {
+        setFormData((prev) => ({
+            ...prev,
+            redemptionLocations: [...prev.redemptionLocations, emptyRedemptionRow()]
+        }));
+    };
+
+    const updateRedemptionRow = (index: number, field: keyof RedemptionLocationRow, value: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            redemptionLocations: prev.redemptionLocations.map((row, i) =>
+                i === index ? { ...row, [field]: value } : row
+            )
+        }));
+    };
+
+    const removeRedemptionRow = (index: number) => {
+        setFormData((prev) => ({
+            ...prev,
+            redemptionLocations: prev.redemptionLocations.filter((_, i) => i !== index)
+        }));
     };
 
     const loadTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
@@ -461,6 +521,10 @@ export default function QuickPromotionPage() {
             setSubmitError('El precio con oferta no puede ser mayor al precio original');
             return;
         }
+        if (!formData.brand.trim()) {
+            setSubmitError('Indica la marca: elige una de la lista o escribe el nombre manualmente.');
+            return;
+        }
         if (promotionType === 'quick-promotion' && redirectDestination === 'custom' && !customRedirectUrl.trim()) {
             setSubmitError('Para quick promotion con URL personalizada debes indicar la URL de compra.');
             return;
@@ -505,6 +569,32 @@ export default function QuickPromotionPage() {
             }
             if (formData.storeLongitude.trim()) {
                 formDataToSend.append('storeLongitude', formData.storeLongitude.trim());
+            }
+            const chainPayload = formData.redemptionLocations
+                .map((row) => ({
+                    branchName: row.branchName.trim(),
+                    address: row.address.trim(),
+                    city: row.city.trim(),
+                    state: row.state.trim(),
+                    country: 'México',
+                    latitude: row.latitude.trim(),
+                    longitude: row.longitude.trim(),
+                    mapsUrl: row.mapsUrl.trim()
+                }))
+                .filter(
+                    (row) =>
+                        row.branchName ||
+                        row.address ||
+                        row.city ||
+                        row.state ||
+                        (row.latitude && row.longitude)
+                );
+            if (chainPayload.length > 0) {
+                formDataToSend.append('chainLocations', JSON.stringify(chainPayload));
+                formDataToSend.append('isChainStore', 'true');
+                if (formData.brand.trim()) {
+                    formDataToSend.append('chainBrandName', formData.brand.trim());
+                }
             }
             const o = formData.optionalAttribution;
             ['brandId', 'shopId', 'gtmTag', 'campaignId', 'source', 'medium'].forEach((k) => {
@@ -888,18 +978,66 @@ export default function QuickPromotionPage() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-300">
                                     Marca *
                                 </label>
-                                <input
-                                    type="text"
-                                    value={formData.brand}
-                                    onChange={(e) => handleInputChange('brand', e.target.value)}
+                                <select
+                                    value={brandSelectValue}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === BRAND_CUSTOM) {
+                                            handleInputChange('brand', '');
+                                        } else {
+                                            handleInputChange('brand', v);
+                                        }
+                                    }}
                                     className={fieldInput}
-                                    placeholder="Ej: Apple, Nike, Samsung"
-                                    required
-                                />
+                                >
+                                    {catalogBrandNames.map((name) => (
+                                        <option key={name} value={name}>
+                                            {name}
+                                        </option>
+                                    ))}
+                                    <option value={BRAND_CUSTOM}>Otra marca / no está en la lista</option>
+                                </select>
+                                {brandSelectValue === BRAND_CUSTOM && (
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-400 mb-1">
+                Nombre de marca (texto libre)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.brand}
+                                            onChange={(e) => handleInputChange('brand', e.target.value)}
+                                            className={fieldInput}
+                                            placeholder="Ej: tu marca o comercio"
+                                            required
+                                        />
+                                    </div>
+                                )}
+                                <div className="rounded-lg border border-cyan-500/25 bg-cyan-950/20 px-3 py-2.5 text-xs text-cyan-100/95 leading-relaxed">
+                                    <Smartphone className="inline h-3.5 w-3.5 mr-1 align-text-bottom text-cyan-300 shrink-0" />
+                                    Si tu marca no aparece en la lista, descarga la app{' '}
+                                    <a
+                                        href="https://www.bizneai.com"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-medium text-cyan-300 underline hover:text-cyan-200"
+                                    >
+                                        BizneAI
+                                    </a>{' '}
+                                    en{' '}
+                                    <a
+                                        href="https://www.bizneai.com"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-mono text-cyan-200/90 hover:text-cyan-100"
+                                    >
+                                        www.bizneai.com
+                                    </a>{' '}
+                                    para dar de alta tu marca. Mientras tanto puedes escribir el nombre manualmente arriba.
+                                </div>
                             </div>
 
                             <div>
@@ -919,6 +1057,123 @@ export default function QuickPromotionPage() {
                                     ))}
                                 </select>
                             </div>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 bg-gray-950/35 p-4 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <MapPin className="h-5 w-5 text-amber-400 shrink-0" />
+                                <h3 className="text-lg font-semibold text-white">Localizaciones para redimir</h3>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                Agrega todas las tiendas o sucursales donde se puede canjear el cupón. Dirección y ciudad bastan; latitud y longitud son opcionales (útiles junto con activación GPS).
+                            </p>
+                            {formData.redemptionLocations.length === 0 && (
+                                <p className="text-xs text-gray-500">Sin filas aún — pulsa «Añadir localización».</p>
+                            )}
+                            <div className="space-y-4">
+                                {formData.redemptionLocations.map((row, index) => (
+                                    <div
+                                        key={index}
+                                        className="rounded-lg border border-white/10 bg-gray-900/50 p-4 space-y-3"
+                                    >
+                                        <div className="flex justify-between items-start gap-2">
+                                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                                Punto {index + 1}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRedemptionRow(index)}
+                                                className="text-rose-400 hover:text-rose-300 p-1 rounded transition-colors"
+                                                aria-label="Eliminar localización"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Sucursal / nombre</label>
+                                                <input
+                                                    type="text"
+                                                    value={row.branchName}
+                                                    onChange={(e) => updateRedemptionRow(index, 'branchName', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="Ej: Centro, Polanco"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Ciudad</label>
+                                                <input
+                                                    type="text"
+                                                    value={row.city}
+                                                    onChange={(e) => updateRedemptionRow(index, 'city', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="Ciudad"
+                                                />
+                                            </div>
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs text-gray-400 mb-1">Dirección</label>
+                                                <input
+                                                    type="text"
+                                                    value={row.address}
+                                                    onChange={(e) => updateRedemptionRow(index, 'address', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="Calle, número, colonia"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Estado</label>
+                                                <input
+                                                    type="text"
+                                                    value={row.state}
+                                                    onChange={(e) => updateRedemptionRow(index, 'state', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="Ej: CDMX, NL"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Link a mapas (opcional)</label>
+                                                <input
+                                                    type="url"
+                                                    value={row.mapsUrl}
+                                                    onChange={(e) => updateRedemptionRow(index, 'mapsUrl', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="https://maps.google.com/..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Latitud (opcional)</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={row.latitude}
+                                                    onChange={(e) => updateRedemptionRow(index, 'latitude', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="19.432608"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Longitud (opcional)</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={row.longitude}
+                                                    onChange={(e) => updateRedemptionRow(index, 'longitude', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="-99.133209"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={addRedemptionRow}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-500/40 text-amber-200 text-sm font-medium hover:bg-amber-500/10 transition-colors"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Añadir localización
+                            </button>
                         </div>
 
                         {/* Tipo de promoción: cupón QR vs quick-promotion (redirección) */}

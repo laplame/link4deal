@@ -581,16 +581,23 @@ class PromotionController {
                     typeof promotionData.storeLocation.coordinates.latitude === 'number' &&
                     Number.isFinite(promotionData.storeLocation.coordinates.latitude);
                 if (!hasMainCoords) {
-                    promotionData.storeLocation = {
+                    const merged = {
                         address: first.address || (promotionData.storeLocation && promotionData.storeLocation.address) || '',
                         city: first.city || (promotionData.storeLocation && promotionData.storeLocation.city) || '',
                         state: first.state || (promotionData.storeLocation && promotionData.storeLocation.state) || '',
-                        country: first.country || (promotionData.storeLocation && promotionData.storeLocation.country) || 'México',
-                        coordinates: {
-                            latitude: first.coordinates.latitude,
-                            longitude: first.coordinates.longitude
-                        }
+                        country: first.country || (promotionData.storeLocation && promotionData.storeLocation.country) || 'México'
                     };
+                    const fc = first.coordinates;
+                    if (
+                        fc &&
+                        typeof fc.latitude === 'number' &&
+                        Number.isFinite(fc.latitude) &&
+                        typeof fc.longitude === 'number' &&
+                        Number.isFinite(fc.longitude)
+                    ) {
+                        merged.coordinates = { latitude: fc.latitude, longitude: fc.longitude };
+                    }
+                    promotionData.storeLocation = merged;
                 }
                 const brandLabel = promotionData.chainBrandName || promotionData.brand || '';
                 if (brandLabel && !(promotionData.storeName && String(promotionData.storeName).trim())) {

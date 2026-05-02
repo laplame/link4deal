@@ -13,7 +13,7 @@ function parseCoord(v) {
  *   city: string,
  *   state: string,
  *   country: string,
- *   coordinates: { latitude: number, longitude: number },
+ *   coordinates?: { latitude: number, longitude: number },
  *   mapsUrl: string
  * }>}
  */
@@ -33,27 +33,44 @@ function parseChainLocations(raw) {
     const out = [];
     for (const item of arr) {
         if (!item || typeof item !== 'object') continue;
+        const branchName =
+            item.branchName != null
+                ? String(item.branchName).trim()
+                : item.name != null
+                  ? String(item.name).trim()
+                  : '';
+        const address = item.address != null ? String(item.address).trim() : '';
+        const city = item.city != null ? String(item.city).trim() : '';
+        const state = item.state != null ? String(item.state).trim() : '';
+        const country =
+            item.country != null && String(item.country).trim()
+                ? String(item.country).trim()
+                : 'México';
+        const mapsUrl = item.mapsUrl != null ? String(item.mapsUrl).trim() : '';
+
         const lat = parseCoord(
             item.latitude !== undefined ? item.latitude : item.lat ?? item.coordinates?.latitude
         );
         const lng = parseCoord(
             item.longitude !== undefined ? item.longitude : item.lng ?? item.coordinates?.longitude
         );
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+        const hasCoords =
+            Number.isFinite(lat) &&
+            Number.isFinite(lng) &&
+            lat >= -90 &&
+            lat <= 90 &&
+            lng >= -180 &&
+            lng <= 180;
 
-        out.push({
-            branchName: item.branchName != null ? String(item.branchName).trim() : item.name != null ? String(item.name).trim() : '',
-            address: item.address != null ? String(item.address).trim() : '',
-            city: item.city != null ? String(item.city).trim() : '',
-            state: item.state != null ? String(item.state).trim() : '',
-            country:
-                item.country != null && String(item.country).trim()
-                    ? String(item.country).trim()
-                    : 'México',
-            coordinates: { latitude: lat, longitude: lng },
-            mapsUrl: item.mapsUrl != null ? String(item.mapsUrl).trim() : ''
-        });
+        const base = { branchName, address, city, state, country, mapsUrl };
+
+        if (hasCoords) {
+            out.push({ ...base, coordinates: { latitude: lat, longitude: lng } });
+            continue;
+        }
+        if (branchName || address || city || state) {
+            out.push({ ...base });
+        }
     }
     return out;
 }
