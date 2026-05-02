@@ -20,6 +20,16 @@ Esta oferta de 90 días de periodo de prueba gratis de un Plan Individual mensua
 /** Términos genéricos cuando la promoción no tiene términos (ej. no extraídos de imagen). */
 const DEFAULT_TERMS_GENERIC = '1 promoción por cliente. Válido hasta agotar existencias o fin de los cupones, lo que suceda primero.';
 
+/**
+ * Promociones con id `sim-…` solo viven en memoria del proceso (se pierden al reiniciar y no comparten entre instancias).
+ * En producción exigimos MongoDB salvo ALLOW_SIMULATED_PROMOTIONS=true.
+ */
+function shouldAllowSimulatedPromotions() {
+    if (process.env.ALLOW_SIMULATED_PROMOTIONS === 'true') return true;
+    if (process.env.ALLOW_SIMULATED_PROMOTIONS === 'false') return false;
+    return process.env.NODE_ENV !== 'production';
+}
+
 /** Agrupa archivos multer: campos `images` (promo) y `termsImages` (T&C), o legacy array. */
 function getPromotionUploadFileGroups(req) {
     const f = req.files;
@@ -683,15 +693,47 @@ class PromotionController {
                         mode: 'database'
                     });
                 } catch (dbError) {
-                    console.error('❌ Error guardando en MongoDB, intentando modo simulado:', dbError.message);
+                    console.error('❌ Error guardando promoción en MongoDB:', dbError.message);
                     if (dbError.name) console.error('   Tipo:', dbError.name);
                     if (dbError.errors) console.error('   Validación:', JSON.stringify(dbError.errors, null, 2));
                     if (dbError.stack) console.error(dbError.stack);
-                    // Continuar con modo simulado si falla MongoDB
+
+                    const isValidation = dbError.name === 'ValidationError';
+                    const status = isValidation ? 400 : 500;
+                    const body = {
+                        success: false,
+                        message: isValidation
+                            ? 'No se pudo guardar la promoción: revisa los datos enviados.'
+                            : 'Error al guardar la promoción en la base de datos.',
+                        mode: 'error'
+                    };
+                    if (dbError.errors && typeof dbError.errors === 'object') {
+                        body.fieldErrors = Object.fromEntries(
+                            Object.entries(dbError.errors).map(([k, v]) => [
+                                k,
+                                v && typeof v === 'object' && 'message' in v ? v.message : String(v)
+                            ])
+                        );
+                    }
+                    if (process.env.NODE_ENV === 'development') {
+                        body.error = dbError.message;
+                    }
+                    return res.status(status).json(body);
                 }
             }
 
-            // Si MongoDB no está conectado o falló, guardar en memoria (modo simulado)
+            if (!shouldAllowSimulatedPromotions()) {
+                console.warn('⚠️ Crear promoción rechazada: sin MongoDB y modo simulado desactivado en producción.');
+                return res.status(503).json({
+                    success: false,
+                    code: 'DB_UNAVAILABLE',
+                    message:
+                        'No hay conexión a la base de datos. Configura MONGODB_URI_ATLAS en el servidor (o NODE_ENV=development solo para pruebas locales). Las promociones no simuladas requieren MongoDB.',
+                    mode: 'database_required'
+                });
+            }
+
+            // Sin BD o desarrollo: guardar en memoria (modo simulado)
             console.log('💾 Guardando promoción en modo simulado (memoria)');
             
             // Inicializar array de promociones simuladas si no existe
@@ -719,7 +761,8 @@ class PromotionController {
 
             res.status(201).json({
                 success: true,
-                message: 'Promoción creada exitosamente (modo simulado - MongoDB no conectado)',
+                message:
+                    'Promoción guardada solo en memoria del servidor (id sim-…). No es persistente; en otro nodo o tras reinicio no existirá. Usa MongoDB en producción.',
                 data: {
                     id: simulatedId,
                     title: simulatedPromotion.title,

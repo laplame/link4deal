@@ -26,6 +26,7 @@ import PromotionOptionalAttributionSection, {
     type PromotionOptionalAttribution
 } from '../components/PromotionOptionalAttributionSection';
 import type { BizneShop } from '../components/BizneShopCard';
+import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
 
 interface PromotionData {
     basicInfo: {
@@ -1780,7 +1781,10 @@ export default function CreatePromotionWizard() {
             const data = await response.json();
 
             if (response.ok && data.success) {
-                const id = data.data?.id ?? null;
+                const id = data.data?.id != null ? String(data.data.id) : null;
+                if (data.mode === 'simulated' && typeof data.warning === 'string') {
+                    window.alert(data.warning);
+                }
                 setSubmitSuccess(true);
                 if (id) {
                     navigate(`/promotion-details/${id}`);
@@ -1788,7 +1792,7 @@ export default function CreatePromotionWizard() {
                     setTimeout(() => navigate('/promotions-marketplace'), 1500);
                 }
             } else {
-                throw new Error(data.message || 'Error al crear la promoción');
+                throw new Error(formatPromotionCreateError(data));
             }
         } catch (error: any) {
             console.error('Error creando promoción:', error);

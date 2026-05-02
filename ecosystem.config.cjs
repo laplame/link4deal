@@ -1,3 +1,6 @@
+/**
+ * PM2 ecosystem. Health externo: `npm run watchdog` (scripts/server-watchdog.sh) vía cron.
+ */
 module.exports = {
   apps: [
     {

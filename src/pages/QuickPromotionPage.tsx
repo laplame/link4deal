@@ -25,6 +25,7 @@ import PromotionOptionalAttributionSection, {
     type PromotionOptionalAttribution
 } from '../components/PromotionOptionalAttributionSection';
 import type { BizneShop } from '../components/BizneShopCard';
+import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
@@ -631,7 +632,10 @@ export default function QuickPromotionPage() {
             const data = await response.json();
 
             if (response.ok && data.success) {
-                const id = data.data?.id ?? null;
+                const id = data.data?.id != null ? String(data.data.id) : null;
+                if (data.mode === 'simulated' && typeof data.warning === 'string') {
+                    window.alert(data.warning);
+                }
                 setSubmitSuccess(true);
                 if (id) {
                     navigate(`/promotion-details/${id}`);
@@ -640,7 +644,7 @@ export default function QuickPromotionPage() {
                     setShowReward(true);
                 }
             } else {
-                throw new Error(data.message || 'Error al crear la promoción');
+                throw new Error(formatPromotionCreateError(data));
             }
         } catch (error: any) {
             console.error('Error creando promoción:', error);
