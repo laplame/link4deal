@@ -27,7 +27,7 @@ export const SITE_CONFIG = {
   /** Descarga directa del APK (Android). Pasa por redirect para contabilizar descargas. */
   apkDownloadUrl: '/api/app-downloads/redirect',
   /** Ruta del APK estático (usado por el redirect en backend) */
-  apkStaticPath: '/build-1772854318161.apk',
+  apkStaticPath: '/assets/build-1777749250753.apk',
   linkedinUrl: 'https://www.linkedin.com/company/damecodigo',
   githubUrl: 'https://github.com/damecodigo',
   get copyright() {

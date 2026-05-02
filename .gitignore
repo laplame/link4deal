@@ -26,3 +26,8 @@ dist-ssr
 # Python server (not currently in use)
 server_py/
 .env
+
+# APK Android — superan el límite de 100 MB de GitHub; no versionar el binario.
+# Subir el archivo en deploy (servidor, S3, GitHub Releases, etc.) o usar Git LFS.
+public/assets/*.apk
+public/*.apk

@@ -5,7 +5,7 @@ const User = require('../models/User');
 
 const router = express.Router();
 const KEY = 'global';
-const APK_PATH = '/build-1772854318161.apk';
+const APK_PATH = '/assets/build-1777749250753.apk';
 
 /** GET /api/app-downloads/redirect - Redirige al APK e incrementa el contador (para QR y enlaces directos) */
 router.get('/redirect', async (req, res) => {
