@@ -435,6 +435,13 @@ export default function QuickPromotionPage() {
     const promotionalValueUsd = calculatePromotionalValueUsd();
     const isMxn = (formData.currency || 'USD').toUpperCase() === 'MXN';
 
+    const fieldInput =
+        'w-full px-4 py-3 rounded-lg border border-white/15 bg-gray-900/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/25 focus:border-amber-400/50';
+    const fieldInputCompact =
+        'w-full px-4 py-2 rounded-lg border border-white/15 bg-gray-900/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/25 focus:border-amber-400/50';
+    const fieldInputPrice =
+        'w-full pl-8 pr-4 py-3 rounded-lg border border-white/15 bg-gray-900/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/25 focus:border-amber-400/50';
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -554,26 +561,22 @@ export default function QuickPromotionPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
-            {/* Header */}
-            <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-gray-100">
+            <div className="border-b border-white/10 bg-gray-900/50 backdrop-blur-sm">
                 <div className="max-w-4xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <Link 
-                                to="/" 
-                                className="text-gray-600 hover:text-gray-900 transition-colors"
-                            >
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <Link to="/" className="text-gray-400 hover:text-amber-200 transition-colors shrink-0">
                                 <ArrowLeft className="h-6 w-6" />
                             </Link>
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Agregar Promoción Rápida</h1>
-                                <p className="text-sm text-gray-600">Crea una promoción en minutos</p>
+                            <div className="min-w-0">
+                                <h1 className="text-2xl font-bold text-white truncate">Agregar Promoción Rápida</h1>
+                                <p className="text-sm text-gray-400">Crea una promoción en minutos</p>
                             </div>
                         </div>
                         <Link
                             to="/create-promotion"
-                            className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                            className="text-sm text-violet-400 hover:text-violet-300 font-medium shrink-0"
                         >
                             Modo Avanzado →
                         </Link>
@@ -582,19 +585,19 @@ export default function QuickPromotionPage() {
             </div>
 
             <div className="max-w-4xl mx-auto px-4 py-8">
-                {/* Templates Rápidos */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 mb-6 shadow-lg shadow-black/20">
                     <div className="flex items-center gap-2 mb-4">
-                        <Sparkles className="h-5 w-5 text-purple-600" />
-                        <h2 className="text-lg font-semibold text-gray-900">Plantillas Rápidas</h2>
+                        <Sparkles className="h-5 w-5 text-amber-400 shrink-0" />
+                        <h2 className="text-lg font-semibold text-white">Plantillas Rápidas</h2>
                     </div>
-                    <p className="text-sm text-gray-600 mb-4">Selecciona una plantilla para pre-llenar el formulario</p>
+                    <p className="text-sm text-gray-400 mb-4">Selecciona una plantilla para pre-llenar el formulario</p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {QUICK_TEMPLATES.map((template) => (
                             <button
                                 key={template.name}
                                 onClick={() => loadTemplate(template)}
-                                className="px-4 py-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg hover:from-purple-100 hover:to-blue-100 transition-all text-sm font-medium text-gray-700"
+                                type="button"
+                                className="px-4 py-3 rounded-xl border border-violet-500/30 bg-violet-950/25 text-sm font-medium text-gray-200 hover:bg-violet-900/35 hover:border-violet-400/40 transition-all"
                             >
                                 {template.name}
                             </button>
@@ -605,7 +608,7 @@ export default function QuickPromotionPage() {
                 {/* Modal de éxito: recompensa y redirección a la promoción */}
                 {showReward && (
                     <div
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="success-modal-title"
@@ -625,25 +628,25 @@ export default function QuickPromotionPage() {
                         }}
                     >
                         <div
-                            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border-2 border-yellow-200"
+                            className="rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-amber-500/30 bg-gray-900/95 backdrop-blur-md"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6">
+                            <div className="bg-gradient-to-r from-amber-950/50 via-gray-900/90 to-orange-950/40 p-6 border-b border-white/10">
                                 <div className="flex items-start gap-4">
                                     <div className="flex-shrink-0">
-                                        <div className="w-14 h-14 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                                        <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center ring-2 ring-amber-400/30">
                                             <Gift className="w-7 h-7 text-white" />
                                         </div>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 id="success-modal-title" className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                                            <Zap className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                                        <h3 id="success-modal-title" className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                            <Zap className="w-5 h-5 text-amber-400 flex-shrink-0" />
                                             ¡Promoción Creada Exitosamente!
                                         </h3>
-                                        <p className="text-base text-gray-800 mb-2">
-                                            Has ganado <span className="font-bold text-orange-600">50 Tokens Luxae</span> de premio
+                                        <p className="text-base text-gray-200 mb-2">
+                                            Has ganado <span className="font-bold text-amber-300">50 Tokens Luxae</span> de premio
                                         </p>
-                                        <p className="text-sm text-gray-600 mb-4">
+                                        <p className="text-sm text-gray-400 mb-4">
                                             Valida tu KYC para recibir tus tokens. Los tokens se acreditarán automáticamente una vez completada la verificación.
                                         </p>
                                         <div className="flex flex-col sm:flex-row gap-3">
@@ -663,14 +666,14 @@ export default function QuickPromotionPage() {
                                                     setAmazonProductUrl('');
                                                     if (id) navigate(`/promotion-details/${id}`);
                                                 }}
-                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-yellow-600 transition-all shadow-md"
+                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-medium hover:from-amber-500 hover:to-orange-500 transition-all shadow-lg shadow-amber-900/30"
                                             >
                                                 <CheckCircle className="w-5 h-5" />
                                                 {createdPromotionId ? 'Ver promoción creada' : 'Aceptar'}
                                             </button>
                                             <Link
                                                 to="/kyc-form"
-                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-orange-400 text-orange-600 rounded-lg font-medium hover:bg-orange-50 transition-colors"
+                                                className="inline-flex items-center justify-center gap-2 px-5 py-3 border border-amber-500/50 text-amber-200 rounded-xl font-medium hover:bg-amber-500/10 transition-colors"
                                                 onClick={() => {
                                                     setShowReward(false);
                                                     setSubmitSuccess(false);
@@ -703,7 +706,7 @@ export default function QuickPromotionPage() {
                                             setAmazonProductUrl('');
                                             if (id) navigate(`/promotion-details/${id}`);
                                         }}
-                                        className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded"
+                                        className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-200 rounded transition-colors"
                                         aria-label="Cerrar"
                                     >
                                         <X className="w-5 h-5" />
@@ -716,21 +719,20 @@ export default function QuickPromotionPage() {
 
                 {/* Guía BizneAI / definición legal y tokenización */}
                 <div className="mb-6">
-                    <PromotionLegalInfo />
+                    <PromotionLegalInfo variant="dark" />
                 </div>
 
-                {/* Formulario */}
-                <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <form onSubmit={handleSubmit} className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-lg shadow-black/20">
                     {submitError && (
-                        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                            <div className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5">⚠️</div>
+                        <div className="mb-6 bg-rose-950/40 border border-rose-500/35 rounded-xl p-4 flex items-start gap-3">
+                            <div className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5">⚠️</div>
                             <div className="flex-1">
-                                <p className="text-sm text-red-800">{submitError}</p>
+                                <p className="text-sm text-rose-100">{submitError}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setSubmitError(null)}
-                                className="text-red-600 hover:text-red-800"
+                                className="text-rose-300 hover:text-rose-100"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -738,16 +740,16 @@ export default function QuickPromotionPage() {
                     )}
 
                     {/* 1. Foto primero (opcional): ver CREAR_PROMOCION_APP_REFERENCIA.md — opcionalmente analyze-image con Gemini */}
-                    <div className="mb-8 pb-8 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                            <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">1</span>
+                    <div className="mb-8 pb-8 border-b border-white/10">
+                        <h2 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/35 font-bold">1</span>
                             Fotos: promoción y términos
                         </h2>
-                        <p className="text-sm text-gray-600 mb-4">
+                        <p className="text-sm text-gray-400 mb-4">
                             Sube el <strong>cartel</strong> (una o varias fotos). Opcional: fotos <strong>solo de términos y condiciones</strong>.
                             El servidor ejecuta OCR en todas; con Gemini se rellenan datos y texto legal.
                         </p>
-                        <div className="border-2 border-dashed border-purple-200 rounded-lg p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/30">
+                        <div className="border-2 border-dashed border-violet-500/35 rounded-xl p-6 text-center hover:border-violet-400/60 transition-colors bg-violet-950/25">
                             <input
                                 type="file"
                                 accept="image/*"
@@ -758,18 +760,18 @@ export default function QuickPromotionPage() {
                             />
                             <label htmlFor="image-upload" className="cursor-pointer">
                                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-                                <p className="text-sm text-gray-600">Cartel / promoción (máx. 8)</p>
+                                <p className="text-sm text-gray-400">Cartel / promoción (máx. 8)</p>
                             </label>
                         </div>
                         {imagePreviews.length > 0 && (
                             <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {imagePreviews.map((preview, index) => (
                                     <div key={index} className="relative group">
-                                        <span className="absolute top-2 left-2 z-10 text-[10px] font-bold uppercase bg-purple-600 text-white px-2 py-0.5 rounded">Promo</span>
+                                        <span className="absolute top-2 left-2 z-10 text-[10px] font-bold uppercase bg-violet-600 text-white px-2 py-0.5 rounded">Promo</span>
                                         <img
                                             src={preview}
                                             alt={`Preview ${index + 1}`}
-                                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                            className="w-full h-32 object-cover rounded-lg border border-white/10"
                                         />
                                         <button
                                             type="button"
@@ -783,8 +785,8 @@ export default function QuickPromotionPage() {
                             </div>
                         )}
 
-                        <p className="text-sm font-medium text-gray-700 mt-6 mb-2">Términos y condiciones (opcional)</p>
-                        <div className="border-2 border-dashed border-amber-200 rounded-lg p-6 text-center hover:border-amber-500 transition-colors bg-amber-50/30">
+                        <p className="text-sm font-medium text-gray-300 mt-6 mb-2">Términos y condiciones (opcional)</p>
+                        <div className="border-2 border-dashed border-amber-500/30 rounded-xl p-6 text-center hover:border-amber-400/70 transition-colors bg-amber-950/20">
                             <input
                                 type="file"
                                 accept="image/*"
@@ -794,8 +796,8 @@ export default function QuickPromotionPage() {
                                 id="terms-image-upload-quick"
                             />
                             <label htmlFor="terms-image-upload-quick" className="cursor-pointer">
-                                <Upload className="mx-auto h-12 w-12 text-amber-600/80 mb-2" />
-                                <p className="text-sm text-gray-600">Fotos solo de letra legal / reverso (máx. 8)</p>
+                                <Upload className="mx-auto h-12 w-12 text-amber-400/90 mb-2" />
+                                <p className="text-sm text-gray-400">Fotos solo de letra legal / reverso (máx. 8)</p>
                             </label>
                         </div>
                         {termsImagePreviews.length > 0 && (
@@ -806,7 +808,7 @@ export default function QuickPromotionPage() {
                                         <img
                                             src={preview}
                                             alt={`Términos ${index + 1}`}
-                                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                            className="w-full h-32 object-cover rounded-lg border border-white/10"
                                         />
                                         <button
                                             type="button"
@@ -826,7 +828,7 @@ export default function QuickPromotionPage() {
                                     type="button"
                                     onClick={() => handleAnalyzeWithGemini()}
                                     disabled={isAnalyzing}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-medium hover:from-emerald-500 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
                                 >
                                     {isAnalyzing ? (
                                         <>
@@ -843,41 +845,41 @@ export default function QuickPromotionPage() {
                                 <span className="text-xs text-gray-500">Incluye cartel y fotos de T&amp;C en un solo envío.</span>
                             </div>
                         )}
-                        {analyzeError && <p className="mt-2 text-sm text-red-600">{analyzeError}</p>}
+                        {analyzeError && <p className="mt-2 text-sm text-rose-400">{analyzeError}</p>}
                     </div>
 
                     {/* 2. Bloque de datos mínimos (doc: CREAR_PROMOCION_APP_REFERENCIA) */}
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold">2</span>
+                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/35 font-bold">2</span>
                         Datos mínimos
                     </h2>
-                    <p className="text-sm text-gray-600 mb-6">
+                    <p className="text-sm text-gray-400 mb-6">
                         Título*, descripción, moneda, precios, tipo de oferta, vigencia, cantidad de cupones. Revisa lo que haya rellenado la AI y completa lo que falte.
                     </p>
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Título de la Promoción *
                             </label>
                             <input
                                 type="text"
                                 value={formData.title}
                                 onChange={(e) => handleInputChange('title', e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                className={fieldInput}
                                 placeholder="Ej: Oferta Especial de Electrónica"
                                 required
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Descripción adicional
                             </label>
                             <textarea
                                 value={formData.description}
                                 onChange={(e) => handleInputChange('description', e.target.value)}
                                 rows={3}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                className={fieldInput}
                                 placeholder="Texto extra que se sumará al título (ej: condiciones, beneficios...)"
                             />
                             <p className="mt-1 text-xs text-gray-500">
@@ -887,27 +889,27 @@ export default function QuickPromotionPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
                                     Marca *
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.brand}
                                     onChange={(e) => handleInputChange('brand', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className={fieldInput}
                                     placeholder="Ej: Apple, Nike, Samsung"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
                                     Categoría *
                                 </label>
                                 <select
                                     value={formData.category}
                                     onChange={(e) => handleInputChange('category', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className={fieldInput}
                                     required
                                 >
                                     {CATEGORIES.map((cat) => (
@@ -920,12 +922,12 @@ export default function QuickPromotionPage() {
                         </div>
 
                         {/* Tipo de promoción: cupón QR vs quick-promotion (redirección) */}
-                        <div className="border-t border-gray-200 pt-6">
+                        <div className="border-t border-white/10 pt-6">
                             <div className="flex items-center gap-2 mb-3">
-                                <Tag className="h-5 w-5 text-gray-600" />
-                                <h3 className="text-lg font-semibold text-gray-900">Tipo de promoción</h3>
+                                <Tag className="h-5 w-5 text-gray-400" />
+                                <h3 className="text-lg font-semibold text-white">Tipo de promoción</h3>
                             </div>
-                            <p className="text-sm text-gray-600 mb-4">
+                            <p className="text-sm text-gray-400 mb-4">
                                 Cupón con QR: el usuario obtiene un código/QR para canjear en tienda. Quick promotion: se redirige directo a una página para comprar (ej. Amazon, Adidas).
                             </p>
                             <div className="flex flex-wrap gap-3 mb-4">
@@ -935,7 +937,7 @@ export default function QuickPromotionPage() {
                                         name="promotionType"
                                         checked={promotionType === 'coupon'}
                                         onChange={() => setPromotionType('coupon')}
-                                        className="text-purple-600 focus:ring-purple-500"
+                                        className="text-amber-500 focus:ring-amber-500/40 bg-gray-900/80 border-white/20"
                                     />
                                     <span className="flex items-center gap-1.5">
                                         <QrCode className="h-4 w-4" />
@@ -948,7 +950,7 @@ export default function QuickPromotionPage() {
                                         name="promotionType"
                                         checked={promotionType === 'quick-promotion'}
                                         onChange={() => setPromotionType('quick-promotion')}
-                                        className="text-purple-600 focus:ring-purple-500"
+                                        className="text-amber-500 focus:ring-amber-500/40 bg-gray-900/80 border-white/20"
                                     />
                                     <span className="flex items-center gap-1.5">
                                         <ExternalLink className="h-4 w-4" />
@@ -957,7 +959,7 @@ export default function QuickPromotionPage() {
                                 </label>
                             </div>
                             {promotionType === 'quick-promotion' && (
-                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-4">
+                                <div className="bg-violet-950/35 border border-violet-500/30 rounded-xl p-4 space-y-4">
                                     <p className="text-sm font-medium text-gray-700">¿A dónde redirigir?</p>
                                     <div className="flex flex-wrap gap-3">
                                         <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -983,26 +985,26 @@ export default function QuickPromotionPage() {
                                     </div>
                                     {redirectDestination === 'amazon' && (
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">URL del producto Amazon (opcional)</label>
+                                            <label className="block text-sm font-medium text-gray-300 mb-1">URL del producto Amazon (opcional)</label>
                                             <input
                                                 type="url"
                                                 value={amazonProductUrl}
                                                 onChange={(e) => setAmazonProductUrl(e.target.value)}
                                                 placeholder="https://www.amazon.com.mx/dp/B0DMV3BMGP?th=1"
-                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                className={fieldInput}
                                             />
                                             <p className="mt-1 text-xs text-gray-500">Pega el enlace del producto para redirigir directo a la compra. Se aplicará tu tag de afiliado. Si lo dejas vacío, se usará el link genérico por defecto.</p>
                                         </div>
                                     )}
                                     {redirectDestination === 'custom' && (
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">URL de compra (afiliado o tienda)</label>
+                                            <label className="block text-sm font-medium text-gray-300 mb-1">URL de compra (afiliado o tienda)</label>
                                             <input
                                                 type="url"
                                                 value={customRedirectUrl}
                                                 onChange={(e) => setCustomRedirectUrl(e.target.value)}
                                                 placeholder="https://www.adidas.mx/..."
-                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                className={fieldInput}
                                             />
                                             <p className="mt-1 text-xs text-gray-500">Ej: link de afiliado Adidas, Nike, etc.</p>
                                         </div>
@@ -1012,19 +1014,19 @@ export default function QuickPromotionPage() {
                         </div>
 
                         {/* Precios */}
-                        <div className="border-t border-gray-200 pt-6">
+                        <div className="border-t border-white/10 pt-6">
                             <div className="flex items-center gap-2 mb-4">
-                                <DollarSign className="h-5 w-5 text-gray-600" />
-                                <h3 className="text-lg font-semibold text-gray-900">Precios</h3>
+                                <DollarSign className="h-5 w-5 text-gray-400" />
+                                <h3 className="text-lg font-semibold text-white">Precios</h3>
                             </div>
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
                                     Moneda del producto
                                 </label>
                                 <select
                                     value={formData.currency || 'USD'}
                                     onChange={(e) => handleInputChange('currency', e.target.value)}
-                                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    className={`w-full max-w-xs ${fieldInput}`}
                                 >
                                     <option value="USD">USD (Dólares americanos)</option>
                                     <option value="MXN">MXN (Pesos – producto en español)</option>
@@ -1037,7 +1039,7 @@ export default function QuickPromotionPage() {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Precio Original * {isMxn && <span className="text-gray-500">(MXN)</span>}
                                     </label>
                                     <div className="relative">
@@ -1046,7 +1048,7 @@ export default function QuickPromotionPage() {
                                             type="number"
                                             value={formData.originalPrice || ''}
                                             onChange={(e) => handleInputChange('originalPrice', parseFloat(e.target.value) || 0)}
-                                            className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            className={fieldInputPrice}
                                             placeholder={isMxn ? 'Ej: 60' : '0.00'}
                                             min="0"
                                             step="0.01"
@@ -1056,7 +1058,7 @@ export default function QuickPromotionPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Precio con Oferta * {isMxn && <span className="text-gray-500">(MXN)</span>}
                                     </label>
                                     <div className="relative">
@@ -1065,7 +1067,7 @@ export default function QuickPromotionPage() {
                                             type="number"
                                             value={formData.currentPrice || ''}
                                             onChange={(e) => handleInputChange('currentPrice', parseFloat(e.target.value) || 0)}
-                                            className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            className={fieldInputPrice}
                                             placeholder={isMxn ? 'Ej: 29' : '0.00'}
                                             min="0"
                                             step="0.01"
@@ -1075,11 +1077,11 @@ export default function QuickPromotionPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Descuento
                                     </label>
-                                    <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
-                                        <span className="text-2xl font-bold text-green-600">
+                                    <div className="px-4 py-3 bg-emerald-950/40 border border-emerald-500/30 rounded-lg">
+                                        <span className="text-2xl font-bold text-emerald-400">
                                             {calculateDiscount()}%
                                         </span>
                                     </div>
@@ -1091,23 +1093,23 @@ export default function QuickPromotionPage() {
                         </div>
 
                         {/* Tipo de promoción (cálculo de tokens) */}
-                        <div className="border-t border-gray-200 pt-6">
+                        <div className="border-t border-white/10 pt-6">
                             <div className="flex items-center gap-2 mb-4">
-                                <Tag className="h-5 w-5 text-indigo-600" />
-                                <h3 className="text-lg font-semibold text-gray-900">Tipo de promoción y valor en tokens</h3>
+                                <Tag className="h-5 w-5 text-violet-400" />
+                                <h3 className="text-lg font-semibold text-white">Tipo de promoción y valor en tokens</h3>
                             </div>
-                            <p className="text-sm text-gray-600 mb-4">
+                            <p className="text-sm text-gray-400 mb-4">
                                 El tipo define cómo se calcula el valor promocional en USD. <strong>X tokens = X USD</strong> (pasivo financiero medible).
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Tipo de promoción
                                     </label>
                                     <select
                                         value={formData.offerType}
                                         onChange={(e) => handleInputChange('offerType', e.target.value as OfferType)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className={fieldInput}
                                     >
                                         {OFFER_TYPES.map((opt) => (
                                             <option key={opt.value} value={opt.value}>
@@ -1118,7 +1120,7 @@ export default function QuickPromotionPage() {
                                 </div>
                                 {(formData.offerType === 'cashback_fixed' || formData.offerType === 'cashback_percentage') && (
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">
                                             {formData.offerType === 'cashback_fixed' ? 'Monto cashback (USD)' : 'Porcentaje cashback (0-100)'}
                                         </label>
                                         <input
@@ -1128,62 +1130,62 @@ export default function QuickPromotionPage() {
                                             step={formData.offerType === 'cashback_fixed' ? 0.01 : 1}
                                             value={formData.cashbackValue ?? ''}
                                             onChange={(e) => handleInputChange('cashbackValue', parseFloat(e.target.value) || 0)}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            className={fieldInput}
                                             placeholder={formData.offerType === 'cashback_fixed' ? '10' : '10'}
                                         />
                                     </div>
                                 )}
                             </div>
                             {promotionalValueUsd != null && (
-                                <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                    <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide mb-1">Vista previa de valor en tokens</p>
-                                    <p className="text-sm font-medium text-indigo-900">
-                                        <span className="text-xl font-bold text-indigo-600">{promotionalValueUsd.toFixed(2)} USD</span>
-                                        <span className="text-indigo-700 font-normal"> = {promotionalValueUsd.toFixed(2)} tokens</span>
+                                <div className="mt-4 p-4 bg-indigo-950/45 border border-indigo-500/30 rounded-xl">
+                                    <p className="text-xs font-medium text-violet-300 uppercase tracking-wide mb-1">Vista previa de valor en tokens</p>
+                                    <p className="text-sm font-medium text-gray-100">
+                                        <span className="text-xl font-bold text-violet-300">{promotionalValueUsd.toFixed(2)} USD</span>
+                                        <span className="text-gray-300 font-normal"> = {promotionalValueUsd.toFixed(2)} tokens</span>
                                     </p>
                                     {isMxn && (
-                                        <p className="text-xs text-indigo-600 mt-1">
+                                        <p className="text-xs text-indigo-300/90 mt-1">
                                             Equivalente en dólares (vista previa con tipo de cambio aproximado). Al guardar se usará el tipo de cambio actual del servidor.
                                         </p>
                                     )}
-                                    <p className="text-xs text-indigo-600 mt-1">Unidad calculable del contrato (pasivo financiero medible). Siempre en USD.</p>
+                                    <p className="text-xs text-indigo-300/90 mt-1">Unidad calculable del contrato (pasivo financiero medible). Siempre en USD.</p>
                                 </div>
                             )}
                         </div>
 
                         {/* Vigencia y límite de redenciones */}
-                        <div className="border-t border-gray-200 pt-6">
+                        <div className="border-t border-white/10 pt-6">
                             <div className="flex items-center gap-2 mb-4">
-                                <Calendar className="h-5 w-5 text-gray-600" />
-                                <h3 className="text-lg font-semibold text-gray-900">Vigencia y disponibilidad</h3>
+                                <Calendar className="h-5 w-5 text-gray-400" />
+                                <h3 className="text-lg font-semibold text-white">Vigencia y disponibilidad</h3>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Fecha de inicio *
                                     </label>
                                     <input
                                         type="date"
                                         value={formData.validFrom}
                                         onChange={(e) => handleInputChange('validFrom', e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className={fieldInput}
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Fecha de fin *
                                     </label>
                                     <input
                                         type="date"
                                         value={formData.validUntil}
                                         onChange={(e) => handleInputChange('validUntil', e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className={fieldInput}
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Máximo de cupones redimibles
                                     </label>
                                     <input
@@ -1191,7 +1193,7 @@ export default function QuickPromotionPage() {
                                         min={1}
                                         value={formData.totalQuantity || ''}
                                         onChange={(e) => handleInputChange('totalQuantity', parseInt(e.target.value, 10) || 0)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className={fieldInput}
                                         placeholder="100"
                                     />
                                     <p className="mt-1 text-xs text-gray-500">Límite legal y financiero de redenciones.</p>
@@ -1200,10 +1202,10 @@ export default function QuickPromotionPage() {
                         </div>
 
                         {/* Ubicación y activación GPS */}
-                        <div className="border-t border-gray-200 pt-6 space-y-6">
+                        <div className="border-t border-white/10 pt-6 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
                                         <MapPin className="h-4 w-4 inline mr-1" />
                                         Ciudad *
                                     </label>
@@ -1211,24 +1213,24 @@ export default function QuickPromotionPage() {
                                         type="text"
                                         value={formData.storeCity}
                                         onChange={(e) => handleInputChange('storeCity', e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className={fieldInput}
                                         placeholder="Ciudad de México"
                                         required
                                     />
                                 </div>
                             </div>
 
-                            <div className="border border-purple-200 rounded-xl p-4 bg-purple-50/50 space-y-4">
+                            <div className="border border-white/10 rounded-xl p-4 bg-gray-950/40 space-y-4 backdrop-blur-sm">
                                 <label className="flex items-start gap-3 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={formData.activateByGps}
                                         onChange={(e) => handleInputChange('activateByGps', e.target.checked)}
-                                        className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                        className="mt-1 rounded border-white/25 text-amber-500 focus:ring-amber-500/40 bg-gray-900/80"
                                     />
                                     <span>
-                                        <span className="block text-sm font-medium text-gray-900">Activación por ubicación (GPS)</span>
-                                        <span className="block text-sm text-gray-600 mt-0.5">
+                                        <span className="block text-sm font-medium text-white">Activación por ubicación (GPS)</span>
+                                        <span className="block text-sm text-gray-400 mt-0.5">
                                             El usuario deberá estar cerca del punto de la tienda para obtener el cupón (validación en el navegador al solicitar el cupón).
                                         </span>
                                     </span>
@@ -1238,14 +1240,14 @@ export default function QuickPromotionPage() {
                                     <>
                                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                             <div className="flex-1">
-                                                <p className="text-xs text-gray-600 mb-2">
+                                                <p className="text-xs text-gray-400 mb-2">
                                                     En móvil puedes usar tu posición actual como punto de la tienda.
                                                 </p>
                                                 <button
                                                     type="button"
                                                     onClick={fillStoreCoordsFromDevice}
                                                     disabled={gpsFromDeviceLoading}
-                                                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm transition-colors"
+                                                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-violet-900/25 transition-colors"
                                                 >
                                                     <Smartphone className="h-4 w-4 shrink-0" />
                                                     {gpsFromDeviceLoading ? 'Obteniendo ubicación…' : 'Obtener del dispositivo'}
@@ -1253,34 +1255,34 @@ export default function QuickPromotionPage() {
                                             </div>
                                         </div>
                                         {gpsFromDeviceError && (
-                                            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{gpsFromDeviceError}</p>
+                                            <p className="text-sm text-rose-200 bg-rose-950/40 border border-rose-500/30 rounded-lg px-3 py-2">{gpsFromDeviceError}</p>
                                         )}
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitud (WGS84)</label>
+                                                <label className="block text-sm font-medium text-gray-300 mb-1">Latitud (WGS84)</label>
                                                 <input
                                                     type="text"
                                                     inputMode="decimal"
                                                     placeholder="ej. 19.432608"
                                                     value={formData.storeLatitude}
                                                     onChange={(e) => handleInputChange('storeLatitude', e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className={fieldInputCompact}
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitud (WGS84)</label>
+                                                <label className="block text-sm font-medium text-gray-300 mb-1">Longitud (WGS84)</label>
                                                 <input
                                                     type="text"
                                                     inputMode="decimal"
                                                     placeholder="ej. -99.133209"
                                                     value={formData.storeLongitude}
                                                     onChange={(e) => handleInputChange('storeLongitude', e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                    className={fieldInputCompact}
                                                 />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Radio permitido (metros)</label>
+                                            <label className="block text-sm font-medium text-gray-300 mb-1">Radio permitido (metros)</label>
                                             <input
                                                 type="number"
                                                 min={50}
@@ -1293,7 +1295,7 @@ export default function QuickPromotionPage() {
                                                         Math.min(50000, Math.max(50, parseInt(e.target.value, 10) || 500))
                                                     )
                                                 }
-                                                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                                className={`w-full max-w-xs ${fieldInputCompact}`}
                                             />
                                             <p className="text-xs text-gray-500 mt-1">Entre 50 m y 50 km.</p>
                                         </div>
@@ -1307,37 +1309,38 @@ export default function QuickPromotionPage() {
                             value={formData.optionalAttribution}
                             onChange={patchOptionalAttribution}
                             onShopSelect={applySelectedShopGps}
+                            variant="dark"
                         />
 
                         {/* Términos y condiciones (opcional; se puede rellenar con Gemini) */}
-                        <div className="border-t border-gray-200 pt-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div className="border-t border-white/10 pt-6">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Términos y condiciones
                             </label>
                             <textarea
                                 value={formData.termsAndConditions}
                                 onChange={(e) => handleInputChange('termsAndConditions', e.target.value)}
                                 rows={4}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                className={fieldInput}
                                 placeholder="Opcional. Si en la foto aparecen términos y condiciones, Gemini los habrá rellenado aquí."
                             />
                         </div>
 
                         {/* Botones */}
-                        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                        <div className="flex items-center justify-between pt-6 border-t border-white/10">
                             <Link
                                 to="/promotions-marketplace"
-                                className="text-gray-600 hover:text-gray-900 font-medium"
+                                className="text-gray-400 hover:text-amber-200 font-medium transition-colors"
                             >
                                 Cancelar
                             </Link>
                             <button
                                 type="submit"
                                 disabled={isSubmitting || submitSuccess}
-                                className={`px-8 py-3 rounded-lg font-medium transition-all ${
+                                className={`px-8 py-3 rounded-xl font-medium transition-all shadow-lg ${
                                     isSubmitting || submitSuccess
-                                        ? 'bg-green-500 text-white cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg'
+                                        ? 'bg-emerald-600 text-white cursor-not-allowed shadow-emerald-900/20'
+                                        : 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white hover:from-violet-500 hover:to-indigo-600 shadow-violet-900/30'
                                 }`}
                             >
                                 {isSubmitting ? (

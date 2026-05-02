@@ -864,6 +864,13 @@ class PromotionController {
                 populate: 'seller'
             };
             const result = await Promotion.paginate(query, options);
+            const uLa = parseFloat(req.query.userLat);
+            const uLo = parseFloat(req.query.userLng);
+            const geoEnrichOpts = {};
+            if (Number.isFinite(uLa) && Number.isFinite(uLo)) {
+                geoEnrichOpts.userLatitude = uLa;
+                geoEnrichOpts.userLongitude = uLo;
+            }
             const docs = (result.docs || []).map((doc) => {
                 const promo = doc.toObject ? doc.toObject() : doc;
                 const validUntil = promo.validUntil ? new Date(promo.validUntil) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -885,7 +892,7 @@ class PromotionController {
                     daysLeft: Math.max(0, diffDays),
                     timeLeftLabel,
                     displayStatus
-                });
+                }, geoEnrichOpts);
             });
             return res.json({
                 success: true,

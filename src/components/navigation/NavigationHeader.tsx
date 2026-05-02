@@ -18,7 +18,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function NavigationHeader({ title }: Props) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'explore' | 'directory' | 'publish' | 'join' | null>(null);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, primaryRole } = useAuth();
   const location = useLocation();
   const desktopNavRef = useRef<HTMLDivElement>(null);
 
@@ -140,7 +140,7 @@ export function NavigationHeader({ title }: Props) {
               <div className="hidden lg:flex lg:items-center lg:gap-2">
                 <span className="text-gray-400 text-sm max-w-[10rem] truncate">Hola, {user.firstName}</span>
                 <Link
-                  to="/dashboard"
+                  to={primaryRole === 'influencer' ? '/admin/influencers' : '/dashboard'}
                   className="flex items-center gap-1.5 text-white/90 hover:text-white px-3 py-1.5 rounded-lg bg-white/10 transition-colors text-sm"
                 >
                   <User className="h-4 w-4" />

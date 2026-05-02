@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const { parseStoreListingPaste } = require('../utils/storeListingPasteParser');
-const { listPresetsMeta, getPresetById } = require('../utils/chainLocationPresets');
+const { listPresetsMeta, getPresetById, upsertPresetFromPayload } = require('../utils/chainLocationPresets');
 const { buildNominatimSearchQueryVariants } = require('../utils/nominatimQuery');
 
 const router = express.Router();
@@ -75,6 +75,20 @@ async function nominatimGeocode(query) {
     };
 }
 
+function requireChainPresetWrite(req, res, next) {
+    const secret = process.env.GEO_CHAIN_PRESET_WRITE_SECRET;
+    if (secret && String(secret).trim()) {
+        const h = req.headers['x-geo-preset-secret'];
+        if (h !== secret) {
+            return res.status(403).json({
+                success: false,
+                message: 'No autorizado para guardar en el catálogo (X-Geo-Preset-Secret incorrecta o vacía).'
+            });
+        }
+    }
+    return next();
+}
+
 // GET /api/geo/chain-presets — catálogo (sams, comfort, …) con conteo de sucursales
 router.get('/chain-presets', (req, res) => {
     try {
@@ -100,6 +114,30 @@ router.get('/chain-presets/:id', (req, res) => {
         return res.json({ success: true, preset });
     } catch (e) {
         return res.status(500).json({ success: false, message: e.message || 'Error al cargar catálogo' });
+    }
+});
+
+/**
+ * POST /api/geo/save-chain-preset
+ * Guarda o actualiza una brand en server/data/chainLocationPresets.json (para promos posteriores).
+ * Body: { id?, label?, chainBrandName, matchNames?, chainLocations }
+ */
+router.post('/save-chain-preset', requireChainPresetWrite, (req, res) => {
+    try {
+        const data = upsertPresetFromPayload(req.body || {});
+        return res.json({
+            success: true,
+            ...data,
+            message: `Catálogo "${data.id}" guardado con ${data.branchCount} sucursales.`
+        });
+    } catch (e) {
+        const code = e.status && Number(e.status) >= 400 && Number(e.status) < 600 ? e.status : 500;
+        const msg = e.message || 'Error al guardar catálogo';
+        return res.status(code).json({
+            success: false,
+            message: msg,
+            error: msg
+        });
     }
 });
 

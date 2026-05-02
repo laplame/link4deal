@@ -284,7 +284,7 @@ const InfluencerSetup: React.FC = () => {
                 throw new Error(data?.message || 'Error al registrar el perfil de influencer');
             }
 
-            navigate('/influencers');
+            navigate('/admin/influencers');
         } catch (error) {
             console.error('Error al crear perfil de influencer:', error);
             alert(error instanceof Error ? error.message : 'Error al registrar. Intenta de nuevo.');

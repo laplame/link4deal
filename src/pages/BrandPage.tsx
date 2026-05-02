@@ -3,8 +3,12 @@ import { Search, Filter, Building2, Users, Plus, Store, LayoutList } from 'lucid
 import { Link } from 'react-router-dom';
 import { RegisteredBrandCard, type RegisteredBrand } from '../components/RegisteredBrandCard';
 import { BizneShopCard, type BizneShop } from '../components/BizneShopCard';
+import { ChainPresetBrandCard, type ChainPresetDirectoryItem } from '../components/ChainPresetBrandCard';
 import { useBizneShops } from '../hooks/useBizneShops';
 import { BizneAiAuctionBusinessCta } from '../components/BizneAiAuctionBusinessCta';
+
+/** Valor interno del filtro de categoría: solo cadenas del catálogo GPS */
+const CHAIN_GPS_FILTER = '__chain_gps__';
 
 const titles = {
   en: 'Brands & businesses',
@@ -20,6 +24,8 @@ export function BrandPage() {
   const [directoryTab, setDirectoryTab] = useState<DirectoryTab>('all');
   const [brands, setBrands] = useState<RegisteredBrand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(true);
+  const [chainPresets, setChainPresets] = useState<ChainPresetDirectoryItem[]>([]);
+  const [loadingChains, setLoadingChains] = useState(true);
   const { shops: bizneShops, loading: loadingBizne, error: bizneError, errorDetail: bizneErrorDetail } = useBizneShops();
 
   useEffect(() => {
@@ -40,15 +46,56 @@ export function BrandPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/geo/chain-presets')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.success && Array.isArray(data.presets)) {
+          setChainPresets(data.presets as ChainPresetDirectoryItem[]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingChains(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const chainGpsCategoryLabel = language === 'es' ? 'Cadena GPS' : 'GPS chain';
+
   const categories = useMemo(() => {
     const fromBrands = brands.flatMap((b) => b.categories || []);
     const fromBizne = bizneShops.map((s) => s.storeType).filter(Boolean) as string[];
-    return Array.from(new Set([...fromBrands, ...fromBizne])).filter(Boolean).sort();
-  }, [brands, bizneShops]);
+    const base = Array.from(new Set([...fromBrands, ...fromBizne])).filter(Boolean).sort();
+    if (chainPresets.length > 0) {
+      return [...base, CHAIN_GPS_FILTER];
+    }
+    return base;
+  }, [brands, bizneShops, chainPresets.length]);
+
+  const filteredChainPresets = useMemo(() => {
+    if (!chainPresets.length) return [];
+    if (selectedCategory !== 'all' && selectedCategory !== CHAIN_GPS_FILTER) {
+      return [];
+    }
+    const term = searchTerm.toLowerCase();
+    return chainPresets.filter((p) => {
+      const matchesSearch =
+        !term ||
+        (p.label || '').toLowerCase().includes(term) ||
+        (p.chainBrandName || '').toLowerCase().includes(term) ||
+        (p.id || '').toLowerCase().includes(term);
+      return matchesSearch;
+    });
+  }, [chainPresets, searchTerm, selectedCategory]);
 
   const filteredBrands = useMemo(
     () =>
       brands.filter((b) => {
+        if (selectedCategory === CHAIN_GPS_FILTER) return false;
         const term = searchTerm.toLowerCase();
         const matchesSearch =
           !term ||
@@ -67,6 +114,7 @@ export function BrandPage() {
   const filteredBizneShops = useMemo(
     () =>
       bizneShops.filter((s) => {
+        if (selectedCategory === CHAIN_GPS_FILTER) return false;
         const term = searchTerm.toLowerCase();
         const matchesSearch =
           !term ||
@@ -82,13 +130,18 @@ export function BrandPage() {
     [bizneShops, searchTerm, selectedCategory],
   );
 
-  const waitingForAnyData = !brands.length && !bizneShops.length && (loadingBrands || loadingBizne);
+  const waitingForAnyData =
+    !brands.length &&
+    !bizneShops.length &&
+    !chainPresets.length &&
+    (loadingBrands || loadingBizne || loadingChains);
   const showBrandsBlock = directoryTab === 'all' || directoryTab === 'brands';
   const showShopsBlock = directoryTab === 'all' || directoryTab === 'shops';
+  const hasVisibleChains = showBrandsBlock && filteredChainPresets.length > 0;
   const hasVisibleBrands = showBrandsBlock && filteredBrands.length > 0;
   const hasVisibleShops = showShopsBlock && (loadingBizne || filteredBizneShops.length > 0);
-  const hasAny = hasVisibleBrands || hasVisibleShops;
-  const isEmpty = !loadingBrands && !loadingBizne && !hasAny;
+  const hasAny = hasVisibleChains || hasVisibleBrands || hasVisibleShops;
+  const isEmpty = !loadingBrands && !loadingBizne && !loadingChains && !hasAny;
 
   const tabBtn = (tab: DirectoryTab, label: string, icon: React.ReactNode) => (
     <button
@@ -122,8 +175,8 @@ export function BrandPage() {
               </h1>
               <p className="text-gray-400 max-w-2xl">
                 {language === 'es'
-                  ? 'Marcas registradas en DameCodigo y tiendas de la red BizneAI en un solo lugar. Los negocios que quieren el flujo de subastas y POS enlazado deben alta en la app BizneAI (bizneai.com) para aparecer como tienda aquí.'
-                  : 'DameCodigo-registered brands and BizneAI network stores in one place. Businesses that need the auction and POS workflow must onboard via the BizneAI app (bizneai.com) to appear as a store here.'}
+                  ? 'Marcas registradas en DameCodigo, cadenas con catálogo de sucursales (GPS) para promociones por ubicación, y tiendas BizneAI. Para subastas y POS enlazado, alta en BizneAI (bizneai.com).'
+                  : 'DameCodigo-registered brands, multi-branch GPS catalog chains for location promos, and BizneAI stores. For auctions and POS, onboard via BizneAI (bizneai.com).'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -199,7 +252,7 @@ export function BrandPage() {
                 <option value="all">{language === 'es' ? 'Todas las categorías' : 'All categories'}</option>
                 {categories.map((category) => (
                   <option key={category} value={category}>
-                    {category}
+                    {category === CHAIN_GPS_FILTER ? chainGpsCategoryLabel : category}
                   </option>
                 ))}
               </select>
@@ -232,22 +285,45 @@ export function BrandPage() {
 
         {!waitingForAnyData && hasAny && (
           <div className="space-y-12">
-            {hasVisibleBrands && (
-              <section id="marcas" className="scroll-mt-24">
-                <h2 className="text-xl font-semibold text-gray-100 mb-2 flex items-center gap-2">
-                  <Building2 className="h-6 w-6 text-blue-400" />
-                  {language === 'es' ? 'Marcas en DameCodigo' : 'Brands on DameCodigo'}
-                </h2>
-                <p className="text-sm text-gray-500 mb-6">
-                  {language === 'es'
-                    ? 'Negocios que crearon perfil y promociones en la plataforma.'
-                    : 'Businesses with a profile and promotions on the platform.'}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredBrands.map((brand) => (
-                    <RegisteredBrandCard key={`brand-${brand._id}`} brand={brand} />
-                  ))}
-                </div>
+            {(hasVisibleChains || hasVisibleBrands) && (
+              <section id="marcas" className="scroll-mt-24 space-y-10">
+                {hasVisibleChains && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-100 mb-2 flex items-center gap-2">
+                      <Building2 className="h-6 w-6 text-amber-400" />
+                      {language === 'es' ? 'Cadenas en catálogo (GPS)' : 'Catalog chains (GPS)'}
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-6">
+                      {language === 'es'
+                        ? 'Marcas con sucursales geocodificadas: promociones por ubicación y cupones cerca de tienda. Las añades desde Importar sucursales o el servidor.'
+                        : 'Brands with geocoded branches: location promos and in-store coupons. Add them via bulk import or server catalog.'}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {filteredChainPresets.map((preset) => (
+                        <ChainPresetBrandCard key={`chain-preset-${preset.id}`} preset={preset} language={language} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hasVisibleBrands && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-100 mb-2 flex items-center gap-2">
+                      <Building2 className="h-6 w-6 text-blue-400" />
+                      {language === 'es' ? 'Marcas registradas' : 'Registered brands'}
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-6">
+                      {language === 'es'
+                        ? 'Negocios que crearon perfil y promociones en la plataforma.'
+                        : 'Businesses with a profile and promotions on the platform.'}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {filteredBrands.map((brand) => (
+                        <RegisteredBrandCard key={`brand-${brand._id}`} brand={brand} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 

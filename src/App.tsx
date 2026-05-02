@@ -47,7 +47,8 @@ import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
 import Link4DealEconomyLanding from './pages/Link4DealEconomyLanding';
 import CheckoutPage from './pages/CheckoutPage';
 import CheckoutSuccess from './pages/CheckoutSuccess';
-import InfluencerDashboard from './pages/dashboards/InfluencerDashboard';
+import InfluencerHubDemoPage from './pages/demo/InfluencerHubDemoPage';
+import InfluencerHubPage from './pages/InfluencerHubPage';
 import BrandDashboard from './pages/dashboards/BrandDashboard';
 import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
@@ -125,6 +126,7 @@ function App() {
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/cookies" element={<CookiesPage />} />
+                  <Route path="/demo/influencer-dashboard" element={<InfluencerHubDemoPage />} />
                   <Route path="/user-type-selector" element={<UserTypeSelector />} />
                   <Route path="/influencer-setup" element={<InfluencerSetup />} />
                   <Route path="/brand-setup" element={<BrandSetup />} />
@@ -150,7 +152,7 @@ function App() {
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
-                  <Route path="/admin/influencers" element={<InfluencerDashboard />} />
+                  <Route path="/admin/influencers" element={<InfluencerHubPage />} />
                   <Route path="/admin/brands" element={<BrandDashboard />} />
                   <Route path="/admin/agencies" element={<AgencyDashboard />} />
                   <Route path="/admin/api-docs" element={<ApiDocsPage />} />

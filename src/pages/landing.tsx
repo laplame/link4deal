@@ -14,6 +14,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 import { getPromotionImageUrl } from '../utils/promotionImage';
+import { masonryTierFromId } from '../utils/masonryVariant';
 
 // Productos de ejemplo (fallback si no hay datos de la API)
 const fallbackProducts = [
@@ -1048,29 +1049,31 @@ export default function LandingPage() {
                                 {products.length} ofertas desde la API
                             </span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {products.length > 0 ? (
-                            products.map((product) => (
-                                <ProductCard
-                                    key={product.id}
-                                    product={product}
-                                    onAddToCart={handleAddToCart}
-                                    onAddToWishlist={handleAddToWishlist}
-                                    onViewDetails={handleViewDetails}
-                                />
-                            ))
+                            <div className="columns-1 md:columns-2 xl:columns-3 gap-8 [column-fill:_balance]">
+                                {products.map((product, index) => (
+                                    <div key={product.id} className="break-inside-avoid mb-8">
+                                        <ProductCard
+                                            product={product}
+                                            onAddToCart={handleAddToCart}
+                                            onAddToWishlist={handleAddToWishlist}
+                                            onViewDetails={handleViewDetails}
+                                            masonryTier={masonryTierFromId(product.id, index)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
                         ) : (
-                            <div className="col-span-full text-center py-12">
+                            <div className="text-center py-12">
                                 <p className="text-gray-600 mb-4">No hay promociones disponibles en este momento.</p>
-                                <Link 
-                                    to="/create-promotion" 
+                                <Link
+                                    to="/create-promotion"
                                     className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                                 >
                                     Crear Primera Promoción
                                 </Link>
                             </div>
                         )}
-                        </div>
                     </section>
                 )}
 

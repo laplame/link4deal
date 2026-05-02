@@ -73,7 +73,7 @@ export default function SignUpPage() {
                 lastName: formData.lastName.trim(),
                 primaryRole
             });
-            navigate('/dashboard', { replace: true });
+            navigate(primaryRole === 'influencer' ? '/admin/influencers' : '/dashboard', { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al crear la cuenta');
         } finally {

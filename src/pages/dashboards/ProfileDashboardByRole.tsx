@@ -2,12 +2,11 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import BrandDashboard from './BrandDashboard';
-import InfluencerDashboard from './InfluencerDashboard';
 
 /**
  * Un solo archivo que renderiza el dashboard según el rol del usuario.
  * - brand → BrandDashboard
- * - influencer → InfluencerDashboard
+ * - influencer → /admin/influencers
  * - admin/moderator pueden ver ambos desde el menú; aquí se muestra según primaryRole
  * - Otros roles → redirige a /dashboard
  */
@@ -30,7 +29,7 @@ export default function ProfileDashboardByRole() {
         case 'brand':
             return <BrandDashboard />;
         case 'influencer':
-            return <InfluencerDashboard />;
+            return <Navigate to="/admin/influencers" replace />;
         default:
             return <Navigate to="/dashboard" replace />;
     }

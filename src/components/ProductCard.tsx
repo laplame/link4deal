@@ -4,6 +4,12 @@ import { Heart, Star, ShoppingCart, Eye, Share2, Truck, Shield, Clock, Tag, MapP
 import { formatPrice, calculateDiscountPercentage, shortenAddress } from '../utils/formatters';
 import CouponRequestForm from './CouponRequestForm';
 import { useAuth } from '../context/AuthContext';
+import {
+    type MasonryTier,
+    CARD_ROUNDED_BY_TIER,
+    PRODUCT_CARD_IMAGE_BY_TIER,
+    contentPaddingByTier,
+} from '../utils/masonryVariant';
 
 interface ProductCardProps {
     product: {
@@ -54,13 +60,16 @@ interface ProductCardProps {
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
     onViewDetails?: (productId: string) => void;
+    /** When set, image height and padding vary for masonry-style grids */
+    masonryTier?: MasonryTier;
 }
 
 export default function ProductCard({ 
     product, 
     onAddToCart, 
     onAddToWishlist, 
-    onViewDetails 
+    onViewDetails,
+    masonryTier,
 }: ProductCardProps) {
     const { isAuthenticated } = useAuth();
     const [isWishlisted, setIsWishlisted] = useState(false);
@@ -95,6 +104,11 @@ export default function ProductCard({
 
     const stockStatus = getStockStatus(product.stock);
 
+    const cardRounded = masonryTier !== undefined ? CARD_ROUNDED_BY_TIER[masonryTier] : 'rounded-xl';
+    const imageHeightClass = masonryTier !== undefined ? PRODUCT_CARD_IMAGE_BY_TIER[masonryTier] : 'h-64';
+    const contentPadding = masonryTier !== undefined ? contentPaddingByTier(masonryTier) : 'p-6';
+    const featurePreviewLimit = masonryTier === 0 ? 2 : 3;
+
     const getHotnessColor = (hotness: 'fire' | 'hot' | 'warm') => {
         switch (hotness) {
             case 'fire': return 'from-red-500 to-orange-500';
@@ -115,7 +129,7 @@ export default function ProductCard({
 
     return (
         <div 
-            className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group"
+            className={`bg-white ${cardRounded} shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
@@ -125,7 +139,7 @@ export default function ProductCard({
                     <img
                         src={imageSrc}
                         alt={product.name}
-                        className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
+                        className={`w-full ${imageHeightClass} object-cover group-hover:scale-105 transition-transform duration-300`}
                         onError={() => setImageError(true)}
                     />
                     {/* Overlay on hover */}
@@ -195,7 +209,7 @@ export default function ProductCard({
             </div>
 
             {/* Content Section */}
-            <div className="p-6">
+            <div className={contentPadding}>
                 {/* Brand & Rating */}
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -271,7 +285,7 @@ export default function ProductCard({
                 {/* Features Preview */}
                 <div className="mb-4">
                     <div className="flex flex-wrap gap-1 mb-2">
-                        {product.features.slice(0, 3).map((feature, index) => (
+                        {product.features.slice(0, featurePreviewLimit).map((feature, index) => (
                             <span key={index} className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
                                 {feature}
                             </span>

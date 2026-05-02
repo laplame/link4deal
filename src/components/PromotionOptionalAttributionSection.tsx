@@ -31,16 +31,20 @@ interface PromotionOptionalAttributionSectionProps {
     onShopSelect?: (shop: BizneShop, coordinates: { latitude: number; longitude: number } | null) => void;
     /** Prefijo para ids de inputs (accesibilidad en formularios con varias instancias). */
     idPrefix?: string;
+    variant?: 'light' | 'dark';
 }
 
-const inputClass =
+const inputClassLight =
     'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white';
+const inputClassDark =
+    'w-full px-3 py-2 text-sm border border-white/15 rounded-lg focus:ring-2 focus:ring-amber-500/25 focus:border-amber-400/50 bg-gray-900/60 text-gray-100 placeholder:text-gray-500';
 
 export default function PromotionOptionalAttributionSection({
     value,
     onChange,
     onShopSelect,
-    idPrefix = 'opt-attr'
+    idPrefix = 'opt-attr',
+    variant = 'light'
 }: PromotionOptionalAttributionSectionProps) {
     const [catalogBrands, setCatalogBrands] = useState<RegisteredBrand[]>([]);
     const [catalogShops, setCatalogShops] = useState<BizneShop[]>([]);
@@ -84,6 +88,27 @@ export default function PromotionOptionalAttributionSection({
         };
     }, []);
 
+    const inputClass = variant === 'dark' ? inputClassDark : inputClassLight;
+    const detailsShell =
+        variant === 'dark'
+            ? 'group border border-white/10 rounded-xl bg-gray-900/40 backdrop-blur-sm open:bg-gray-900/55 open:shadow-lg open:shadow-black/20'
+            : 'group border border-gray-200 rounded-xl bg-gray-50/80 open:bg-white open:shadow-sm';
+    const summaryClass =
+        variant === 'dark'
+            ? 'cursor-pointer list-none flex flex-wrap items-center gap-2 px-4 py-3 text-sm font-medium text-gray-200 [&::-webkit-details-marker]:hidden'
+            : 'cursor-pointer list-none flex flex-wrap items-center gap-2 px-4 py-3 text-sm font-medium text-gray-800 [&::-webkit-details-marker]:hidden';
+    const innerBorder = variant === 'dark' ? 'border-t border-white/10' : 'border-t border-gray-100';
+    const helpText = variant === 'dark' ? 'text-xs text-gray-400 pt-3 leading-relaxed' : 'text-xs text-gray-500 pt-3 leading-relaxed';
+    const codeBg = variant === 'dark' ? 'text-indigo-200 bg-white/10 px-1 rounded' : 'text-gray-700 bg-gray-100 px-1 rounded';
+    const labelClass = variant === 'dark' ? 'block text-xs font-medium text-gray-400' : 'block text-xs font-medium text-gray-600';
+    const linkClass =
+        variant === 'dark'
+            ? 'text-violet-400 hover:text-violet-300 underline-offset-2 hover:underline'
+            : 'text-purple-600 hover:text-purple-800 underline-offset-2 hover:underline';
+    const loadingText = variant === 'dark' ? 'text-xs text-gray-500' : 'text-xs text-gray-400';
+    const gpsOk = variant === 'dark' ? 'text-xs text-emerald-400' : 'text-xs text-green-600';
+    const gpsWarn = variant === 'dark' ? 'text-xs text-amber-400' : 'text-xs text-amber-600';
+
     const brandSelectValue = catalogBrands.some((b) => b._id === value.brandId) ? value.brandId : '';
     const shopOptions = catalogShops
         .map((s) => {
@@ -102,35 +127,36 @@ export default function PromotionOptionalAttributionSection({
     };
 
     return (
-        <details className="group border border-gray-200 rounded-xl bg-gray-50/80 open:bg-white open:shadow-sm">
-            <summary className="cursor-pointer list-none flex flex-wrap items-center gap-2 px-4 py-3 text-sm font-medium text-gray-800 [&::-webkit-details-marker]:hidden">
+        <details className={detailsShell}>
+            <summary className={summaryClass}>
                 <span className="flex items-center gap-2 min-w-0">
-                    <Tag className="w-4 h-4 text-purple-600 shrink-0" aria-hidden />
+                    <Tag className={`w-4 h-4 shrink-0 ${variant === 'dark' ? 'text-violet-400' : 'text-purple-600'}`} aria-hidden />
                     Atribución e integración
-                    <span className="text-xs font-normal text-gray-500">(opcional)</span>
+                    <span className={`text-xs font-normal ${variant === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                        (opcional)
+                    </span>
                 </span>
-                <span className="text-xs font-normal text-gray-500 w-full sm:w-auto sm:ml-0">
+                <span
+                    className={`text-xs font-normal w-full sm:w-auto sm:ml-0 ${variant === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}
+                >
                     GTM, UTMs, ids de marca/tienda/producto
                 </span>
             </summary>
-            <div className="px-4 pb-4 pt-0 space-y-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 pt-3 leading-relaxed">
+            <div className={`px-4 pb-4 pt-0 space-y-4 ${innerBorder}`}>
+                <p className={helpText}>
                     Todo es opcional. Se guardan en la promoción y encajan con los mismos nombres que el endpoint{' '}
-                    <code className="text-gray-700 bg-gray-100 px-1 rounded">/api/discount-qr/create</code> (
-                    <code className="text-gray-700 bg-gray-100 px-1 rounded">brandId</code>,{' '}
-                    <code className="text-gray-700 bg-gray-100 px-1 rounded">shopId</code>, …). Puedes elegir ids del
-                    catálogo de{' '}
-                    <Link to="/brands" className="text-purple-600 hover:text-purple-800 underline-offset-2 hover:underline">
+                    <code className={codeBg}>/api/discount-qr/create</code> (
+                    <code className={codeBg}>brandId</code>, <code className={codeBg}>shopId</code>, …). Puedes elegir
+                    ids del catálogo de{' '}
+                    <Link to="/brands" className={linkClass}>
                         Marcas y negocios
                     </Link>
                     .
                 </p>
-                {catalogLoading && (
-                    <p className="text-xs text-gray-400">Cargando marcas y tiendas del catálogo…</p>
-                )}
+                {catalogLoading && <p className={loadingText}>Cargando marcas y tiendas del catálogo…</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                        <label htmlFor={`${idPrefix}-brandId-pick`} className="block text-xs font-medium text-gray-600">
+                        <label htmlFor={`${idPrefix}-brandId-pick`} className={labelClass}>
                             Marca registrada (mismo listado que en /brands)
                         </label>
                         <select
@@ -151,7 +177,7 @@ export default function PromotionOptionalAttributionSection({
                                 </option>
                             ))}
                         </select>
-                        <label htmlFor={`${idPrefix}-brandId`} className="block text-xs font-medium text-gray-600 mb-1 pt-1">
+                        <label htmlFor={`${idPrefix}-brandId`} className={`${labelClass} mb-1 pt-1`}>
                             brandId (texto)
                         </label>
                         <input
@@ -165,7 +191,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div className="space-y-1">
-                        <label htmlFor={`${idPrefix}-shopId-pick`} className="block text-xs font-medium text-gray-600">
+                        <label htmlFor={`${idPrefix}-shopId-pick`} className={labelClass}>
                             Tienda BizneAI (listado violeta en /brands)
                         </label>
                         <select
@@ -192,16 +218,16 @@ export default function PromotionOptionalAttributionSection({
                             const selected = catalogShops.find((s) => (s.id || s._id || '') === shopSelectValue);
                             const coords = getBizneShopCoordinates(selected);
                             return coords ? (
-                                <p className="text-xs text-green-600">
+                                <p className={gpsOk}>
                                     GPS detectado: {coords.latitude}, {coords.longitude}
                                 </p>
                             ) : (
-                                <p className="text-xs text-amber-600">
+                                <p className={gpsWarn}>
                                     Esta tienda no trae GPS en el catálogo; puedes escribir latitud y longitud manualmente.
                                 </p>
                             );
                         })()}
-                        <label htmlFor={`${idPrefix}-shopId`} className="block text-xs font-medium text-gray-600 mb-1 pt-1">
+                        <label htmlFor={`${idPrefix}-shopId`} className={`${labelClass} mb-1 pt-1`}>
                             shopId (texto)
                         </label>
                         <input
@@ -215,7 +241,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div className="sm:col-span-2">
-                        <label htmlFor={`${idPrefix}-externalProductId`} className="block text-xs font-medium text-gray-600 mb-1">
+                        <label htmlFor={`${idPrefix}-externalProductId`} className={`${labelClass} mb-1`}>
                             Id producto (catálogo externo)
                         </label>
                         <input
@@ -229,7 +255,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div>
-                        <label htmlFor={`${idPrefix}-gtmTag`} className="block text-xs font-medium text-gray-600 mb-1">
+                        <label htmlFor={`${idPrefix}-gtmTag`} className={`${labelClass} mb-1`}>
                             gtmTag
                         </label>
                         <input
@@ -243,7 +269,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div>
-                        <label htmlFor={`${idPrefix}-campaignId`} className="block text-xs font-medium text-gray-600 mb-1">
+                        <label htmlFor={`${idPrefix}-campaignId`} className={`${labelClass} mb-1`}>
                             campaignId
                         </label>
                         <input
@@ -257,7 +283,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div>
-                        <label htmlFor={`${idPrefix}-source`} className="block text-xs font-medium text-gray-600 mb-1">
+                        <label htmlFor={`${idPrefix}-source`} className={`${labelClass} mb-1`}>
                             source (UTM)
                         </label>
                         <input
@@ -271,7 +297,7 @@ export default function PromotionOptionalAttributionSection({
                         />
                     </div>
                     <div>
-                        <label htmlFor={`${idPrefix}-medium`} className="block text-xs font-medium text-gray-600 mb-1">
+                        <label htmlFor={`${idPrefix}-medium`} className={`${labelClass} mb-1`}>
                             medium (UTM)
                         </label>
                         <input

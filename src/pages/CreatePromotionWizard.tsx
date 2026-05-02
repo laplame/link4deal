@@ -253,6 +253,99 @@ export default function CreatePromotionWizard() {
         }
     }, [searchParams, setSearchParams]);
 
+    const catalogChainParam = searchParams.get('catalogChain');
+
+    useEffect(() => {
+        if (!catalogChainParam?.trim()) return;
+        let cancelled = false;
+        const id = catalogChainParam.trim();
+        (async () => {
+            setChainPresetApplying(true);
+            setChainPresetLoadError(null);
+            try {
+                const res = await fetch(`/api/geo/chain-presets/${encodeURIComponent(id)}`);
+                const data = await res.json();
+                if (cancelled) return;
+                if (!data.success || !data.preset) {
+                    setChainPresetLoadError(data.message || 'Catálogo no encontrado');
+                    setChainPresetApplying(false);
+                    return;
+                }
+                const preset = data.preset as {
+                    id?: string;
+                    label?: string;
+                    chainBrandName?: string;
+                    chainLocations?: Array<{
+                        branchName?: string;
+                        address?: string;
+                        city?: string;
+                        coordinates?: { latitude?: number; longitude?: number };
+                        mapsUrl?: string;
+                    }>;
+                };
+                const locs = Array.isArray(preset.chainLocations) ? preset.chainLocations : [];
+                const branches = locs.map((loc, i) => ({
+                    key: `cat-url-${id}-${i}-${Math.random().toString(36).slice(2, 9)}`,
+                    branchName: loc.branchName != null ? String(loc.branchName) : '',
+                    address: loc.address != null ? String(loc.address) : '',
+                    city: loc.city != null ? String(loc.city) : '',
+                    latitude:
+                        loc.coordinates?.latitude != null && Number.isFinite(loc.coordinates.latitude)
+                            ? String(loc.coordinates.latitude)
+                            : '',
+                    longitude:
+                        loc.coordinates?.longitude != null && Number.isFinite(loc.coordinates.longitude)
+                            ? String(loc.coordinates.longitude)
+                            : '',
+                    mapsUrl: loc.mapsUrl != null ? String(loc.mapsUrl) : ''
+                }));
+                setPromotionData((prev) => ({
+                    ...prev,
+                    basicInfo: {
+                        ...prev.basicInfo,
+                        brand:
+                            prev.basicInfo.brand ||
+                            (preset.chainBrandName != null ? String(preset.chainBrandName).trim() : '') ||
+                            (preset.label != null ? String(preset.label).trim() : '') ||
+                            prev.basicInfo.brand
+                    },
+                    targeting: {
+                        ...prev.targeting,
+                        isChainStore: true,
+                        chainBrandName:
+                            (preset.chainBrandName != null && String(preset.chainBrandName).trim()) ||
+                            (preset.label != null && String(preset.label).trim()) ||
+                            prev.targeting.chainBrandName,
+                        chainBranches: branches
+                    }
+                }));
+                setChainPresetId(String(preset.id || id));
+                setSearchParams(
+                    (prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.delete('catalogChain');
+                        return next;
+                    },
+                    { replace: true }
+                );
+                const targetingIdx = steps.findIndex((s) => s.id === 'targeting');
+                if (targetingIdx >= 0) setCurrentStep(targetingIdx);
+                if (branches.length === 0) {
+                    setChainPresetLoadError(
+                        'Este catálogo no tiene sucursales con coordenadas. Complétalo en Importar sucursales.'
+                    );
+                }
+            } catch {
+                if (!cancelled) setChainPresetLoadError('Error al cargar el catálogo');
+            } finally {
+                if (!cancelled) setChainPresetApplying(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [catalogChainParam, setSearchParams]);
+
     const [chainPresets, setChainPresets] = useState<ChainPresetMeta[]>([]);
     const [chainPresetId, setChainPresetId] = useState('');
     const [chainPresetApplying, setChainPresetApplying] = useState(false);

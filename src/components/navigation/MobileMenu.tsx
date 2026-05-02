@@ -30,7 +30,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function MobileMenu({ isOpen, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, primaryRole } = useAuth();
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -84,7 +84,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             {isAuthenticated && user ? (
               <>
                 <div className="text-gray-300 text-sm mb-3 px-1">Hola, {user.firstName}</div>
-                <MobileMenuButton to="/dashboard" onClick={onClose}>
+                <MobileMenuButton to={primaryRole === 'influencer' ? '/admin/influencers' : '/dashboard'} onClick={onClose}>
                   <span className="flex items-center gap-2">
                     <User className="h-4 w-4" /> Mi cuenta
                   </span>

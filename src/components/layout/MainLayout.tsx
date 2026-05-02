@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { NavigationHeader } from '../navigation/NavigationHeader';
+import { useAuth } from '../../context/AuthContext';
 
 const pathTitles: Record<string, string> = {
   '/': 'Inicio',
@@ -22,7 +23,10 @@ const pathTitles: Record<string, string> = {
   '/quick-promotion': 'Crear oferta',
   '/create-promotion': 'Crear promoción',
   '/importar-sucursales': 'Importar sucursales',
-  '/admin': 'Admin'
+  '/admin': 'Admin',
+  '/dashboard/panel': 'Mi panel',
+  '/admin/influencers': 'Panel creador',
+  '/demo/influencer-dashboard': 'Demo panel influencer'
 };
 
 function getTitle(pathname: string): string | undefined {
@@ -40,10 +44,18 @@ function getTitle(pathname: string): string | undefined {
 /** Rutas que tienen su propia barra de navegación; no mostrar navbar global para evitar duplicado. */
 const ROUTES_WITH_OWN_NAV = ['/', '/landing', '/comisionista-digital'];
 
+/** Panel hub sin navbar global solo para influencer en estas rutas. */
+const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/admin/influencers'];
+const DEMO_INFLUENCER_HUB_PATH = '/demo/influencer-dashboard';
+
 export function MainLayout() {
   const location = useLocation();
+  const { primaryRole } = useAuth();
   const pathname = location.pathname;
-  const hideGlobalNav = ROUTES_WITH_OWN_NAV.includes(pathname);
+  const hideGlobalNav =
+    ROUTES_WITH_OWN_NAV.includes(pathname) ||
+    pathname === DEMO_INFLUENCER_HUB_PATH ||
+    (INFLUENCER_HUB_PATHS_HIDE_NAV.includes(pathname) && primaryRole === 'influencer');
   const title = getTitle(pathname);
 
   return (

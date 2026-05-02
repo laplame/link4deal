@@ -29,6 +29,12 @@ import {
 } from 'lucide-react';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
 import { getPromotionImageUrl } from '../utils/promotionImage';
+import {
+  CARD_ROUNDED_BY_TIER,
+  MARKETPLACE_IMAGE_BY_TIER,
+  contentPaddingByTier,
+  marketplaceMasonryTier,
+} from '../utils/masonryVariant';
 
 const IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
 
@@ -660,17 +666,22 @@ export default function PromotionsMarketplace() {
           </div>
         )}
 
-        {/* Grid de promociones */}
-        {!isLoading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPromotions.map((promotion) => (
-            <div key={promotion.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+        {/* Grid de promociones — layout tipo masonry */}
+        {!isLoading && !error && filteredPromotions.length > 0 && (
+          <div className="columns-1 md:columns-2 xl:columns-3 gap-6 [column-fill:_balance]">
+            {filteredPromotions.map((promotion, index) => {
+              const tier = marketplaceMasonryTier(promotion, index);
+              const cardRounded = CARD_ROUNDED_BY_TIER[tier];
+              const imgHeight = MARKETPLACE_IMAGE_BY_TIER[tier];
+              const bodyPad = contentPaddingByTier(tier);
+              return (
+            <div key={promotion.id} className={`break-inside-avoid mb-6 bg-white ${cardRounded} shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow`}>
               {/* Imagen y badges */}
               <div className="relative">
                 <img 
                   src={promotion.image} 
                   alt={promotion.title}
-                  className="w-full h-48 object-cover"
+                  className={`w-full ${imgHeight} object-cover`}
                   onError={(e) => { (e.target as HTMLImageElement).src = IMAGE_PLACEHOLDER; }}
                 />
                 <div className="absolute top-3 left-3 flex flex-col gap-2">
@@ -716,7 +727,7 @@ export default function PromotionsMarketplace() {
               </div>
 
               {/* Contenido */}
-              <div className="p-6">
+              <div className={bodyPad}>
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -840,7 +851,8 @@ export default function PromotionsMarketplace() {
                 </div>
               </div>
             </div>
-          ))}
+              );
+            })}
           </div>
         )}
 

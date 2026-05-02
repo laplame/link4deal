@@ -31,7 +31,13 @@ export default function SignInPage() {
         setIsLoading(true);
         try {
             const data = await login({ login: formData.login, password: formData.password });
-            navigate(data?.user?.isSuperAdmin ? '/admin' : '/dashboard', { replace: true });
+            const u = data?.user;
+            const dest = u?.isSuperAdmin
+                ? '/admin'
+                : u?.primaryRole === 'influencer'
+                  ? '/admin/influencers'
+                  : '/dashboard';
+            navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
         } finally {

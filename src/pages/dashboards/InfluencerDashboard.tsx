@@ -1,47 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-    ArrowLeft, 
-    Camera, 
-    Users, 
-    TrendingUp, 
-    DollarSign, 
-    Target, 
-    BarChart3, 
+import InfluencerHubLayout, { type InfluencerHubNavEntry } from '../../components/dashboard/InfluencerHubLayout';
+import InfluencerThreadsView, { type ThreadItem } from '../../components/dashboard/InfluencerThreadsView';
+import {
     Calendar,
-    Eye,
-    Heart,
-    Share2,
-    MessageCircle,
-    Mail,
-    Inbox,
+    Users,
+    Library,
+    TrendingUp,
+    Target,
     Zap,
     Star,
-    Award,
-    Clock,
     CheckCircle,
+    Clock,
     AlertCircle,
-    ExternalLink,
-    Download,
-    Filter,
+    Eye,
+    Edit,
     Search,
     Plus,
-    Settings,
-    Bell,
-    Phone,
-    Globe,
-    MapPin,
-    Tag,
-    ShoppingBag,
+    Camera,
+    BarChart3,
+    ArrowLeft,
+    Radio,
+    MessageSquare,
+    GraduationCap,
     CreditCard,
     Wallet,
-    Gift,
-    Trophy,
-    Fire,
-    Sparkles,
-    Edit
+    Tag,
+    ShoppingBag,
+    Gift
 } from 'lucide-react';
+
+type HubSection =
+    | 'channels-threads'
+    | 'eventos'
+    | 'cursos'
+    | 'recursos'
+    | 'pagos'
+    | 'directorio';
 
 interface Influencer {
     id: string;
@@ -107,11 +103,12 @@ export default function InfluencerDashboard() {
     const [influencers, setInfluencers] = useState<Influencer[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [earnings, setEarnings] = useState<Earning[]>([]);
-    const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
     const [inboxLoading, setInboxLoading] = useState(false);
+    const [section, setSection] = useState<HubSection>('eventos');
+    const [campaignTab, setCampaignTab] = useState<'proximas' | 'activas' | 'pasadas'>('activas');
 
     useEffect(() => {
         if (!isInfluencerRole) return;
@@ -237,7 +234,6 @@ export default function InfluencerDashboard() {
 
     const totalInfluencers = influencers.length;
     const activeInfluencers = influencers.filter(i => i.status === 'active' || i.status === 'verified').length;
-    const totalEarnings = influencers.reduce((sum, i) => sum + i.totalEarnings, 0);
     const totalMonthlyEarnings = influencers.reduce((sum, i) => sum + i.monthlyEarnings, 0);
     const totalCampaigns = campaigns.length;
     const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
@@ -249,13 +245,146 @@ export default function InfluencerDashboard() {
         return matchesSearch && matchesStatus;
     });
 
+    const navTree = useMemo((): InfluencerHubNavEntry[] => {
+        const tree: InfluencerHubNavEntry[] = [];
+        if (isInfluencerRole) {
+            tree.push({
+                type: 'group',
+                id: 'channels',
+                label: 'Canales',
+                icon: <Radio className="h-4 w-4" />,
+                defaultOpen: true,
+                children: [
+                    {
+                        id: 'channels-threads',
+                        label: 'Hilos · mensajes personales',
+                        icon: <MessageSquare className="h-3.5 w-3.5" />
+                    }
+                ]
+            });
+        }
+        if (!isInfluencerRole) {
+            tree.push({
+                type: 'item',
+                id: 'directorio',
+                label: 'Directorio',
+                icon: <Users className="h-4 w-4" />
+            });
+        }
+        tree.push(
+            {
+                type: 'item',
+                id: 'eventos',
+                label: 'Eventos',
+                icon: <Calendar className="h-4 w-4" />
+            },
+            {
+                type: 'item',
+                id: 'cursos',
+                label: 'Cursos online',
+                icon: <GraduationCap className="h-4 w-4" />
+            },
+            {
+                type: 'item',
+                id: 'recursos',
+                label: 'Recursos',
+                icon: <Library className="h-4 w-4" />
+            },
+            {
+                type: 'item',
+                id: 'pagos',
+                label: 'Pagos',
+                icon: <CreditCard className="h-4 w-4" />
+            }
+        );
+        return tree;
+    }, [isInfluencerRole]);
+
+    const sidebarQuickLinks = (isInfluencerRole
+        ? [
+              { to: '/marketplace', label: 'Ofertas y cupones', icon: <Tag className="h-4 w-4" /> },
+              { to: '/cart', label: 'Carrito', icon: <ShoppingBag className="h-4 w-4" /> },
+              { to: '/categories', label: 'Categorías', icon: <Gift className="h-4 w-4" /> }
+          ]
+        : undefined);
+
+    const mainTitle = useMemo(() => {
+        switch (section) {
+            case 'channels-threads':
+                return 'Hilos · mensajes personales';
+            case 'eventos':
+                return 'Eventos';
+            case 'cursos':
+                return 'Cursos online';
+            case 'recursos':
+                return 'Recursos';
+            case 'pagos':
+                return 'Pagos';
+            case 'directorio':
+                return 'Directorio';
+            default:
+                return 'Panel';
+        }
+    }, [section]);
+
+    const brandTitle =
+        isInfluencerRole && influencers[0]?.name ? influencers[0].name : 'Link4Deal';
+    const brandSubtitle = isInfluencerRole
+        ? 'Canales, eventos, cursos y pagos'
+        : 'Herramientas de comunidad';
+    const avatarUrl = isInfluencerRole && influencers[0]?.avatar ? influencers[0].avatar : null;
+
+    const tabCampaigns = useMemo(() => {
+        if (campaignTab === 'activas') return campaigns.filter((c) => c.status === 'active');
+        if (campaignTab === 'pasadas')
+            return campaigns.filter((c) => c.status === 'completed' || c.status === 'cancelled');
+        return campaigns.filter((c) => c.status === 'pending');
+    }, [campaigns, campaignTab]);
+
+    function fmtCampaignDate(s: string) {
+        if (!s) return '—';
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) return s;
+        return d.toLocaleDateString('es', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    const threadItems = useMemo(
+        (): ThreadItem[] =>
+            inboxMessages.map((msg) => ({
+                id: msg.id,
+                authorName: msg.senderName,
+                authorEmail: msg.senderEmail,
+                body: msg.message,
+                createdAt: msg.createdAt,
+                isUnread: !msg.read,
+                replies: []
+            })),
+        [inboxMessages]
+    );
+
+    const inboxUnreadCount = useMemo(() => inboxMessages.filter((m) => !m.read).length, [inboxMessages]);
+
+    const threadsOnlineMembers = useMemo(() => {
+        if (!isInfluencerRole || !influencers[0]) return [];
+        const me = influencers[0];
+        return [
+            { id: 'self', name: me.name || 'Tú', avatarUrl: me.avatar || undefined },
+            { id: 'ld-team', name: 'Equipo Link4Deal' }
+        ];
+    }, [isInfluencerRole, influencers]);
+
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'verified': return 'bg-green-100 text-green-800';
-            case 'active': return 'bg-blue-100 text-blue-800';
-            case 'pending': return 'bg-yellow-100 text-yellow-800';
-            case 'suspended': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-800';
+            case 'verified':
+                return 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/20';
+            case 'active':
+                return 'bg-violet-500/15 text-violet-200 ring-1 ring-violet-500/25';
+            case 'pending':
+                return 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/25';
+            case 'suspended':
+                return 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/20';
+            default:
+                return 'bg-white/10 text-gray-300';
         }
     };
 
@@ -269,440 +398,399 @@ export default function InfluencerDashboard() {
         }
     };
 
+    const campaignTabs = [
+        { id: 'proximas' as const, label: 'Próximas' },
+        { id: 'activas' as const, label: 'Activas' },
+        { id: 'pasadas' as const, label: 'Pasadas' }
+    ];
+
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <div className="bg-white shadow-sm border-b">
-                <div className="max-w-7xl mx-auto px-4 py-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <Link 
-                                to="/admin" 
-                                className="text-gray-500 hover:text-gray-700 transition-colors"
-                            >
-                                <ArrowLeft className="w-6 h-6" />
-                            </Link>
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900">
-                                    Panel de Influencers
-                                </h1>
-                                <p className="text-gray-600 mt-1">
-                                    Gestión completa de influencers, métricas y campañas
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                                <Plus className="w-4 h-4" />
-                                Nuevo Influencer
-                            </button>
-                            <button className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors">
-                                <Settings className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Total Influencers</p>
-                                <p className="text-2xl font-bold text-gray-900">{totalInfluencers}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Users className="w-6 h-6 text-blue-600" />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +12% este mes
-                        </div>
-                    </div>
-
-                    {isInfluencerRole && (
-                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 md:col-span-2 lg:col-span-5">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Inbox className="w-5 h-5 text-purple-600" />
-                                <h2 className="text-lg font-semibold text-gray-900">Mensajes recibidos</h2>
-                            </div>
-                            <p className="text-sm text-gray-500 mb-4">
-                                Mensajes que te han dejado desde tu perfil público. Los ves aquí al iniciar sesión.
+        <InfluencerHubLayout
+            brandTitle={brandTitle}
+            brandSubtitle={brandSubtitle}
+            avatarUrl={avatarUrl}
+            navTree={navTree}
+            activeNavId={section}
+            onNavChange={(id) => setSection(id as HubSection)}
+            mainTitle={mainTitle}
+            tabs={section === 'eventos' ? campaignTabs : undefined}
+            activeTabId={section === 'eventos' ? campaignTab : undefined}
+            onTabChange={
+                section === 'eventos'
+                    ? (id) => setCampaignTab(id as 'proximas' | 'activas' | 'pasadas')
+                    : undefined
+            }
+            topRight={
+                !isInfluencerRole ? (
+                    <Link
+                        to="/admin"
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-gray-900/60 px-4 py-2 text-sm font-medium text-gray-200 shadow-sm hover:bg-white/10 transition-colors"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Panel admin
+                    </Link>
+                ) : undefined
+            }
+            sidebarQuickLinks={sidebarQuickLinks}
+        >
+            {section === 'eventos' && (
+                <div className="space-y-8 max-w-4xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-amber-500/70">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                {isInfluencerRole ? 'Ganancias totales' : 'Influencers'}
                             </p>
-                            {inboxLoading ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent" />
+                            <p className="text-2xl font-bold text-white mt-1">
+                                {isInfluencerRole
+                                    ? `$${(influencers[0]?.totalEarnings ?? 0).toLocaleString()}`
+                                    : totalInfluencers}
+                            </p>
+                            <div className="mt-2 flex items-center text-xs text-emerald-400">
+                                <TrendingUp className="w-3.5 h-3.5 mr-1" />
+                                {isInfluencerRole ? 'Historial acumulado' : 'Registrados'}
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-orange-400">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                Este mes
+                            </p>
+                            <p className="text-2xl font-bold text-white mt-1">
+                                $
+                                {(isInfluencerRole
+                                    ? influencers[0]?.monthlyEarnings
+                                    : totalMonthlyEarnings) ?? 0}
+                            </p>
+                            <div className="mt-2 flex items-center text-xs text-emerald-400">
+                                <TrendingUp className="w-3.5 h-3.5 mr-1" />
+                                Estimado
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-pink-400">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                Campañas activas
+                            </p>
+                            <p className="text-2xl font-bold text-white mt-1">{activeCampaigns}</p>
+                            <div className="mt-2 flex items-center text-xs text-gray-400">
+                                <Target className="w-3.5 h-3.5 mr-1" />
+                                {totalCampaigns} en total
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-violet-400">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                {isInfluencerRole ? 'Completadas' : 'Activos / verif.'}
+                            </p>
+                            <p className="text-2xl font-bold text-white mt-1">
+                                {isInfluencerRole
+                                    ? influencers[0]?.completedCampaigns ?? 0
+                                    : activeInfluencers}
+                            </p>
+                            <div className="mt-2 flex items-center text-xs text-gray-400">
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                                Rendimiento
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-3xl space-y-4">
+                        {tabCampaigns.length === 0 ? (
+                            <p className="text-gray-400 text-sm py-12 text-center rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm">
+                                No hay eventos en esta vista. Prueba otra pestaña o sincroniza campañas desde tu
+                                perfil.
+                            </p>
+                        ) : (
+                            tabCampaigns.map((campaign) => (
+                                <div key={campaign.id} className="flex gap-4 items-stretch">
+                                    <div className="w-28 shrink-0 text-sm text-gray-400 pt-3 font-medium leading-snug">
+                                        {fmtCampaignDate(campaign.startDate)}
+                                    </div>
+                                    <div className="flex-1 rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm border-l-[3px] border-l-amber-500/70 px-5 py-4">
+                                        <p className="font-semibold text-white text-base">{campaign.title}</p>
+                                        <p className="text-sm text-gray-400 mt-0.5">
+                                            {campaign.startDate && campaign.endDate !== campaign.startDate
+                                                ? `${campaign.startDate} — ${campaign.endDate}`
+                                                : campaign.brand}
+                                        </p>
+                                        <p className="text-sm text-gray-300 mt-3 line-clamp-2">
+                                            {campaign.brand} · ${campaign.earnings.toLocaleString()} · Progreso{' '}
+                                            {campaign.progress}%
+                                        </p>
+                                    </div>
                                 </div>
-                            ) : inboxMessages.length === 0 ? (
-                                <p className="text-gray-500 py-6">No tienes mensajes aún.</p>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {section === 'channels-threads' && isInfluencerRole && (
+                <InfluencerThreadsView
+                    threads={threadItems}
+                    loading={inboxLoading}
+                    onlineMembers={threadsOnlineMembers}
+                    channelTitle="mensajes-personales"
+                    channelSubtitle="Hilos desde tu perfil público (sesión iniciada)"
+                    notificationCount={inboxUnreadCount}
+                />
+            )}
+
+            {section === 'channels-threads' && !isInfluencerRole && (
+                <p className="text-gray-400">
+                    Los hilos y mensajes personales del creador están disponibles con cuenta influencer.
+                </p>
+            )}
+
+            {section === 'cursos' && (
+                <div className="max-w-2xl rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-10 text-center">
+                    <GraduationCap className="h-14 w-14 text-amber-400 mx-auto mb-4" strokeWidth={1.25} />
+                    <h2 className="text-lg font-semibold text-white">Cursos online</h2>
+                    <p className="text-sm text-gray-400 mt-3 leading-relaxed">
+                        Próximamente: módulos en video, materiales descargables y certificados para la comunidad de
+                        creadores.
+                    </p>
+                </div>
+            )}
+
+            {section === 'pagos' && (
+                <div className="space-y-6 max-w-4xl">
+                    {isInfluencerRole && (
+                        <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-emerald-500">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                        Total estimado
+                                    </p>
+                                    <p className="text-2xl font-bold text-white mt-1 flex items-center gap-2">
+                                        <Wallet className="h-6 w-6 text-emerald-400" />
+                                        ${(influencers[0]?.totalEarnings ?? 0).toLocaleString()}
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-5 border-l-4 border-l-amber-400">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                        Este mes
+                                    </p>
+                                    <p className="text-2xl font-bold text-white mt-1 flex items-center gap-2">
+                                        <CreditCard className="h-6 w-6 text-amber-400" />
+                                        ${(influencers[0]?.monthlyEarnings ?? 0).toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                Actualiza tus datos fiscales y método de cobro cuando activemos la configuración
+                                completa en esta sección.
+                            </p>
+                            {earnings.length === 0 ? (
+                                <p className="text-gray-400 py-10 text-center rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm text-sm">
+                                    Aún no hay movimientos de pago registrados.
+                                </p>
                             ) : (
-                                <ul className="space-y-3 max-h-80 overflow-y-auto">
-                                    {inboxMessages.map((msg) => (
-                                        <li
-                                            key={msg.id}
-                                            className={`border rounded-lg p-4 ${msg.read ? 'bg-gray-50 border-gray-200' : 'bg-purple-50/50 border-purple-200'}`}
+                                <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm divide-y divide-white/10">
+                                    {earnings.map((earning) => (
+                                        <div
+                                            key={earning.id}
+                                            className="flex items-center justify-between gap-4 px-5 py-4 text-sm"
                                         >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="font-medium text-gray-900">{msg.senderName}</p>
-                                                    {msg.senderEmail && (
-                                                        <p className="text-sm text-gray-500">{msg.senderEmail}</p>
-                                                    )}
-                                                    <p className="text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</p>
-                                                    <p className="text-xs text-gray-400 mt-2">
-                                                        {new Date(msg.createdAt).toLocaleString('es')}
-                                                    </p>
-                                                </div>
-                                                {!msg.read && (
-                                                    <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-purple-200 text-purple-800">
-                                                        Nuevo
-                                                    </span>
-                                                )}
+                                            <div className="min-w-0">
+                                                <p className="font-medium text-white truncate">
+                                                    {earning.campaign}
+                                                </p>
+                                                <p className="text-gray-400">{earning.date}</p>
                                             </div>
-                                        </li>
+                                            <div className="text-right shrink-0">
+                                                <p className="font-semibold text-emerald-400">
+                                                    ${earning.amount.toLocaleString()}
+                                                </p>
+                                                <p className="text-xs text-gray-400 capitalize">{earning.status}</p>
+                                            </div>
+                                        </div>
                                     ))}
-                                </ul>
+                                </div>
                             )}
-                        </div>
+                        </>
                     )}
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Activos</p>
-                                <p className="text-2xl font-bold text-gray-900">{activeInfluencers}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                                <Zap className="w-6 h-6 text-green-600" />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +8% este mes
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Ganancias Totales</p>
-                                <p className="text-2xl font-bold text-gray-900">${totalEarnings.toLocaleString()}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <DollarSign className="w-6 h-6 text-purple-600" />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +15% este mes
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Ganancias Mensuales</p>
-                                <p className="text-2xl font-bold text-gray-900">${totalMonthlyEarnings.toLocaleString()}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                                <TrendingUp className="w-6 h-6 text-yellow-600" />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +22% este mes
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Campañas Activas</p>
-                                <p className="text-2xl font-bold text-gray-900">{activeCampaigns}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                                <Target className="w-6 h-6 text-orange-600" />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +5% este mes
-                        </div>
-                    </div>
+                    {!isInfluencerRole && (
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                            El detalle de pagos a influencers se coordina con marcas y operaciones. Usa el panel
+                            admin para reportes globales.
+                        </p>
+                    )}
                 </div>
+            )}
 
-                {/* Filters and Search */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 mb-8">
-                    <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                        <div className="flex-1 max-w-md">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar influencers..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
+            {section === 'directorio' && !isInfluencerRole && (
+                <div className="space-y-6 max-w-6xl">
+                    <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Buscar influencers..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/15 bg-gray-900/60 text-gray-100 text-sm placeholder:text-gray-500 focus:ring-2 focus:ring-amber-500/25 focus:border-amber-400/50"
+                            />
                         </div>
-                        
-                        <div className="flex gap-3">
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="all">Todos los estados</option>
-                                <option value="verified">Verificados</option>
-                                <option value="active">Activos</option>
-                                <option value="pending">Pendientes</option>
-                                <option value="suspended">Suspendidos</option>
-                            </select>
-                            
-                            <select
-                                value={selectedPeriod}
-                                onChange={(e) => setSelectedPeriod(e.target.value as any)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="7d">Últimos 7 días</option>
-                                <option value="30d">Últimos 30 días</option>
-                                <option value="90d">Últimos 90 días</option>
-                                <option value="1y">Último año</option>
-                            </select>
-                        </div>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="rounded-xl border border-white/15 bg-gray-900/60 text-gray-100 px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500/25"
+                        >
+                            <option value="all">Todos los estados</option>
+                            <option value="verified">Verificados</option>
+                            <option value="active">Activos</option>
+                            <option value="pending">Pendientes</option>
+                            <option value="suspended">Suspendidos</option>
+                        </select>
                     </div>
-                </div>
 
-                {/* Influencers List */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-                    <div className="p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-900">Lista de Influencers</h2>
-                        <p className="text-gray-600 mt-1">Gestiona todos los influencers registrados en la plataforma</p>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Influencer
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Seguidores
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Engagement
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Ganancias
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Campañas
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Estado
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Acciones
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredInfluencers.map((influencer) => (
-                                    <tr key={influencer.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <img
-                                                    className="w-10 h-10 rounded-full"
-                                                    src={influencer.avatar}
-                                                    alt={influencer.name}
-                                                />
-                                                <div className="ml-4">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {influencer.name}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500">
-                                                        {influencer.username}
-                                                    </div>
-                                                    <div className="text-xs text-gray-400">
-                                                        {influencer.location}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                {influencer.followers.toLocaleString()}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                seguidores
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className="text-sm text-gray-900">
-                                                    {influencer.engagement}%
-                                                </div>
-                                                <div className="ml-2 flex items-center text-yellow-400">
-                                                    <Star className="w-4 h-4 fill-current" />
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                ${influencer.totalEarnings.toLocaleString()}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                total
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                {influencer.activeCampaigns} activas
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {influencer.completedCampaigns} completadas
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(influencer.status)}`}>
-                                                {getStatusIcon(influencer.status)}
-                                                <span className="ml-1 capitalize">{influencer.status}</span>
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex space-x-2">
-                                                <button className="text-blue-600 hover:text-blue-900">
-                                                    <Eye className="w-4 h-4" />
-                                                </button>
-                                                <button className="text-green-600 hover:text-green-900">
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button className="text-purple-600 hover:text-purple-900">
-                                                    <MessageCircle className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
+                    <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-950/60 text-gray-400 text-xs uppercase tracking-wide">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left">Influencer</th>
+                                        <th className="px-4 py-3 text-left">Seguidores</th>
+                                        <th className="px-4 py-3 text-left">Engagement</th>
+                                        <th className="px-4 py-3 text-left">Ganancias</th>
+                                        <th className="px-4 py-3 text-left">Estado</th>
+                                        <th className="px-4 py-3 text-left">Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Campaigns Overview */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    {/* Active Campaigns */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Campañas Activas</h3>
-                            <p className="text-gray-600 text-sm">Campañas en curso y próximas</p>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                {campaigns.filter(c => c.status === 'active').map((campaign) => (
-                                    <div key={campaign.id} className="border border-gray-200 rounded-lg p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-medium text-gray-900">{campaign.title}</h4>
-                                            <span className="text-sm text-blue-600 font-medium">
-                                                ${campaign.earnings.toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mb-3">{campaign.brand}</p>
-                                        <div className="flex items-center justify-between text-sm text-gray-500">
-                                            <span>{campaign.type} • {campaign.category}</span>
-                                            <span>{campaign.progress}% completado</span>
-                                        </div>
-                                        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                                            <div 
-                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                                style={{ width: `${campaign.progress}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Recent Earnings */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Ganancias Recientes</h3>
-                            <p className="text-gray-600 text-sm">Últimas transacciones y comisiones</p>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                {earnings.slice(0, 5).map((earning) => (
-                                    <div key={earning.id} className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-gray-900">{earning.campaign}</p>
-                                            <p className="text-sm text-gray-600">{earning.brand}</p>
-                                            <p className="text-xs text-gray-500">{earning.date}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-medium text-green-600">
-                                                ${earning.amount.toLocaleString()}
-                                            </p>
-                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                earning.status === 'paid' ? 'bg-green-100 text-green-800' :
-                                                earning.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800'
-                                            }`}>
-                                                {earning.status === 'paid' ? 'Pagado' : 
-                                                 earning.status === 'processing' ? 'Procesando' : 'Pendiente'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                </thead>
+                                <tbody className="divide-y divide-white/10">
+                                    {filteredInfluencers.map((influencer) => (
+                                        <tr key={influencer.id} className="hover:bg-white/5">
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <img
+                                                        className="w-10 h-10 rounded-full object-cover bg-white/10"
+                                                        src={influencer.avatar || '/placeholder-avatar.png'}
+                                                        alt=""
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).src =
+                                                                'data:image/svg+xml,' +
+                                                                encodeURIComponent(
+                                                                    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect fill="#e4e4e7" width="40" height="40"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-size="14">?</text></svg>`
+                                                                );
+                                                        }}
+                                                    />
+                                                    <div>
+                                                        <div className="font-medium text-white">
+                                                            {influencer.name}
+                                                        </div>
+                                                        <div className="text-gray-400 text-xs">
+                                                            {influencer.username}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-200">
+                                                {influencer.followers.toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="inline-flex items-center gap-1 text-gray-200">
+                                                    {influencer.engagement}%
+                                                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-200">
+                                                ${influencer.totalEarnings.toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(influencer.status)}`}
+                                                >
+                                                    {getStatusIcon(influencer.status)}
+                                                    {influencer.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex gap-2 text-gray-400">
+                                                    <button type="button" aria-label="Ver">
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    <button type="button" aria-label="Editar">
+                                                        <Edit className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
+            )}
 
-                {/* Quick Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="p-6 border-b border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900">Acciones Rápidas</h3>
-                        <p className="text-gray-600 text-sm">Acceso directo a funciones principales</p>
-                    </div>
-                    <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all duration-200">
-                                <Plus className="w-8 h-8 text-blue-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Nuevo Influencer</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                                <Target className="w-8 h-8 text-green-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Nueva Campaña</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all duration-200">
-                                <BarChart3 className="w-8 h-8 text-purple-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Ver Reportes</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-all duration-200">
-                                <Download className="w-8 h-8 text-orange-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Exportar Datos</span>
-                            </button>
+            {section === 'directorio' && isInfluencerRole && (
+                <p className="text-gray-400">El directorio completo está disponible para el equipo moderador.</p>
+            )}
 
-                            <Link 
-                                to="/admin/ocr-profile" 
-                                className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all duration-200"
+            {section === 'recursos' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
+                    <Link
+                        to="/marketplace"
+                        className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all group"
+                    >
+                        <Target className="w-8 h-8 text-violet-400 mb-3" />
+                        <p className="font-semibold text-white">Marketplace</p>
+                        <p className="text-sm text-gray-400 mt-1">Ofertas y promociones</p>
+                    </Link>
+                    <Link
+                        to="/subastas"
+                        className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
+                    >
+                        <Zap className="w-8 h-8 text-orange-500 mb-3" />
+                        <p className="font-semibold text-white">Subastas</p>
+                        <p className="text-sm text-gray-400 mt-1">En vivo y pujas</p>
+                    </Link>
+                    <Link
+                        to="/influencers"
+                        className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
+                    >
+                        <Users className="w-8 h-8 text-pink-500 mb-3" />
+                        <p className="font-semibold text-white">Comunidad</p>
+                        <p className="text-sm text-gray-400 mt-1">Perfiles públicos</p>
+                    </Link>
+                    {!isInfluencerRole && (
+                        <>
+                            <Link
+                                to="/admin/ocr-profile"
+                                className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
                             >
-                                <Camera className="w-8 h-8 text-red-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">OCR Perfiles</span>
+                                <Camera className="w-8 h-8 text-rose-500 mb-3" />
+                                <p className="font-semibold text-white">OCR perfiles</p>
+                                <p className="text-sm text-gray-400 mt-1">Digitalizar datos</p>
                             </Link>
-                        </div>
-                    </div>
+                            <button
+                                type="button"
+                                className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm text-left opacity-80 cursor-not-allowed"
+                            >
+                                <Plus className="w-8 h-8 text-gray-500 mb-3" />
+                                <p className="font-semibold text-gray-200">Nuevo influencer</p>
+                                <p className="text-sm text-gray-400 mt-1">Próximamente</p>
+                            </button>
+                            <Link
+                                to="/dashboard"
+                                className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
+                            >
+                                <BarChart3 className="w-8 h-8 text-violet-500 mb-3" />
+                                <p className="font-semibold text-white">Mi panel rol</p>
+                                <p className="text-sm text-gray-400 mt-1">Vista según cuenta</p>
+                            </Link>
+                        </>
+                    )}
+                    {isInfluencerRole && influencers[0]?.username && (
+                        <Link
+                            to={`/influencer/${encodeURIComponent(influencers[0].username.replace(/^@/, ''))}`}
+                            className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
+                        >
+                            <Eye className="w-8 h-8 text-cyan-400 mb-3" />
+                            <p className="font-semibold text-white">Ver mi perfil público</p>
+                            <p className="text-sm text-gray-400 mt-1">Cómo te ven las marcas</p>
+                        </Link>
+                    )}
                 </div>
-            </div>
-        </div>
+            )}
+        </InfluencerHubLayout>
     );
 }
