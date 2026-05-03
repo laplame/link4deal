@@ -11,7 +11,8 @@ Este documento integra **todos los campos del schema de Promoción** (y lo neces
 | **Crear promoción (mínimo)** | `title` (obligatorio). Recomendado: `productName`, `brand`, `category`, `originalPrice`, `currentPrice`, `currency`, `validFrom`, `validUntil`, `totalQuantity`, `offerType`. |
 | **Tokenización (unidad calculable)** | `offerType`, `originalPrice`, `discountPercentage` o `currentPrice`; opcional `cashbackValue`. El backend calcula `promotionalValueUsd`. |
 | **Definición legal (Gherkin)** | Precio base (USD), producto, características, cantidad máxima (`totalQuantity`), vigencia (`validFrom`, `validUntil`). |
-| **Cupón QR (crear)** | Ver sección 6; no es parte del schema Promotion sino del flujo `POST /api/discount-qr/create`. |
+| **Cupón solo en tienda (GPS)** | `activateByGps`, `gpsRadiusMeters`, coordenadas en `storeLocation` y/o en `chainLocations`. Ver **sección 6**. |
+| **Cupón QR (crear)** | Ver sección 7; no es parte del schema Promotion sino del flujo `POST /api/discount-qr/create`. |
 
 ---
 
@@ -46,8 +47,13 @@ Este documento integra **todos los campos del schema de Promoción** (y lo neces
 | Campo | Tipo | Obligatorio | Default / enum | Descripción |
 |-------|------|-------------|----------------|-------------|
 | **storeName** | string | No | — | Nombre de la tienda. |
-| **storeLocation** | object | No | — | `address`, `city`, `state`, `country` (default `'México'`), `coordinates`: `{ latitude, longitude }`. |
+| **storeLocation** | object | No | — | `address`, `city`, `state`, `country` (default `'México'`), `coordinates`: `{ latitude, longitude }`. Punto principal de la promoción. |
 | **isPhysicalStore** | boolean | No | `false` | Si aplica a tienda física. |
+| **activateByGps** | boolean | No | `false` | Si es `true`, la **app o la web** debe pedir ubicación y comprobar que el usuario está dentro de `gpsRadiusMeters` respecto al punto de tienda o a **cualquier** sucursal con coordenadas en `chainLocations`. Alias móvil: **`gpsActivationEnabled`**. |
+| **gpsRadiusMeters** | number | No | `500` | Radio en metros (mín. 50, máx. 50 000). Alias móvil: **`locationRadiusMeters`**. |
+| **isChainStore** | boolean | No | `false` | Indica cadena con varias sucursales; acompaña a `chainLocations`. |
+| **chainBrandName** | string | No | `''` | Nombre comercial de la cadena. |
+| **chainLocations** | array | No | `[]` | Sucursales: `branchName`, `address`, `city`, `state`, `country`, `coordinates` `{ latitude, longitude }`, `mapsUrl`. Para GPS, basta con que **al menos una** sucursal tenga coordenadas válidas. |
 | **allowedShopIds** | string[] | No | — | IDs de tiendas donde aplica (vacío = todas). |
 | **allowedProductIds** | string[] | No | — | IDs de productos a los que aplica (vacío = todos). |
 
@@ -123,7 +129,8 @@ Los mismos nombres que el schema. Para fechas se suele enviar string ISO o `YYYY
 - `offerType` (`percentage` | `bogo` | `cashback_fixed` | `cashback_percentage`), y si aplica `cashbackValue`
 - `validFrom`, `validUntil`
 - `totalQuantity` (máximo de cupones redimibles)
-- `storeName`, `storeLocation.city`, `storeLocation.address` (opcional)
+- `storeName`, `storeLocation` (dirección y/o `coordinates`), opcional **`activateByGps`**, **`gpsRadiusMeters`**
+- Cadena: **`isChainStore`**, **`chainBrandName`**, **`chainLocations`** (JSON en FormData o array según cliente)
 - `images` (archivos)
 
 **Respuesta éxito (201):** `{ success: true, data: { id, ...promotion } }`.  
@@ -133,11 +140,46 @@ En `data` vendrá `promotionalValueUsd` si el backend pudo calcularlo.
 
 ## 5. API: actualizar promoción (PUT /api/promotions/:id)
 
-Mismos campos que en creación (parcial). Campos permitidos incluyen: `title`, `description`, `productName`, `brand`, `category`, `originalPrice`, `currentPrice`, `currency`, `discountPercentage`, `offerType`, `cashbackValue`, `promotionalValueUsd`, `storeName`, `storeLocation`, `validFrom`, `validUntil`, `totalQuantity`, `status`, etc.
+Mismos campos que en creación (parcial). Campos permitidos incluyen: `title`, `description`, `productName`, `brand`, `category`, `originalPrice`, `currentPrice`, `currency`, `discountPercentage`, `offerType`, `cashbackValue`, `promotionalValueUsd`, `storeName`, `storeLocation`, `activateByGps`, `gpsRadiusMeters`, `isChainStore`, `chainBrandName`, `chainLocations`, `validFrom`, `validUntil`, `totalQuantity`, `status`, etc.
 
 ---
 
-## 6. Cupón QR (no es parte del schema Promotion)
+## 6. Cupones con geolocalización (GPS y varias sucursales)
+
+### 6.1 Comportamiento esperado
+
+- Si **`activateByGps`** es `true`, el usuario debe **permitir ubicación** en el navegador o la app antes de obtener el cupón (flujo actual en web: `CouponRequestForm`).
+- La comprobación de distancia es **en el cliente** (navegador / app). El endpoint **`POST /api/discount-qr/create`** no valida GPS en el servidor; la app debe replicar la misma regla si ofrece “cupón solo en tienda”.
+
+### 6.2 Un solo punto (sin sucursales o solo `storeLocation`)
+
+- Se usa **`storeLocation.coordinates`** (lat/lon). El usuario debe estar a ≤ **`gpsRadiusMeters`** de ese punto.
+
+### 6.3 Cadena: varias ubicaciones (`chainLocations`)
+
+- Cada elemento puede incluir **`coordinates`** (y opcionalmente `mapsUrl`).
+- Regla de validación: el usuario debe estar a ≤ **`gpsRadiusMeters` de al menos una sucursal** que tenga coordenadas válidas (en web se calcula la **más cercana** solo para mensajes y UX; la condición de éxito es “dentro del radio de cualquiera”).
+- Si solo hay **una** sucursal con coordenadas, no hace falta una segunda lectura de GPS solo para “elegir sucursal”; esa sucursal es el punto de referencia.
+- Si hay **dos o más** sucursales con coordenadas, la web puede mostrar “sucursal más cercana” tras pedir ubicación (página de detalle); el cupón sigue validando contra **cualquier** sucursal dentro del radio.
+
+### 6.4 API de listados y `enrichPromotionClientFields`
+
+- En las respuestas JSON, el servidor puede exponer aliases para móvil: **`gpsActivationEnabled`** (= `activateByGps`), **`locationRadiusMeters`** (= `gpsRadiusMeters` normalizado entre 50 y 50 000).
+- **`chainLocations` guardadas en la promoción** tienen prioridad: los presets de catálogo (`chainLocationPresets`) **solo rellenan** sucursales si la promoción **no** trae ya un array `chainLocations` en base de datos (evita sobrescribir quick-promotion / importaciones propias).
+
+### 6.5 Checklist para la app móvil
+
+- [ ] Leer `activateByGps` o `gpsActivationEnabled`.
+- [ ] Leer `gpsRadiusMeters` o `locationRadiusMeters`.
+- [ ] Si hay **`chainLocations`** con coordenadas: comprobar distancia mínima al usuario frente a **cada** sucursal con coords; aceptar si el mínimo ≤ radio.
+- [ ] Si no hay sucursales con coords: usar **`storeLocation.coordinates`** si existe.
+- [ ] Si no hay coords: no se puede cumplir el GPS; mostrar mensaje claro (como en web).
+
+---
+
+## 7. Cupón QR (no es parte del schema Promotion)
+
+Si la promoción tiene **`activateByGps`**, la **web** valida la ubicación en el cliente antes de llamar a este endpoint; el **create** del cupón no recibe coordenadas ni comprueba el GPS en servidor. La **app móvil** debe aplicar la misma regla (ver **sección 6**: varias sucursales = dentro del radio de **cualquiera** con coords).
 
 Para **pedir un cupón QR** asociado a una promoción, la app llama a:
 
@@ -159,7 +201,7 @@ Para **pedir un cupón QR** asociado a una promoción, la app llama a:
 
 ---
 
-## 7. Checklist app: promoción legal y tokenizable
+## 8. Checklist app: promoción legal y tokenizable
 
 Para que la promoción sea válida, auditable y con valor calculable en USD (pasivo financiero medible), la app debería permitir capturar al menos:
 
@@ -172,15 +214,17 @@ Para que la promoción sea válida, auditable y con valor calculable en USD (pas
 - [ ] **totalQuantity** (máximo de redenciones)
 - [ ] **category** y **brand** (recomendado)
 - [ ] Al menos una **imagen** (recomendado para listados)
+- [ ] Si aplica **solo en tienda**: `activateByGps`, `gpsRadiusMeters`, coords en `storeLocation` y/o `chainLocations`
 
 Con eso el backend puede calcular **promotionalValueUsd** (X tokens = X USD) y la promoción queda alineada con el Gherkin BizneAI/DameCodigo.
 
 ---
 
-## 8. Documentos relacionados
+## 9. Documentos relacionados
 
 - **PROMOCIONES_BIZNEAI_GHERKIN.md** – Mapeo Gherkin ↔ campos, tipos de promoción, pasivo financiero.
 - **APP_DECODE_QR_DISCOUNT.md** – Formato del QR, cómo pedir y leer cupones.
 - **DISCOUNT_QR_VERIFY_ENDPOINT.md** – Contrato de verify/redeem del cupón QR.
+- **server/utils/promotionClientFields.js** – Aliases GPS y enriquecido de respuestas; prioridad de `chainLocations` sobre preset.
 - **server/models/Promotion.js** – Schema fuente.
 - **server/utils/promotionValueUsd.js** – Cálculo de valor en USD por tipo de oferta.
