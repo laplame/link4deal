@@ -18,7 +18,12 @@ const DownloadApp: React.FC = () => {
   }, []);
 
   const handleDownloadAndroid = () => {
-    window.open(SITE_CONFIG.apkDownloadUrl, '_blank');
+    const url = getApkDownloadFullUrl();
+    // Misma pestaña si el navegador bloquea popups; la API devuelve attachment y dispara la descarga
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!w) {
+      window.location.href = url;
+    }
   };
 
   return (
@@ -74,7 +79,12 @@ const DownloadApp: React.FC = () => {
             <div className="bg-white rounded-2xl p-6 shadow-lg inline-block">
               <div className="text-center">
                 {qrDataUrl ? (
-                  <a href={SITE_CONFIG.apkDownloadUrl} download="damecodigo-link4deal.apk" className="inline-block">
+                  <a
+                    href={getApkDownloadFullUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
                     <img src={qrDataUrl} alt="QR para descargar la app" className="w-32 h-32 rounded-lg mx-auto mb-4" />
                   </a>
                 ) : (

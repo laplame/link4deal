@@ -155,8 +155,9 @@ if (!fsSync.existsSync(promotionsPath)) {
 }
 app.use('/uploads', express.static(uploadsPath));
 
-// Servir archivos públicos
+// Servir archivos públicos (/public/...) y alias /assets (APK y estáticos en public/assets/)
 app.use('/public', express.static(path.join(__dirname, '../public')));
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
 // ===== HEALTH CHECK Y INFO =====
 

@@ -1,27 +1,52 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const AppDownloadStats = require('../models/AppDownloadStats');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const router = express.Router();
 const KEY = 'global';
-const APK_PATH = '/assets/build-1777749250753.apk';
 
-/** GET /api/app-downloads/redirect - Redirige al APK e incrementa el contador (para QR y enlaces directos) */
-router.get('/redirect', async (req, res) => {
+/** Archivo en disco (public/assets → servido por Express en /public/...) */
+const APK_BASENAME = 'build-1777749250753.apk';
+const APK_DISK_PATH = path.join(__dirname, '../../public/assets', APK_BASENAME);
+/** URL pública de respaldo si no hay archivo en disco (p. ej. CDN u otro host) */
+const APK_PUBLIC_URL_PATH = `/public/assets/${APK_BASENAME}`;
+const APK_DOWNLOAD_FILENAME = 'damecodigo-link4deal.apk';
+
+function bumpDownloadCountFireAndForget() {
+    AppDownloadStats.findOneAndUpdate(
+        { key: KEY },
+        { $inc: { count: 1 }, $set: { lastUpdated: new Date() } },
+        { upsert: true }
+    ).catch((err) => console.error('Error contador descarga APK (no bloquea):', err.message));
+}
+
+/**
+ * GET /api/app-downloads/redirect — Descarga el APK (attachment) y cuenta el clic.
+ * Antes redirigía a /assets/... pero los estáticos están montados en /public/..., causando 404.
+ */
+router.get('/redirect', (req, res) => {
+    bumpDownloadCountFireAndForget();
+
     try {
-        await AppDownloadStats.findOneAndUpdate(
-            { key: KEY },
-            { $inc: { count: 1 }, $set: { lastUpdated: new Date() } },
-            { upsert: true }
-        );
-        const base = `${req.protocol}://${req.get('host')}`;
-        return res.redirect(302, `${base}${APK_PATH}`);
-    } catch (err) {
-        console.error('Error en redirect de descarga:', err);
-        const base = `${req.protocol}://${req.get('host')}`;
-        return res.redirect(302, `${base}${APK_PATH}`);
+        if (fs.existsSync(APK_DISK_PATH)) {
+            return res.download(APK_DISK_PATH, APK_DOWNLOAD_FILENAME, (err) => {
+                if (err) {
+                    console.error('Error enviando APK:', err.message);
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: 'No se pudo enviar el archivo APK' });
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error('APK read error:', e.message);
     }
+
+    const base = `${req.protocol}://${req.get('host')}`;
+    return res.redirect(302, `${base}${APK_PUBLIC_URL_PATH}`);
 });
 
 /** POST /api/app-downloads - Incrementa el contador (público, al hacer clic en descargar) */
