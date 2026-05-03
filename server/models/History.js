@@ -5,8 +5,7 @@ const historySchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: [true, 'El usuario es requerido'],
-        index: true
+        required: [true, 'El usuario es requerido']
     },
     
     // Tipo de acción

@@ -12,7 +12,7 @@ import {
     Percent
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { haversineDistanceMeters } from '../utils/geo';
+import { findNearestChainBranch, haversineDistanceMeters } from '../utils/geo';
 
 interface CouponRequestFormProps {
     /** ID de la promoción (MongoDB _id). Se envía como promotionId al backend; debe ser el mismo en index y en promotion-details. */
@@ -30,6 +30,11 @@ interface CouponRequestFormProps {
     gpsRadiusMeters?: number;
     promotionLat?: number;
     promotionLng?: number;
+    /** Varias sucursales: válido si el usuario está dentro del radio de cualquiera que tenga coordenadas. */
+    chainLocations?: Array<{
+        branchName?: string;
+        coordinates?: { latitude?: number; longitude?: number };
+    }>;
     /** Opcionales: el backend los guarda en el payload del cupón sin validación estricta (atribución / GTM / UTM). */
     brandId?: string;
     shopId?: string;
@@ -63,6 +68,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     gpsRadiusMeters = 500,
     promotionLat,
     promotionLng,
+    chainLocations,
     brandId,
     shopId,
     gtmTag,
@@ -135,8 +141,30 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
 
     const verifyGpsForCoupon = (): Promise<boolean> => {
         if (!activateByGps) return Promise.resolve(true);
-        if (promotionLat == null || promotionLng == null || Number.isNaN(promotionLat) || Number.isNaN(promotionLng)) {
-            setGpsError('Esta promoción requiere ubicación, pero no hay coordenadas de tienda configuradas. Contacta al soporte.');
+
+        const branchesWithCoords =
+            Array.isArray(chainLocations) && chainLocations.length > 0
+                ? chainLocations.filter((b) => {
+                      const c = b?.coordinates;
+                      if (!c) return false;
+                      const lat =
+                          typeof c.latitude === 'number' ? c.latitude : parseFloat(String(c.latitude).replace(',', '.'));
+                      const lng =
+                          typeof c.longitude === 'number' ? c.longitude : parseFloat(String(c.longitude).replace(',', '.'));
+                      return Number.isFinite(lat) && Number.isFinite(lng);
+                  })
+                : [];
+
+        const hasSinglePoint =
+            promotionLat != null &&
+            promotionLng != null &&
+            !Number.isNaN(promotionLat) &&
+            !Number.isNaN(promotionLng);
+
+        if (branchesWithCoords.length === 0 && !hasSinglePoint) {
+            setGpsError(
+                'Esta promoción requiere ubicación, pero no hay coordenadas de tienda o sucursales configuradas. Contacta al soporte.'
+            );
             return Promise.resolve(false);
         }
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -146,12 +174,33 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         return new Promise((resolve) => {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    const d = haversineDistanceMeters(
-                        pos.coords.latitude,
-                        pos.coords.longitude,
-                        promotionLat,
-                        promotionLng
-                    );
+                    const uLat = pos.coords.latitude;
+                    const uLng = pos.coords.longitude;
+
+                    if (branchesWithCoords.length > 0) {
+                        const nearest = findNearestChainBranch(uLat, uLng, branchesWithCoords);
+                        if (!nearest) {
+                            setGpsError('No hay sucursales con ubicación válida para esta promoción.');
+                            resolve(false);
+                            return;
+                        }
+                        if (nearest.distanceMeters <= gpsRadiusMeters) {
+                            setGpsError(null);
+                            resolve(true);
+                            return;
+                        }
+                        const label =
+                            nearest.branch.branchName || nearest.branch.city || 'la sucursal más cercana';
+                        setGpsError(
+                            `Debes estar dentro de ${gpsRadiusMeters} m de alguna sucursal participante (${label}: ~${Math.round(
+                                nearest.distanceMeters
+                            )} m).`
+                        );
+                        resolve(false);
+                        return;
+                    }
+
+                    const d = haversineDistanceMeters(uLat, uLng, promotionLat!, promotionLng!);
                     if (d <= gpsRadiusMeters) {
                         setGpsError(null);
                         resolve(true);
@@ -633,7 +682,17 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                             <p className="font-medium mb-1">Ubicación requerida</p>
                             <p>
                                 Al continuar, el navegador pedirá tu ubicación. Debes estar dentro de{' '}
-                                <strong>{gpsRadiusMeters} m</strong> del punto de la oferta para obtener el cupón.
+                                <strong>{gpsRadiusMeters} m</strong>{' '}
+                                {Array.isArray(chainLocations) &&
+                                chainLocations.some(
+                                    (b) =>
+                                        b?.coordinates &&
+                                        Number.isFinite(Number(b.coordinates.latitude)) &&
+                                        Number.isFinite(Number(b.coordinates.longitude))
+                                )
+                                    ? 'de alguna sucursal participante'
+                                    : 'del punto de la oferta'}{' '}
+                                para obtener el cupón.
                             </p>
                         </div>
                     )}

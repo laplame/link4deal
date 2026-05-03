@@ -292,7 +292,9 @@ const promotionSchema = new mongoose.Schema({
 promotionSchema.index({ status: 1, validUntil: 1 });
 promotionSchema.index({ category: 1, status: 1 });
 promotionSchema.index({ isHotOffer: 1, status: 1 });
-promotionSchema.index({ 'storeLocation.coordinates': '2dsphere' });
+// Nota: 2dsphere exige GeoJSON { type: 'Point', coordinates: [lng, lat] } o par legacy [lng, lat].
+// Las coordenadas del modelo son { latitude, longitude }; un índice 2dsphere aquí hace fallar insertMany/save.
+// Si necesitas búsquedas por radio, añade un campo GeoJSON y rellénalo en el controlador, o migra coordenadas a ese formato.
 promotionSchema.index({ createdAt: -1 });
 
 // Virtual para calcular si la promoción está activa

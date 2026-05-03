@@ -32,7 +32,7 @@ function buildFollowersAndSocial(socialMediaArray) {
 
 class InfluencerController {
     isMongoConnected() {
-        return database.isConnected && mongoose.connection.readyState === 1;
+        return database.isReady();
     }
 
     isValidObjectId(id) {

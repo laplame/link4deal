@@ -8,7 +8,7 @@ const PROGRAM_ID = 'coffee';
 const COFFEE_THRESHOLD = 10;
 
 function isMongoConnected() {
-    return database.isConnected;
+    return database.isReady();
 }
 
 function sanitizeString(value, max = 500) {

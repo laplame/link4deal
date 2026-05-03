@@ -1,6 +1,20 @@
 const axios = require('axios');
+const { Blob } = require('node:buffer');
 const { envPath } = require('../config/envPath');
 require('dotenv').config({ path: envPath });
+
+/** Node 18+ FormData exige Blob para ficheros, no Buffer crudo. */
+function imageBufferAsBlob(buffer, filename = 'promotion.jpg') {
+    const lower = filename.toLowerCase();
+    const type = lower.endsWith('.png')
+        ? 'image/png'
+        : lower.endsWith('.webp')
+          ? 'image/webp'
+          : lower.endsWith('.gif')
+            ? 'image/gif'
+            : 'image/jpeg';
+    return new Blob([buffer], { type });
+}
 
 class OCRService {
     constructor() {
@@ -15,10 +29,8 @@ class OCRService {
             console.log('🔄 Procesando imagen con servidor Python...');
             
             const formData = new FormData();
-            formData.append('image', imageBuffer, {
-                filename: 'promotion.jpg',
-                contentType: 'image/jpeg'
-            });
+            const blob = imageBufferAsBlob(imageBuffer, options.suggestedFilename || 'promotion.jpg');
+            formData.append('image', blob, options.suggestedFilename || 'promotion.jpg');
             
             // Agregar opciones de OCR
             if (options.language) formData.append('language', options.language);
@@ -28,7 +40,6 @@ class OCRService {
 
             const response = await axios.post(`${this.pythonServerUrl}/ocr/process`, formData, {
                 headers: {
-                    'Content-Type': 'multipart/form-data',
                     'X-API-Key': process.env.OCR_API_KEY || 'default-key'
                 },
                 timeout: this.timeout
@@ -64,10 +75,8 @@ class OCRService {
             }
 
             const formData = new FormData();
-            formData.append('image', imageBuffer, {
-                filename: 'promotion.jpg',
-                contentType: 'image/jpeg'
-            });
+            const blob = imageBufferAsBlob(imageBuffer, options.suggestedFilename || 'promotion.jpg');
+            formData.append('image', blob, options.suggestedFilename || 'promotion.jpg');
 
             // Configurar parámetros de OCR
             const ocrParams = {
@@ -88,8 +97,7 @@ class OCRService {
             const response = await axios.post('https://ocr.space/parse/image', formData, {
                 headers: {
                     'X-RapidAPI-Key': this.rapidApiKey,
-                    'X-RapidAPI-Host': this.rapidApiHost,
-                    'Content-Type': 'multipart/form-data'
+                    'X-RapidAPI-Host': this.rapidApiHost
                 },
                 timeout: this.timeout
             });

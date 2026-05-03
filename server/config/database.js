@@ -176,18 +176,30 @@ class Database {
     }
 
     async closeConnection() {
-        if (this.isConnected) {
-            try {
-                await mongoose.connection.close();
-                console.log('🔌 Conexión a MongoDB cerrada');
-                this.isConnected = false;
-            } catch (error) {
-                console.error('❌ Error cerrando conexión:', error);
-            }
+        if (mongoose.connection.readyState === 0) {
+            this.isConnected = false;
+            return;
+        }
+        try {
+            await mongoose.connection.close();
+            console.log('🔌 Conexión a MongoDB cerrada');
+            this.isConnected = false;
+        } catch (error) {
+            console.error('❌ Error cerrando conexión:', error);
         }
     }
 
+    /**
+     * Estado real de escritura a MongoDB (no fiarse solo de this.isConnected:
+     * tras reconexiones o ciertos eventos de red el flag puede quedar en false
+     * aunque readyState === 1, y en producción eso provocaba 503 o rutas “sin BD”).
+     */
+    isReady() {
+        return mongoose.connection.readyState === 1;
+    }
+
     getConnectionStatus() {
+        this.isConnected = this.isReady();
         return {
             isConnected: this.isConnected,
             connectionState: mongoose.connection.readyState,
@@ -199,6 +211,7 @@ class Database {
 
     async healthCheck() {
         try {
+            this.isConnected = this.isReady();
             if (!this.isConnected) {
                 return { status: 'disconnected', message: 'No hay conexión activa' };
             }

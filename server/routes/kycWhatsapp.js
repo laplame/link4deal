@@ -200,7 +200,7 @@ async function sendWhatsappOtp(provider, phoneE164, code) {
 
 router.post('/request-code', async (req, res) => {
     try {
-        if (!database.isConnected) {
+        if (!database.isReady()) {
             return res.status(503).json({ success: false, message: 'Base de datos no disponible' });
         }
 
@@ -269,7 +269,7 @@ router.post('/request-code', async (req, res) => {
 
 router.post('/verify-code', async (req, res) => {
     try {
-        if (!database.isConnected) {
+        if (!database.isReady()) {
             return res.status(503).json({ success: false, message: 'Base de datos no disponible' });
         }
 

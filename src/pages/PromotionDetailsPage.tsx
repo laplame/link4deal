@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { formatPrice, calculateDiscountPercentage } from '../utils/formatters';
@@ -29,31 +29,7 @@ import {
 import CouponRequestForm from '../components/CouponRequestForm';
 import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
 import { getPromotionImageUrl } from '../utils/promotionImage';
-import { findNearestChainBranch, resolveBranchMapsUrl, type ChainBranch } from '../utils/geo';
-
-function normalizeChainBranches(raw: unknown): ChainBranch[] {
-    if (!Array.isArray(raw)) return [];
-    const out: ChainBranch[] = [];
-    for (const item of raw) {
-        if (!item || typeof item !== 'object') continue;
-        const c = (item as { coordinates?: { latitude?: unknown; longitude?: unknown } }).coordinates;
-        if (!c) continue;
-        const lat = typeof c.latitude === 'number' ? c.latitude : parseFloat(String(c.latitude).replace(',', '.'));
-        const lng = typeof c.longitude === 'number' ? c.longitude : parseFloat(String(c.longitude).replace(',', '.'));
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        const o = item as Record<string, unknown>;
-        out.push({
-            branchName: o.branchName != null ? String(o.branchName) : undefined,
-            address: o.address != null ? String(o.address) : undefined,
-            city: o.city != null ? String(o.city) : undefined,
-            state: o.state != null ? String(o.state) : undefined,
-            country: o.country != null ? String(o.country) : undefined,
-            coordinates: { latitude: lat, longitude: lng },
-            mapsUrl: o.mapsUrl != null ? String(o.mapsUrl) : undefined
-        });
-    }
-    return out;
-}
+import { findNearestChainBranch, resolveBranchMapsUrl, normalizeChainBranchesFromApi, type ChainBranch } from '../utils/geo';
 
 interface SmartContract {
     address: string;
@@ -254,7 +230,7 @@ export default function PromotionDetailsPage() {
                     promotionLng: promo.storeLocation?.coordinates?.longitude ?? null,
                     isChainStore: !!promo.isChainStore,
                     chainBrandName: promo.chainBrandName ? String(promo.chainBrandName) : '',
-                    chainLocations: normalizeChainBranches(promo.chainLocations)
+                    chainLocations: normalizeChainBranchesFromApi(promo.chainLocations)
                 };
 
                 setProduct(transformedProduct);
@@ -269,10 +245,26 @@ export default function PromotionDetailsPage() {
         fetchPromotion();
     }, [id]);
 
+    const chainBranchesWithCoords = useMemo(
+        () => (product ? normalizeChainBranchesFromApi(product.chainLocations) : []),
+        [product?.chainLocations]
+    );
+
     useEffect(() => {
-        if (!product?.isChainStore || !product.chainLocations?.length) {
+        if (!product) {
             setChainGeoStatus('idle');
             setNearestBranchInfo(null);
+            return;
+        }
+        const coordBranches = chainBranchesWithCoords;
+        if (coordBranches.length === 0) {
+            setChainGeoStatus('idle');
+            setNearestBranchInfo(null);
+            return;
+        }
+        if (coordBranches.length === 1) {
+            setNearestBranchInfo({ branch: coordBranches[0], distanceMeters: 0 });
+            setChainGeoStatus('ok');
             return;
         }
         setChainGeoStatus('loading');
@@ -286,7 +278,7 @@ export default function PromotionDetailsPage() {
                 const r = findNearestChainBranch(
                     pos.coords.latitude,
                     pos.coords.longitude,
-                    product.chainLocations!
+                    coordBranches
                 );
                 if (r) setNearestBranchInfo(r);
                 setChainGeoStatus('ok');
@@ -294,7 +286,7 @@ export default function PromotionDetailsPage() {
             () => setChainGeoStatus('denied'),
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 }
         );
-    }, [product?.id, product?.isChainStore, product?.chainLocations]);
+    }, [product?.id, chainBranchesWithCoords]);
 
     // Cargar historial de precios
     useEffect(() => {
@@ -384,16 +376,15 @@ export default function PromotionDetailsPage() {
     const couponLat =
         nearestBranchInfo?.branch.coordinates.latitude ??
         (product.promotionLat != null ? product.promotionLat : undefined) ??
-        product.chainLocations?.[0]?.coordinates.latitude;
+        chainBranchesWithCoords[0]?.coordinates.latitude;
     const couponLng =
         nearestBranchInfo?.branch.coordinates.longitude ??
         (product.promotionLng != null ? product.promotionLng : undefined) ??
-        product.chainLocations?.[0]?.coordinates.longitude;
+        chainBranchesWithCoords[0]?.coordinates.longitude;
 
     const waitingForNearest =
         !!product.activateByGps &&
-        !!product.isChainStore &&
-        (product.chainLocations?.length ?? 0) > 0 &&
+        chainBranchesWithCoords.length > 1 &&
         chainGeoStatus === 'loading';
 
     const handleAddToCart = () => {
@@ -532,7 +523,7 @@ export default function PromotionDetailsPage() {
                                         </div>
                                     </div>
 
-                                    {product.isChainStore &&
+                                    {(product.isChainStore || chainBranchesWithCoords.length > 0) &&
                                         product.chainLocations &&
                                         product.chainLocations.length > 0 && (
                                             <div className="mb-6 p-4 rounded-lg border border-indigo-200 bg-indigo-50/90">
@@ -1153,6 +1144,7 @@ export default function PromotionDetailsPage() {
                     gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
                     promotionLat={couponLat}
                     promotionLng={couponLng}
+                    chainLocations={chainBranchesWithCoords}
                     onClose={() => setShowCouponForm(false)}
                 />
             )}

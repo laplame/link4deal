@@ -12,7 +12,7 @@ class BrandController {
                     message: 'ID de marca inválido'
                 });
             }
-            if (!database.isConnected) {
+            if (!database.isReady()) {
                 return res.status(503).json({
                     success: false,
                     message: 'Base de datos no disponible'
@@ -40,7 +40,7 @@ class BrandController {
 
     async list(req, res) {
         try {
-            if (!database.isConnected) {
+            if (!database.isReady()) {
                 return res.json({
                     success: true,
                     data: [],
@@ -64,7 +64,7 @@ class BrandController {
 
     async create(req, res) {
         try {
-            if (!database.isConnected) {
+            if (!database.isReady()) {
                 return res.status(503).json({
                     success: false,
                     message: 'Base de datos no disponible'

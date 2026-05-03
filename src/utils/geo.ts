@@ -85,3 +85,28 @@ export function findNearestChainBranch(
     if (!best) return null;
     return { branch: best, distanceMeters: bestD };
 }
+
+/** Normaliza el array `chainLocations` de la API a sucursales con coordenadas válidas. */
+export function normalizeChainBranchesFromApi(raw: unknown): ChainBranch[] {
+    if (!Array.isArray(raw)) return [];
+    const out: ChainBranch[] = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const c = (item as { coordinates?: { latitude?: unknown; longitude?: unknown } }).coordinates;
+        if (!c) continue;
+        const lat = typeof c.latitude === 'number' ? c.latitude : parseFloat(String(c.latitude).replace(',', '.'));
+        const lng = typeof c.longitude === 'number' ? c.longitude : parseFloat(String(c.longitude).replace(',', '.'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const o = item as Record<string, unknown>;
+        out.push({
+            branchName: o.branchName != null ? String(o.branchName) : undefined,
+            address: o.address != null ? String(o.address) : undefined,
+            city: o.city != null ? String(o.city) : undefined,
+            state: o.state != null ? String(o.state) : undefined,
+            country: o.country != null ? String(o.country) : undefined,
+            coordinates: { latitude: lat, longitude: lng },
+            mapsUrl: o.mapsUrl != null ? String(o.mapsUrl) : undefined
+        });
+    }
+    return out;
+}

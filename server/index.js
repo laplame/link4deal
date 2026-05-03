@@ -172,11 +172,13 @@ app.get('/health', async (req, res) => {
             status: 'healthy',
             timestamp: new Date().toISOString(),
             environment: NODE_ENV,
+            mongodbUriConfigured: Boolean(process.env.MONGODB_URI_ATLAS && String(process.env.MONGODB_URI_ATLAS).trim()),
             version: '1.0.0',
             services: {
                 database: {
                     connected: dbStatus.isConnected,
                     state: dbStatus.connectionState,
+                    mongooseReadyState: dbStatus.connectionState,
                     host: dbStatus.host || 'N/A'
                 },
                 cloudinary: cloudinaryStatus,
@@ -363,6 +365,18 @@ async function startServer() {
             }
         } else {
             console.log('⚠️ MongoDB en modo simulado');
+        }
+
+        if (NODE_ENV === 'production') {
+            const hasUri = Boolean(process.env.MONGODB_URI_ATLAS && String(process.env.MONGODB_URI_ATLAS).trim());
+            if (!dbStatus.isConnected) {
+                console.error(
+                    '🚨 PRODUCCIÓN: MongoDB no conectado. Crear promociones devolverá 503 (simulado desactivado en prod). ' +
+                        (hasUri
+                            ? 'Revisa Network Access en Atlas, usuario/clave y logs arriba.'
+                            : 'Falta MONGODB_URI_ATLAS en el entorno del proceso (confirma server/.env o .env en la raíz y cwd de PM2).')
+                );
+            }
         }
         
         // Cloudinary (necesario para isConfigured = true en uploadAvatar, promociones, etc.)

@@ -491,7 +491,7 @@ const userProfileSchema = new mongoose.Schema({
 });
 
 // Indexes
-userProfileSchema.index({ user: 1 });
+// user ya tiene índice único implícito (unique: true)
 userProfileSchema.index({ profileType: 1 });
 userProfileSchema.index({ status: 1 });
 userProfileSchema.index({ isVerified: 1 });

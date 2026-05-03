@@ -14,6 +14,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 import { getPromotionImageUrl } from '../utils/promotionImage';
+import { normalizeChainBranchesFromApi } from '../utils/geo';
 import { masonryTierFromId } from '../utils/masonryVariant';
 
 // Productos de ejemplo (fallback si no hay datos de la API)
@@ -415,6 +416,10 @@ interface Product {
         storeName: string;
     };
     distance?: number;
+    activateByGps?: boolean;
+    gpsRadiusMeters?: number;
+    isChainStore?: boolean;
+    chainLocations?: ReturnType<typeof normalizeChainBranchesFromApi>;
 }
 
 export default function LandingPage() {
@@ -536,7 +541,16 @@ export default function LandingPage() {
                                 address: promo.storeLocation.address || '',
                                 storeName: promo.storeName || ''
                             } : undefined,
-                            distance: undefined
+                            distance: undefined,
+                            activateByGps: !!(promo.activateByGps || promo.gpsActivationEnabled),
+                            gpsRadiusMeters:
+                                typeof promo.gpsRadiusMeters === 'number'
+                                    ? promo.gpsRadiusMeters
+                                    : typeof promo.locationRadiusMeters === 'number'
+                                      ? promo.locationRadiusMeters
+                                      : 500,
+                            isChainStore: !!promo.isChainStore,
+                            chainLocations: normalizeChainBranchesFromApi(promo.chainLocations)
                         };
                     });
                     

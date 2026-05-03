@@ -311,8 +311,7 @@ const roleSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Indexes
-roleSchema.index({ name: 1 });
+// Indexes (name ya tiene índice implícito por unique: true)
 roleSchema.index({ type: 1 });
 roleSchema.index({ level: 1 });
 roleSchema.index({ isActive: 1 });

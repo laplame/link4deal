@@ -137,7 +137,7 @@ const permissionSchema = new mongoose.Schema({
 });
 
 // Indexes
-permissionSchema.index({ name: 1 });
+// name ya indexado por unique: true
 permissionSchema.index({ category: 1 });
 permissionSchema.index({ resource: 1 });
 permissionSchema.index({ level: 1 });

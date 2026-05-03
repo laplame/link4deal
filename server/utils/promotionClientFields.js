@@ -48,10 +48,11 @@ function enrichPromotionClientFields(promo, opts = {}) {
     }
 
     /**
-     * Una misma marca en catálogo (chainLocationPresets) incluye todas las geocercas;
-     * unificamos chainLocations en respuestas API para GPS / sucursal más cercana / mapas.
+     * Preset de catálogo solo si la promoción no trae sucursales guardadas en BD
+     * (quick-promotion / wizard con chainLocations debe prevalecer sobre el JSON de marca).
      */
-    const presetForBrand = findPresetMatchingPromotion(o);
+    const hasStoredChain = Array.isArray(o.chainLocations) && o.chainLocations.length > 0;
+    const presetForBrand = !hasStoredChain ? findPresetMatchingPromotion(o) : null;
     if (presetForBrand && presetForBrand.chainLocations.length > 0) {
         o.chainLocations = presetForBrand.chainLocations.map((loc) => ({
             branchName: loc.branchName,

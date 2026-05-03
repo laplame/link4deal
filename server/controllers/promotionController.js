@@ -114,9 +114,9 @@ async function processAppendPromotionImages(req) {
 }
 
 class PromotionController {
-    // Helper para verificar conexión a MongoDB
+    // Helper para verificar conexión a MongoDB (readyState es la fuente de verdad)
     isMongoConnected() {
-        return database.isConnected && mongoose.connection.readyState === 1;
+        return database.isReady();
     }
 
     // Helper para validar ObjectId
@@ -361,7 +361,9 @@ class PromotionController {
                     // OCR en cada imagen; texto de `termsImages` alimenta términos legales
                     try {
                         console.log(`🔍 OCR (${isTermsSlot ? 'términos' : 'promo'}) ${file.originalname}...`);
-                        const ocrResult = await ocrService.processImageWithPython(originalBuffer);
+                        const ocrResult = await ocrService.processImageWithPython(originalBuffer, {
+                            suggestedFilename: file.originalname || 'promotion.jpg'
+                        });
 
                         if (ocrResult.success && ocrResult.data && ocrResult.data.text) {
                             const raw = String(ocrResult.data.text).trim();
@@ -695,6 +697,7 @@ class PromotionController {
                 } catch (dbError) {
                     console.error('❌ Error guardando promoción en MongoDB:', dbError.message);
                     if (dbError.name) console.error('   Tipo:', dbError.name);
+                    if (dbError.code) console.error('   Código MongoDB:', dbError.code);
                     if (dbError.errors) console.error('   Validación:', JSON.stringify(dbError.errors, null, 2));
                     if (dbError.stack) console.error(dbError.stack);
 

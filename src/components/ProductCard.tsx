@@ -56,7 +56,11 @@ interface ProductCardProps {
         distance?: number; // en metros
         activateByGps?: boolean;
         gpsRadiusMeters?: number;
-    };
+        isChainStore?: boolean;
+        chainLocations?: Array<{
+            branchName?: string;
+            coordinates?: { latitude?: number; longitude?: number };
+        }>;
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
     onViewDetails?: (productId: string) => void;
@@ -397,6 +401,11 @@ export default function ProductCard({
                     gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
                     promotionLat={product.storeLocation?.latitude}
                     promotionLng={product.storeLocation?.longitude}
+                    chainLocations={
+                        product.chainLocations && product.chainLocations.length > 0
+                            ? product.chainLocations
+                            : undefined
+                    }
                     onClose={() => setShowCouponForm(false)}
                 />
             )}
