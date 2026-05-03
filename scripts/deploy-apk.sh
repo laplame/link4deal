@@ -16,7 +16,7 @@
 # Variables opcionales:
 #   DEPLOY_SSH          usuario@host (obligatorio si no pasas $1)
 #   DEPLOY_REMOTE_DIR   directorio remoto (default: ~/project/link4deal/public/assets)
-#   APK_LOCAL           ruta local al .apk (default: public/assets/build-1777749250753.apk)
+#   APK_LOCAL           ruta local al .apk (default: public/assets/build-1777745115129.apk)
 #   SSH_OPTS            opciones extra para ssh/scp (ej. "-i ~/.ssh/id_ed25519")
 #
 set -euo pipefail
@@ -24,7 +24,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-APK_LOCAL="${APK_LOCAL:-$ROOT/public/assets/build-1777749250753.apk}"
+APK_LOCAL="${APK_LOCAL:-$ROOT/public/assets/build-1777745115129.apk}"
 DEPLOY_SSH="${DEPLOY_SSH:-${1:-}}"
 DEPLOY_REMOTE_DIR="${DEPLOY_REMOTE_DIR:-~/project/link4deal/public/assets}"
 SSH_OPTS="${SSH_OPTS:-}"

@@ -9,7 +9,7 @@ const router = express.Router();
 const KEY = 'global';
 
 /** Archivo en disco (public/assets → servido por Express en /public/...) */
-const APK_BASENAME = 'build-1777749250753.apk';
+const APK_BASENAME = 'build-1777745115129.apk';
 const APK_DISK_PATH = path.join(__dirname, '../../public/assets', APK_BASENAME);
 /** URL pública de respaldo si no hay archivo en disco (p. ej. CDN u otro host) */
 const APK_PUBLIC_URL_PATH = `/public/assets/${APK_BASENAME}`;
