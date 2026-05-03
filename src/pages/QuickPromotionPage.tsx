@@ -16,6 +16,7 @@ import {
     ExternalLink,
     Smartphone,
     Plus,
+    Search,
     Trash2
 } from 'lucide-react';
 import { brands as catalogBrands } from '../data/brands';
@@ -34,6 +35,7 @@ const BRAND_CUSTOM = '__custom__';
 interface RedemptionLocationRow {
     branchName: string;
     address: string;
+    postalCode: string;
     city: string;
     state: string;
     latitude: string;
@@ -44,12 +46,24 @@ interface RedemptionLocationRow {
 const emptyRedemptionRow = (): RedemptionLocationRow => ({
     branchName: '',
     address: '',
+    postalCode: '',
     city: '',
     state: '',
     latitude: '',
     longitude: '',
     mapsUrl: '',
 });
+
+/** Lee JSON del body o devuelve objeto vacío (p. ej. HTML de error 413 de Nginx). */
+async function readResponseBodyJson(res: Response): Promise<{ data: Record<string, unknown>; raw: string }> {
+    const raw = await res.text();
+    if (!raw.trim()) return { data: {}, raw };
+    try {
+        return { data: JSON.parse(raw) as Record<string, unknown>, raw };
+    } catch {
+        return { data: {}, raw };
+    }
+}
 
 interface QuickPromotionData {
     title: string;
@@ -62,6 +76,12 @@ interface QuickPromotionData {
     offerType: OfferType;
     cashbackValue: number;
     storeCity: string;
+    /** Calle, número, colonia (geocodificación y tienda). */
+    storeAddress: string;
+    /** Código postal (geocodificación). */
+    storePostalCode: string;
+    /** Estado o entidad (ej. CDMX, Nuevo León). */
+    storeState: string;
     validFrom: string;
     validUntil: string;
     totalQuantity: number;
@@ -185,6 +205,9 @@ export default function QuickPromotionPage() {
         currentPrice: 0,
         currency: 'USD',
         storeCity: 'Ciudad de México',
+        storeAddress: '',
+        storePostalCode: '',
+        storeState: '',
         validFrom: defaultValidFrom,
         validUntil: defaultValidUntil,
         totalQuantity: 100,
@@ -221,6 +244,11 @@ export default function QuickPromotionPage() {
     const [customRedirectUrl, setCustomRedirectUrl] = useState('');
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
     const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
+    const [geocodeMainLoading, setGeocodeMainLoading] = useState(false);
+    const [geocodeMainError, setGeocodeMainError] = useState<string | null>(null);
+    const [geocodeVerifiedUrl, setGeocodeVerifiedUrl] = useState<string | null>(null);
+    const [geocodeRowLoading, setGeocodeRowLoading] = useState<number | null>(null);
+    const [geocodeRowError, setGeocodeRowError] = useState<string | null>(null);
 
     const catalogBrandNames = useMemo(
         () => [...new Set(catalogBrands.map((b) => b.name))].sort((a, b) => a.localeCompare(b, 'es')),
@@ -257,6 +285,98 @@ export default function QuickPromotionPage() {
             },
             { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
         );
+    };
+
+    const geocodeMainFromAddress = async () => {
+        setGeocodeMainError(null);
+        setGeocodeVerifiedUrl(null);
+        setGeocodeMainLoading(true);
+        try {
+            const res = await fetch('/api/geo/geocode-address', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address: formData.storeAddress,
+                    postalCode: formData.storePostalCode,
+                    city: formData.storeCity,
+                    state: formData.storeState,
+                    country: 'México'
+                })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'No se encontró la ubicación');
+            }
+            const d = json.data as {
+                latitude: number;
+                longitude: number;
+                city?: string;
+                state?: string;
+                mapsUrl?: string;
+                displayName?: string;
+            };
+            setFormData((prev) => ({
+                ...prev,
+                storeLatitude: String(d.latitude),
+                storeLongitude: String(d.longitude),
+                storeCity: d.city || prev.storeCity,
+                storeState: d.state || prev.storeState
+            }));
+            setGeocodeVerifiedUrl(typeof d.mapsUrl === 'string' ? d.mapsUrl : null);
+        } catch (e: unknown) {
+            setGeocodeMainError(e instanceof Error ? e.message : 'Error al geocodificar');
+        } finally {
+            setGeocodeMainLoading(false);
+        }
+    };
+
+    const geocodeRedemptionRowAt = async (index: number) => {
+        const row = formData.redemptionLocations[index];
+        if (!row) return;
+        setGeocodeRowError(null);
+        setGeocodeRowLoading(index);
+        try {
+            const res = await fetch('/api/geo/geocode-address', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address: row.address,
+                    postalCode: row.postalCode,
+                    city: row.city,
+                    state: row.state,
+                    country: 'México'
+                })
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'No se encontró la ubicación');
+            }
+            const d = json.data as {
+                latitude: number;
+                longitude: number;
+                city?: string;
+                state?: string;
+                mapsUrl?: string;
+            };
+            setFormData((prev) => {
+                const rows = [...prev.redemptionLocations];
+                const cur = rows[index];
+                if (!cur) return prev;
+                rows[index] = {
+                    ...cur,
+                    latitude: String(d.latitude),
+                    longitude: String(d.longitude),
+                    city: d.city || cur.city,
+                    state: d.state || cur.state,
+                    mapsUrl: (typeof d.mapsUrl === 'string' && d.mapsUrl) || cur.mapsUrl
+                };
+                return { ...prev, redemptionLocations: rows };
+            });
+        } catch (e: unknown) {
+            setGeocodeRowError(e instanceof Error ? e.message : 'Error al geocodificar la fila');
+        } finally {
+            setGeocodeRowLoading(null);
+        }
     };
 
     const addRedemptionRow = () => {
@@ -552,7 +672,17 @@ export default function QuickPromotionPage() {
             
             // Ubicación y fechas
             formDataToSend.append('storeCity', formData.storeCity);
-            formDataToSend.append('storeState', formData.storeCity);
+            const stateVal = formData.storeState.trim() || formData.storeCity;
+            formDataToSend.append('storeState', stateVal);
+            const addrLine = [
+                formData.storeAddress.trim(),
+                formData.storePostalCode.trim() ? `C.P. ${formData.storePostalCode.trim()}` : ''
+            ]
+                .filter(Boolean)
+                .join(', ');
+            if (addrLine) {
+                formDataToSend.append('storeAddress', addrLine);
+            }
             formDataToSend.append('validFrom', formData.validFrom);
             formDataToSend.append('validUntil', formData.validUntil);
             formDataToSend.append('totalQuantity', String(formData.totalQuantity > 0 ? formData.totalQuantity : 100));
@@ -572,16 +702,22 @@ export default function QuickPromotionPage() {
                 formDataToSend.append('storeLongitude', formData.storeLongitude.trim());
             }
             const chainPayload = formData.redemptionLocations
-                .map((row) => ({
-                    branchName: row.branchName.trim(),
-                    address: row.address.trim(),
-                    city: row.city.trim(),
-                    state: row.state.trim(),
-                    country: 'México',
-                    latitude: row.latitude.trim(),
-                    longitude: row.longitude.trim(),
-                    mapsUrl: row.mapsUrl.trim()
-                }))
+                .map((row) => {
+                    const addr =
+                        [row.address.trim(), row.postalCode.trim() ? `C.P. ${row.postalCode.trim()}` : '']
+                            .filter(Boolean)
+                            .join(', ') || row.address.trim();
+                    return {
+                        branchName: row.branchName.trim(),
+                        address: addr,
+                        city: row.city.trim(),
+                        state: row.state.trim(),
+                        country: 'México',
+                        latitude: row.latitude.trim(),
+                        longitude: row.longitude.trim(),
+                        mapsUrl: row.mapsUrl.trim()
+                    };
+                })
                 .filter(
                     (row) =>
                         row.branchName ||
@@ -629,10 +765,12 @@ export default function QuickPromotionPage() {
                 body: formDataToSend
             });
 
-            const data = await response.json();
+            const { data, raw } = await readResponseBodyJson(response);
 
             if (response.ok && data.success) {
-                const id = data.data?.id != null ? String(data.data.id) : null;
+                const id = data.data != null && typeof data.data === 'object' && 'id' in data.data
+                    ? String((data.data as { id: unknown }).id)
+                    : null;
                 if (data.mode === 'simulated' && typeof data.warning === 'string') {
                     window.alert(data.warning);
                 }
@@ -644,7 +782,28 @@ export default function QuickPromotionPage() {
                     setShowReward(true);
                 }
             } else {
-                throw new Error(formatPromotionCreateError(data));
+                let msg = formatPromotionCreateError(
+                    data as { message?: unknown; fieldErrors?: Record<string, unknown> }
+                );
+                if (msg === 'Error al crear la promoción' || msg.trim() === '') {
+                    if (response.status === 413) {
+                        msg =
+                            'El tamaño total de las fotos es demasiado grande para el servidor. Reduce la resolución o el número de imágenes.';
+                    } else if (response.status === 429) {
+                        msg = 'Demasiadas promociones desde esta red. Espera unos minutos e intenta de nuevo.';
+                    } else if (response.status === 503) {
+                        msg =
+                            (typeof data.message === 'string' && data.message) ||
+                            'Servicio no disponible (¿base de datos?). Revisa la configuración del servidor.';
+                    } else if (response.status >= 500) {
+                        msg = `Error del servidor (${response.status}). Revisa logs del API y MongoDB.`;
+                    } else if (!response.ok && raw.trim().startsWith('<')) {
+                        msg = `Respuesta inesperada del servidor (HTTP ${response.status}). Si subes muchas fotos, revisa en Nginx client_max_body_size para /api/.`;
+                    } else if (!response.ok) {
+                        msg = `No se pudo crear la promoción (HTTP ${response.status}).`;
+                    }
+                }
+                throw new Error(msg);
             }
         } catch (error: any) {
             console.error('Error creando promoción:', error);
@@ -1069,7 +1228,9 @@ export default function QuickPromotionPage() {
                                 <h3 className="text-lg font-semibold text-white">Localizaciones para redimir</h3>
                             </div>
                             <p className="text-sm text-gray-400">
-                                Agrega todas las tiendas o sucursales donde se puede canjear el cupón. Dirección y ciudad bastan; latitud y longitud son opcionales (útiles junto con activación GPS).
+                                Agrega todas las tiendas o sucursales donde se puede canjear el cupón. Dirección, código
+                                postal y ciudad permiten rellenar coordenadas con «Buscar coordenadas (mapa)» en cada fila;
+                                abre el enlace para comprobar el punto en Google Maps.
                             </p>
                             {formData.redemptionLocations.length === 0 && (
                                 <p className="text-xs text-gray-500">Sin filas aún — pulsa «Añadir localización».</p>
@@ -1125,6 +1286,17 @@ export default function QuickPromotionPage() {
                                                 />
                                             </div>
                                             <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Código postal</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={row.postalCode}
+                                                    onChange={(e) => updateRedemptionRow(index, 'postalCode', e.target.value)}
+                                                    className={fieldInputCompact}
+                                                    placeholder="CP"
+                                                />
+                                            </div>
+                                            <div>
                                                 <label className="block text-xs text-gray-400 mb-1">Estado</label>
                                                 <input
                                                     type="text"
@@ -1133,6 +1305,28 @@ export default function QuickPromotionPage() {
                                                     className={fieldInputCompact}
                                                     placeholder="Ej: CDMX, NL"
                                                 />
+                                            </div>
+                                            <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void geocodeRedemptionRowAt(index)}
+                                                    disabled={geocodeRowLoading === index}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600/85 text-white text-xs font-medium hover:bg-amber-500 disabled:opacity-50"
+                                                >
+                                                    <Search className="h-3.5 w-3.5" />
+                                                    {geocodeRowLoading === index ? 'Buscando…' : 'Buscar coordenadas (mapa)'}
+                                                </button>
+                                                {row.mapsUrl?.trim() && (
+                                                    <a
+                                                        href={row.mapsUrl.trim()}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 text-xs text-emerald-400 underline"
+                                                    >
+                                                        <ExternalLink className="h-3 w-3" />
+                                                        Ver en Maps
+                                                    </a>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-gray-400 mb-1">Link a mapas (opcional)</label>
@@ -1170,6 +1364,11 @@ export default function QuickPromotionPage() {
                                     </div>
                                 ))}
                             </div>
+                            {geocodeRowError && (
+                                <p className="text-sm text-rose-300 bg-rose-950/25 border border-rose-500/20 rounded-lg px-3 py-2">
+                                    {geocodeRowError}
+                                </p>
+                            )}
                             <button
                                 type="button"
                                 onClick={addRedemptionRow}
@@ -1462,10 +1661,20 @@ export default function QuickPromotionPage() {
 
                         {/* Ubicación y activación GPS */}
                         <div className="border-t border-white/10 pt-6 space-y-6">
+                            <div>
+                                <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-amber-400" />
+                                    Ubicación de la tienda (para mapa y GPS)
+                                </h3>
+                                <p className="text-xs text-gray-500 mb-4">
+                                    Puedes rellenar dirección y código postal y usar «Buscar en mapa» para obtener
+                                    latitud/longitud vía OpenStreetMap; el enlace abre Google Maps para que verifiques
+                                    el punto.
+                                </p>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        <MapPin className="h-4 w-4 inline mr-1" />
                                         Ciudad *
                                     </label>
                                     <input
@@ -1477,7 +1686,72 @@ export default function QuickPromotionPage() {
                                         required
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Estado / entidad
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.storeState}
+                                        onChange={(e) => handleInputChange('storeState', e.target.value)}
+                                        className={fieldInput}
+                                        placeholder="Ej: CDMX, Nuevo León, Jalisco"
+                                    />
+                                </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Dirección (calle, número, colonia)</label>
+                                <input
+                                    type="text"
+                                    value={formData.storeAddress}
+                                    onChange={(e) => handleInputChange('storeAddress', e.target.value)}
+                                    className={fieldInput}
+                                    placeholder="Ej: Av. Insurgentes Sur 123, Col. Del Valle"
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Código postal</label>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={formData.storePostalCode}
+                                        onChange={(e) => handleInputChange('storePostalCode', e.target.value)}
+                                        className={fieldInput}
+                                        placeholder="Ej: 03100"
+                                    />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void geocodeMainFromAddress()}
+                                        disabled={geocodeMainLoading}
+                                        className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600/90 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-60 border border-amber-500/40"
+                                    >
+                                        <Search className="h-4 w-4 shrink-0" />
+                                        {geocodeMainLoading ? 'Buscando…' : 'Buscar coordenadas (mapa)'}
+                                    </button>
+                                </div>
+                            </div>
+                            {geocodeMainError && (
+                                <p className="text-sm text-rose-300 bg-rose-950/30 border border-rose-500/25 rounded-lg px-3 py-2">
+                                    {geocodeMainError}
+                                </p>
+                            )}
+                            {geocodeVerifiedUrl && (
+                                <p className="text-sm text-emerald-200/95 flex flex-wrap items-center gap-2">
+                                    <span>Ubicación encontrada.</span>
+                                    <a
+                                        href={geocodeVerifiedUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-emerald-400 underline hover:text-emerald-300"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                        Verificar en Google Maps
+                                    </a>
+                                </p>
+                            )}
 
                             <div className="border border-white/10 rounded-xl p-4 bg-gray-950/40 space-y-4 backdrop-blur-sm">
                                 <label className="flex items-start gap-3 cursor-pointer">

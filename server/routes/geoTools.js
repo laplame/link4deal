@@ -5,7 +5,7 @@
 const express = require('express');
 const { parseStoreListingPaste } = require('../utils/storeListingPasteParser');
 const { listPresetsMeta, getPresetById, upsertPresetFromPayload } = require('../utils/chainLocationPresets');
-const { buildNominatimSearchQueryVariants } = require('../utils/nominatimQuery');
+const { buildNominatimSearchQueryVariants, buildStructuredAddressGeocodeVariants } = require('../utils/nominatimQuery');
 
 const router = express.Router();
 
@@ -137,6 +137,77 @@ router.post('/save-chain-preset', requireChainPresetWrite, (req, res) => {
             success: false,
             message: msg,
             error: msg
+        });
+    }
+});
+
+/**
+ * POST /api/geo/geocode-address
+ * Geocodifica dirección + código postal + ciudad/estado (Nominatim). Respuesta incluye mapsUrl (Google) para verificar.
+ * Body: { address?, postalCode?, cp?, city?, state?, country? }
+ */
+router.post('/geocode-address', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const address = body.address != null ? String(body.address).trim() : '';
+        const postalCode =
+            body.postalCode != null
+                ? String(body.postalCode).trim()
+                : body.cp != null
+                  ? String(body.cp).trim()
+                  : '';
+        const city = body.city != null ? String(body.city).trim() : '';
+        const state = body.state != null ? String(body.state).trim() : '';
+        const country =
+            body.country != null && String(body.country).trim()
+                ? String(body.country).trim()
+                : 'México';
+
+        const variants = buildStructuredAddressGeocodeVariants({
+            address,
+            postalCode,
+            city,
+            state,
+            country
+        });
+        if (variants.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Indica al menos: (dirección y ciudad) o (código postal y ciudad) o (código postal y estado), para poder geocodificar.'
+            });
+        }
+
+        let lastErr = null;
+        for (let vi = 0; vi < variants.length; vi++) {
+            if (vi > 0) await sleep(GEO_DELAY_MS);
+            try {
+                const geo = await nominatimGeocode(variants[vi]);
+                if (geo) {
+                    return res.json({
+                        success: true,
+                        data: {
+                            ...geo,
+                            queryUsed: variants[vi],
+                            openStreetMapUrl: `https://www.openstreetmap.org/?mlat=${geo.latitude}&mlon=${geo.longitude}&zoom=18`
+                        },
+                        message: 'Ubicación encontrada. Abre mapsUrl para verificar en Google Maps.'
+                    });
+                }
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+        return res.status(404).json({
+            success: false,
+            message:
+                lastErr?.message ||
+                'No se encontró la ubicación. Revisa dirección, código postal y ciudad; compara con Google Maps.'
+        });
+    } catch (e) {
+        return res.status(500).json({
+            success: false,
+            message: e.message || 'Error de geocodificación'
         });
     }
 });

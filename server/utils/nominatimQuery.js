@@ -89,4 +89,49 @@ function buildNominatimSearchQueryVariants(branchName, address, countryDefault =
     return variants;
 }
 
-module.exports = { buildNominatimSearchQuery, simplifyAddressForGeocode, buildNominatimSearchQueryVariants };
+/**
+ * Variantes para formulario estructurado: calle, CP, ciudad, estado (México y similar).
+ * @param {{ address?: string, postalCode?: string, city?: string, state?: string, country?: string }} parts
+ * @returns {string[]}
+ */
+function buildStructuredAddressGeocodeVariants(parts) {
+    const street = parts.address != null ? String(parts.address).trim() : '';
+    const cpRaw =
+        parts.postalCode != null
+            ? String(parts.postalCode).replace(/\s+/g, '').trim()
+            : parts.cp != null
+              ? String(parts.cp).replace(/\s+/g, '').trim()
+              : '';
+    const ci = parts.city != null ? String(parts.city).trim() : '';
+    const st = parts.state != null ? String(parts.state).trim() : '';
+    const c =
+        parts.country != null && String(parts.country).trim()
+            ? String(parts.country).trim()
+            : 'México';
+
+    const variants = [];
+    if (street && ci && st) variants.push(`${street}, ${ci}, ${st}, ${c}`);
+    if (street && ci) variants.push(`${street}, ${ci}, ${c}`);
+    if (cpRaw && ci && st) variants.push(`C.P. ${cpRaw}, ${ci}, ${st}, ${c}`);
+    if (cpRaw && ci) variants.push(`C.P. ${cpRaw}, ${ci}, ${c}`);
+    if (cpRaw && st && !ci) variants.push(`C.P. ${cpRaw}, ${st}, ${c}`);
+    if (street && st && !ci) variants.push(`${street}, ${st}, ${c}`);
+    if (!street && cpRaw && ci) variants.push(`${ci} ${cpRaw}, ${c}`);
+
+    const out = [];
+    const seen = new Set();
+    for (const v of variants) {
+        if (v && !seen.has(v)) {
+            seen.add(v);
+            out.push(v);
+        }
+    }
+    return out;
+}
+
+module.exports = {
+    buildNominatimSearchQuery,
+    simplifyAddressForGeocode,
+    buildNominatimSearchQueryVariants,
+    buildStructuredAddressGeocodeVariants
+};
