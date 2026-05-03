@@ -64,7 +64,7 @@ if command -v pm2 > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Link4Deal backend process found${NC}"
     else
         echo -e "${RED}❌ Link4Deal backend process NOT found${NC}"
-        echo "Try: pm2 start ecosystem.config.js --env production"
+        echo "Try: pm2 start ecosystem.config.cjs --env production"
     fi
 else
     echo -e "${RED}❌ PM2 is not installed${NC}"
@@ -115,7 +115,7 @@ fi
 echo -e "\n${YELLOW}8. Quick Fix Suggestions:${NC}"
 echo "If backend API (port 5001) is not running:"
 echo "1. cd /home/cto/project"
-echo "2. pm2 start ecosystem.config.js --env production"
+echo "2. pm2 start ecosystem.config.cjs --env production"
 echo "3. pm2 save"
 echo ""
 echo "If nginx has config errors:"

@@ -53,53 +53,12 @@ class Database {
     }
 
     async connectToAtlas() {
-        let atlasUri = process.env.MONGODB_URI_ATLAS;
-        
+        const { normalizeAtlasUri } = require('../utils/normalizeAtlasUri');
+        let atlasUri = normalizeAtlasUri(process.env.MONGODB_URI_ATLAS);
+
         if (!atlasUri) {
             throw new Error('MONGODB_URI_ATLAS no está configurado en las variables de entorno');
         }
-
-        // Limpiar la URI
-        atlasUri = atlasUri.trim();
-        
-        // Codificar la contraseña si tiene caracteres especiales (ej: < >)
-        // Extraer usuario y contraseña para codificarlos correctamente
-        const uriMatch = atlasUri.match(/^(mongodb\+srv:\/\/)([^:]+):([^@]+)@(.+)$/);
-        if (uriMatch) {
-            const protocol = uriMatch[1];
-            const user = uriMatch[2];
-            let password = uriMatch[3];
-            let rest = uriMatch[4];
-            
-            // Si la contraseña tiene caracteres especiales, codificarla
-            // Pero solo si no está ya codificada (no empieza con %)
-            if (password && !password.startsWith('%')) {
-                // Codificar caracteres especiales comunes
-                password = encodeURIComponent(password);
-            }
-            
-            // Reconstruir URI
-            atlasUri = `${protocol}${user}:${password}@${rest}`;
-        }
-        
-        // Corregir formato si tiene parámetros incorrectos como ?link4deal=Cluster0
-        if (atlasUri.includes('?link4deal=') || atlasUri.match(/\?[^=]*=Cluster0/)) {
-            // Extraer la parte base (antes del ?)
-            const baseUri = atlasUri.split('?')[0];
-            // Remover cualquier doble slash y agregar nombre de base de datos
-            const cleanBase = baseUri.replace(/\/+$/, '');
-            atlasUri = `${cleanBase}/link4deal?retryWrites=true&w=majority`;
-            console.log('🔧 URI corregida automáticamente (formato y codificación)');
-        } else {
-            // Asegurar que tenga el nombre de la base de datos si no lo tiene
-            if (!atlasUri.match(/\/[^\/\?]+(\?|$)/)) {
-                const separator = atlasUri.includes('?') ? '' : '/';
-                atlasUri = atlasUri.replace(/(\?|$)/, `${separator}link4deal$1`);
-            }
-        }
-        
-        // Remover dobles slashes (pero no el doble slash después de ://)
-        atlasUri = atlasUri.replace(/([^:]\/)\/+/g, '$1');
 
         const options = {
             serverSelectionTimeoutMS: 10000,

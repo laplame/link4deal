@@ -6,15 +6,16 @@
  */
 require('../config/envPath');
 const mongoose = require('mongoose');
+const { normalizeAtlasUri } = require('../utils/normalizeAtlasUri');
 
 async function main() {
-    const uri = process.env.MONGODB_URI_ATLAS;
-    if (!uri || !String(uri).trim()) {
+    const uri = normalizeAtlasUri(process.env.MONGODB_URI_ATLAS);
+    if (!uri) {
         console.error('❌ MONGODB_URI_ATLAS no definido.');
         process.exit(1);
     }
 
-    await mongoose.connect(uri.trim(), { serverSelectionTimeoutMS: 15000 });
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
     const col = mongoose.connection.collection('promotions');
     const indexes = await col.indexes();
 

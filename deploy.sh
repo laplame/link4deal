@@ -106,7 +106,7 @@ fi
 # Start PM2 processes
 echo "Starting backend with PM2..."
 cd $PROJECT_DIR
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.cjs --env production
 
 # Step 7: Verify everything is running
 echo -e "${YELLOW}🔍 Verifying services...${NC}"

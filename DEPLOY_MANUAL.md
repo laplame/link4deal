@@ -108,7 +108,7 @@ mkdir -p logs server/uploads server/uploads/promotions
 
 ### 3.1 Usar el ecosystem del repo
 
-El repo incluye `ecosystem.config.cjs` (recomendado) o `ecosystem.config.js` con:
+El repo incluye `ecosystem.config.cjs` (CommonJS; el raíz tiene `"type": "module"` y `.js` rompería PM2) con:
 
 - **name:** `link4deal-backend`
 - **cwd:** `/home/cto/project/link4deal`

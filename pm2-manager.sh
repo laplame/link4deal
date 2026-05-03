@@ -1,7 +1,7 @@
 #!/bin/bash
 
 APP_NAME="link4deal-backend"
-CONFIG_FILE="ecosystem.config.js"
+CONFIG_FILE="ecosystem.config.cjs"
 
 echo "🚀 PM2 Manager para Link4Deal"
 echo "================================"

@@ -1,6 +1,3 @@
-/**
- * PM2 ecosystem. Health externo: `npm run watchdog` (scripts/server-watchdog.sh) vía cron.
- */
 module.exports = {
   apps: [
     {
@@ -13,11 +10,11 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 5001
       },
       env_production: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 5001
       },
       error_file: '/home/cto/project/link4deal/logs/pm2-error.log',
       out_file: '/home/cto/project/link4deal/logs/pm2-out.log',
@@ -27,5 +24,18 @@ module.exports = {
       max_restarts: 10,
       min_uptime: '10s'
     }
-  ]
+  ],
+
+  deploy: {
+    production: {
+      user: 'cto',
+      host: 'localhost',
+      ref: 'origin/main',
+      repo: 'git@github.com:yourusername/link4deal.git',
+      path: '/home/cto/project/link4deal',
+      'pre-deploy-local': '',
+      'post-deploy':
+        'cd /home/cto/project/link4deal && npm install && npm run build && pm2 reload ecosystem.config.cjs --env production && sudo systemctl reload nginx'
+    }
+  }
 };

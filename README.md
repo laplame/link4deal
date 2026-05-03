@@ -295,7 +295,7 @@ npm run server:start
 npm run python:start
 
 # Usar PM2 para gestión de procesos
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 ```
 
 ## 🐛 Troubleshooting
