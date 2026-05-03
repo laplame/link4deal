@@ -61,6 +61,7 @@ interface ProductCardProps {
             branchName?: string;
             coordinates?: { latitude?: number; longitude?: number };
         }>;
+    };
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
     onViewDetails?: (productId: string) => void;
