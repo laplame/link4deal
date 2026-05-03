@@ -57,14 +57,17 @@ class CloudinaryConfig {
             // Si es un buffer (archivo subido)
             if (file.buffer) {
                 const result = await new Promise((resolve, reject) => {
-                    const uploadStream = cloudinary.uploader.upload_stream(
-                        uploadOptions,
-                        (error, result) => {
-                            if (error) reject(error);
-                            else resolve(result);
-                        }
-                    );
-                    
+                    let settled = false;
+                    const finish = (err, res) => {
+                        if (settled) return;
+                        settled = true;
+                        if (err) reject(err);
+                        else resolve(res);
+                    };
+                    const uploadStream = cloudinary.uploader.upload_stream(uploadOptions, (error, uploadResult) => {
+                        finish(error, uploadResult);
+                    });
+                    uploadStream.on('error', (streamErr) => finish(streamErr, null));
                     uploadStream.end(file.buffer);
                 });
 

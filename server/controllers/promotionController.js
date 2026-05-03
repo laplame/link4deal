@@ -702,14 +702,20 @@ class PromotionController {
                     if (dbError.stack) console.error(dbError.stack);
 
                     const isValidation = dbError.name === 'ValidationError';
+                    const isBadGeoIndex = dbError.code === 16755;
                     const status = isValidation ? 400 : 500;
                     const body = {
                         success: false,
                         message: isValidation
                             ? 'No se pudo guardar la promoción: revisa los datos enviados.'
-                            : 'Error al guardar la promoción en la base de datos.',
+                            : isBadGeoIndex
+                              ? 'Índice geoespacial incompatible en la base de datos (storeLocation.coordinates). En el servidor ejecuta: npm run db:drop-promo-geo-index'
+                              : 'Error al guardar la promoción en la base de datos.',
                         mode: 'error'
                     };
+                    if (isBadGeoIndex) {
+                        body.code = 'MONGO_GEO_INDEX_FIX';
+                    }
                     if (dbError.errors && typeof dbError.errors === 'object') {
                         body.fieldErrors = Object.fromEntries(
                             Object.entries(dbError.errors).map(([k, v]) => [
