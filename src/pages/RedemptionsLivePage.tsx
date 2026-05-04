@@ -51,6 +51,10 @@ export interface RedemptionRow {
   idempotencyKey: string | null;
   idempotencyShopId: string | null;
   idempotencyProductId: string | null;
+  /** Del payload del cupón (asignación al crear el QR). */
+  influencerId?: string | null;
+  influencerName?: string | null;
+  influencerUsername?: string | null;
 }
 
 function formatRelativeTime(iso: string | null): string {
@@ -74,7 +78,7 @@ function shortenId(s: string | null, head = 6, tail = 4): string {
   return `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
-function RedemptionCard({ row, initiallyOpen }: { row: RedemptionRow; initiallyOpen: boolean }) {
+export function RedemptionCard({ row, initiallyOpen }: { row: RedemptionRow; initiallyOpen: boolean }) {
   const [open, setOpen] = useState(initiallyOpen);
   const mapsUrl =
     row.location != null
@@ -109,6 +113,14 @@ function RedemptionCard({ row, initiallyOpen }: { row: RedemptionRow; initiallyO
               {row.referralCode && (
                 <p className="text-xs text-gray-500 truncate mt-0.5" title={row.referralCode}>
                   {row.referralCode}
+                </p>
+              )}
+              {(row.influencerId || row.influencerName || row.influencerUsername) && (
+                <p className="text-xs text-violet-300/95 truncate mt-0.5" title={row.influencerId || ''}>
+                  Influencer:{' '}
+                  {row.influencerName ||
+                    row.influencerUsername ||
+                    (row.influencerId ? shortenId(row.influencerId, 10, 6) : '')}
                 </p>
               )}
             </div>

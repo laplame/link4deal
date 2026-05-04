@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -15,6 +15,13 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getPromotionImageUrl } from '../utils/promotionImage';
+import { getPolygonscanAddressUrl } from '../utils/polygonExplorer';
+import {
+  RedemptionCard,
+  type RedemptionRow,
+} from './RedemptionsLivePage';
+
+const REDEMPTIONS_POLL_MS = 6000;
 
 const OFFER_TYPE_LABELS: Record<string, string> = {
   percentage: 'Descuento por porcentaje',
@@ -42,13 +49,6 @@ const STATUS_LABELS: Record<string, string> = {
   expired: 'Expirado',
   deleted: 'Eliminado'
 };
-
-/** URL pública en Polygonscan (mainnet) para la dirección del contrato mostrada en esta página. */
-function getPolygonscanAddressUrl(address: string): string {
-  const trimmed = (address || '').trim();
-  const hex = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
-  return `https://polygonscan.com/address/${hex}`;
-}
 
 interface PromotionData {
   _id: string;
@@ -87,6 +87,11 @@ export default function PromotionSmartContractPage() {
   const [promotion, setPromotion] = useState<PromotionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [liveRows, setLiveRows] = useState<RedemptionRow[]>([]);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveHint, setLiveHint] = useState<string | null>(null);
+  const [liveLastAt, setLiveLastAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -115,6 +120,88 @@ export default function PromotionSmartContractPage() {
       });
     return () => { cancelled = true; };
   }, [id]);
+
+  const fetchLiveRedemptions = useCallback(
+    async (silent: boolean) => {
+      if (!id) return;
+      if (!silent) setLiveLoading(true);
+      try {
+        const q = new URLSearchParams();
+        q.set('promotionId', id);
+        q.set('limit', '40');
+        const headers: HeadersInit = { Accept: 'application/json' };
+        const key = import.meta.env.VITE_REDEMPTIONS_LIST_API_KEY;
+        if (key) headers['x-redemptions-api-key'] = key;
+        const res = await fetch(`/api/discount-qr/redemptions/recent?${q.toString()}`, { headers });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          setLiveError(
+            'Listado de redenciones protegido. Configura VITE_REDEMPTIONS_LIST_API_KEY en el front igual que REDEMPTIONS_LIST_API_KEY en el servidor.'
+          );
+          setLiveRows([]);
+          setLiveHint(null);
+          return;
+        }
+        if (!res.ok || !data.ok) {
+          setLiveError(typeof data.message === 'string' ? data.message : 'No se pudo cargar redenciones');
+          setLiveRows([]);
+          setLiveHint(null);
+          return;
+        }
+        setLiveError(null);
+        setLiveRows(Array.isArray(data.data) ? data.data : []);
+        setLiveHint(typeof data.hint === 'string' ? data.hint : null);
+        setLiveLastAt(new Date().toISOString());
+      } catch {
+        setLiveError('Error de red al cargar redenciones');
+        setLiveRows([]);
+        setLiveHint(null);
+      } finally {
+        if (!silent) setLiveLoading(false);
+      }
+    },
+    [id]
+  );
+
+  useEffect(() => {
+    if (!id) return;
+    void fetchLiveRedemptions(false);
+    const timer = window.setInterval(() => void fetchLiveRedemptions(true), REDEMPTIONS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [id, fetchLiveRedemptions]);
+
+  const influencerSummaries = useMemo(() => {
+    const byKey = new Map<
+      string,
+      { label: string; count: number; lastAt: string | null }
+    >();
+    for (const row of liveRows) {
+      if (!row.influencerId && !row.influencerName && !row.influencerUsername) continue;
+      const key =
+        row.influencerId ||
+        row.influencerUsername ||
+        row.influencerName ||
+        'unknown';
+      const label =
+        row.influencerName ||
+        row.influencerUsername ||
+        (row.influencerId ? `${row.influencerId.slice(0, 8)}…` : '—');
+      const prev = byKey.get(key);
+      const usedAt = row.usedAt;
+      if (!prev) {
+        byKey.set(key, { label, count: 1, lastAt: usedAt });
+      } else {
+        prev.count += 1;
+        if (
+          usedAt &&
+          (!prev.lastAt || new Date(usedAt).getTime() > new Date(prev.lastAt).getTime())
+        ) {
+          prev.lastAt = usedAt;
+        }
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => b.count - a.count);
+  }, [liveRows]);
 
   if (loading) {
     return (
@@ -298,12 +385,35 @@ export default function PromotionSmartContractPage() {
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 sm:col-span-2">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Influencers en la promoción</p>
-                <p className="font-medium text-slate-900 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-pink-500" />
-                  En proceso
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+                  Influencers (canjes recientes en ventana del feed)
                 </p>
-                <p className="text-xs text-slate-500 mt-1">Los influencers asociados se mostrarán cuando estén verificados.</p>
+                {influencerSummaries.length === 0 ? (
+                  <p className="text-sm text-slate-600 mt-1">
+                    Aún no hay cupones redimidos con influencer asignado en los últimos resultados del API, o el listado
+                    está vacío.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {influencerSummaries.map((inf, idx) => (
+                      <li
+                        key={`${inf.label}-${idx}`}
+                        className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-800"
+                      >
+                        <span className="flex items-center gap-2 font-medium">
+                          <Users className="h-4 w-4 text-pink-500 shrink-0" />
+                          {inf.label}
+                        </span>
+                        <span className="text-xs text-slate-500 tabular-nums">
+                          {inf.count} canje{inf.count !== 1 ? 's' : ''}
+                          {inf.lastAt
+                            ? ` · último ${new Date(inf.lastAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}`
+                            : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 
@@ -337,6 +447,62 @@ export default function PromotionSmartContractPage() {
                   Ver smart contract en Polygonscan
                 </a>
               </div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Redenciones en vivo
+                  </p>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Mismo origen que la página «Redenciones en vivo». Actualización cada {REDEMPTIONS_POLL_MS / 1000}s.
+                  </p>
+                  {liveLastAt && (
+                    <p className="text-xs text-slate-400 mt-1 tabular-nums">
+                      Sincronizado: {new Date(liveLastAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to={`/redenciones-en-vivo?promotionId=${encodeURIComponent(id || '')}`}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  Abrir panel completo
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </div>
+              {liveHint && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 text-xs mb-4">
+                  {liveHint}
+                </div>
+              )}
+              {liveError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800 text-sm mb-4">
+                  {liveError}
+                </div>
+              )}
+              {liveLoading && liveRows.length === 0 && !liveError ? (
+                <div className="grid gap-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-32 rounded-xl bg-slate-100 animate-pulse" />
+                  ))}
+                </div>
+              ) : liveRows.length === 0 && !liveError ? (
+                <p className="text-sm text-slate-500">
+                  No hay redenciones recientes para esta promoción (o el TTL del cupón eliminó el historial).
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {liveRows.map((row, idx) => (
+                    <RedemptionCard
+                      key={`${row.couponId}-${idx}`}
+                      row={row}
+                      initiallyOpen={idx === 0}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-slate-500 text-sm">

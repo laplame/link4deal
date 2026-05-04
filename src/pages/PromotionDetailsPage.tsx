@@ -30,6 +30,7 @@ import CouponRequestForm from '../components/CouponRequestForm';
 import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 import { findNearestChainBranch, resolveBranchMapsUrl, normalizeChainBranchesFromApi, type ChainBranch } from '../utils/geo';
+import { getPolygonscanAddressUrl } from '../utils/polygonExplorer';
 
 interface SmartContract {
     address: string;
@@ -715,12 +716,21 @@ export default function PromotionDetailsPage() {
                                         <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-6">
                                             <div className="flex items-center gap-2 mb-4">
                                                 <FileText className="h-6 w-6 text-purple-600" />
-                                                <h3 className="text-xl font-semibold text-purple-900">Smart Contract ERC-777</h3>
+                                                <h3 className="text-xl font-semibold text-purple-900">Smart contract (PSCS-1)</h3>
                                             </div>
                                             <p className="text-purple-700 mb-4">
-                                                Este producto está respaldado por un smart contract en la blockchain de Ethereum, 
-                                                garantizando transparencia y seguridad en todas las transacciones.
+                                                Resumen en esta pestaña. La ficha con inventario, emisión LUXAE y redenciones en
+                                                vivo coincide con nuestra vista pública; desde ahí enlazamos a Polygonscan.
                                             </p>
+                                            {id && (
+                                                <Link
+                                                    to={`/promocion/${id}/smart-contract`}
+                                                    className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                                                >
+                                                    Ver ficha del contrato y Polygonscan
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -803,13 +813,13 @@ export default function PromotionDetailsPage() {
                                             
                                             <div className="flex gap-3">
                                                 <a
-                                                    href={product.smartContract.blockchainExplorer}
+                                                    href={getPolygonscanAddressUrl(product.smartContract.address)}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
-                                                    Ver en Blockchain Explorer
+                                                    Ver en Polygonscan
                                                 </a>
                                                 
                                                 <a
@@ -1058,14 +1068,21 @@ export default function PromotionDetailsPage() {
                             </div>
                             
                             <div className="mt-4 space-y-2">
+                                <Link
+                                    to={`/promocion/${id}/smart-contract`}
+                                    className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Ficha contrato (PSCS-1)
+                                </Link>
                                 <a
-                                    href={product.smartContract.blockchainExplorer}
+                                    href={getPolygonscanAddressUrl(product.smartContract.address)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-full inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
                                 >
                                     <ExternalLink className="h-4 w-4" />
-                                    Ver en Explorer
+                                    Polygonscan
                                 </a>
                             </div>
                         </div>

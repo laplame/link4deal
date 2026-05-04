@@ -203,12 +203,14 @@ function extractGpsForApi(redeemedBy) {
 function formatRedemptionRow(doc) {
     const p = doc.payload && typeof doc.payload === 'object' ? doc.payload : {};
     const r = doc.redeemedBy && typeof doc.redeemedBy === 'object' ? doc.redeemedBy : {};
+    const influencerRaw = p.influencerId != null ? String(p.influencerId).trim() : '';
     return {
         couponId: doc.tokenId,
         usedAt: doc.usedAt || null,
         promotionId: p.promotionId != null ? String(p.promotionId) : null,
         shopId: p.shopId != null ? String(p.shopId) : null,
         referralCode: p.referralCode != null ? String(p.referralCode) : null,
+        influencerId: influencerRaw !== '' ? influencerRaw : null,
         discountPercentage: p.discountPercentage != null ? Number(p.discountPercentage) : null,
         payloadDeviceId: p.deviceId != null ? String(p.deviceId) : null,
         devices: {
@@ -1099,7 +1101,41 @@ router.get('/redemptions/recent', async (req, res) => {
             .select('tokenId usedAt expiresAt payload redeemedBy')
             .lean();
 
-        const data = docs.map(formatRedemptionRow);
+        const influencerObjectIds = [
+            ...new Set(
+                docs
+                    .map((d) => {
+                        const id = d.payload && d.payload.influencerId != null
+                            ? String(d.payload.influencerId).trim()
+                            : '';
+                        return isValidObjectId(id) ? id : null;
+                    })
+                    .filter(Boolean)
+            )
+        ];
+        let influencerById = new Map();
+        if (influencerObjectIds.length > 0) {
+            const inflRows = await Influencer.find({ _id: { $in: influencerObjectIds } })
+                .select('name username')
+                .lean();
+            influencerById = new Map(
+                inflRows.map((i) => [String(i._id), { name: i.name || null, username: i.username || null }])
+            );
+        }
+
+        const data = docs.map((doc) => {
+            const row = formatRedemptionRow(doc);
+            const infId = row.influencerId;
+            if (infId && influencerById.has(infId)) {
+                const inf = influencerById.get(infId);
+                row.influencerName = inf.name || null;
+                row.influencerUsername = inf.username || null;
+            } else {
+                row.influencerName = null;
+                row.influencerUsername = null;
+            }
+            return row;
+        });
         return res.json({
             ok: true,
             count: data.length,
