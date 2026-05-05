@@ -1,72 +1,117 @@
 # Endpoint: verificar cupón (QR) – contrato para la app
 
-La app (p. ej. LUXAE) llama a **verify** para validar el código escaneado y obtener los datos necesarios para mostrar/verificar el cupón. Este documento define el contrato del endpoint y confirma que **la lógica está implementada** en este backend (link4deal); para bizneai.com hay que desplegar el mismo backend o exponer este endpoint.
+La app (p. ej. LUXAE o POS) llama a **verify** para validar el código escaneado o el código de referencia y obtener el JSON del cupón. Este documento refleja lo que **pide y devuelve** el backend en este repo (`server/routes/discountQr.js`).
 
 ---
 
-## Flujo en el backend: id del token → BD → validar si aplica
+## Flujo en el backend
 
-1. El backend **obtiene el id del cupón** del token enviado por la app. El token tiene la forma `LINK4DEAL-DISCOUNT.v1.<id>.<sig>`: se extrae `<id>` (y se valida `<sig>` con la llave del servidor).
-2. Con ese **id** se **busca el cupón en la base de datos** (colección de tokens de descuento).
-3. Se **valida si aplica**: promoción existente y activa, vigencia, y, si aplica en tu negocio, tienda, productos, etc. Toda esta lógica es del backend (reglas de negocio).
-4. **Si no aplica** (tienda incorrecta, producto no incluido, cupón expirado, ya usado, etc.), el backend responde con **error** y un **mensaje claro** (p. ej. `"Promoción no activa"`, `"Cupón no aplica a esta tienda"`, `"QR ya redimido"`).
-5. **La app** recibe esa respuesta de error y **muestra el mensaje al usuario** (`message` y, si viene, `errors`).
-
-En resumen: **token → id → BD → validación (tienda, productos, etc.) → si no aplica, error con mensaje → la app muestra ese mensaje al usuario.**
-
----
-
-## 0. Simplificación: un solo id del cupón
-
-**No hay campos** en el payload para “shop id” ni “producto seleccionado”. Se simplifica usando **el id del cupón** como única referencia:
-
-- **couponId** (en la respuesta de verify) = identificador único del cupón (el mismo que va dentro del QR como referencia).
-- Con ese **couponId** el backend (o la app) resuelve todo:
-  - El payload del verify ya trae **promotionId**; con la promoción puedes obtener producto, tienda, etc. (p. ej. `GET /api/promotions/:id`).
-  - No hace falta duplicar `shopId` ni `productId` en el cupón: la promoción es el vínculo a producto/tienda.
-
-Flujo resumido: **QR → verify → couponId + payload (promotionId, discountPercentage, walletAddress, …) → con promotionId pides detalle de promoción (producto/tienda)**.
+1. Se recibe un identificador de cupón: valor del QR (`qrValue`), alias `token`, o el código alfanumérico (`referralCode` / `couponCode`, p. ej. `L4D-...`).
+2. Se resuelve el documento en MongoDB (`DiscountQrToken`):
+   - Si el string tiene formato de **token de referencia** firmado (`LINK4DEAL-DISCOUNT.v1.<id>.<sig>`), se valida la firma y se busca por `tokenId`.
+   - Si no, se busca por `payload.referralCode` igual al string (último creado con ese código).
+3. Se comprueba **expiración del documento** (`expiresAt` del cupón).
+4. Se ejecutan **reglas de negocio** (`validateBusinessRules`) sobre el `payload` y, si la petición los envía, `shopId` / `productId` de **contexto** (no sustituyen al payload; sirven para comprobar `allowedShopIds` / `allowedProductIds` de la promoción).
+5. Respuesta **200** con `payload`, `couponId`, `redemption`, o **400** con `errorCode`, `message` y a veces `errors` y `payload`.
 
 ---
 
 ## 1. Request
 
-**Método y URL**
+Hay **dos** variantes equivalentes en cuanto a datos del cupón; la diferencia es GET vs POST.
+
+### 1.1 `POST /api/discount-qr/verify`
 
 ```http
 POST /api/discount-qr/verify
 Content-Type: application/json
 ```
 
-**Body (exactamente lo que debe enviar la app)**
+**Body – identificador del cupón (uno obligatorio)**
+
+| Campo (JSON)     | Orden de lectura en código | Descripción |
+|------------------|----------------------------|-------------|
+| `qrValue`        | 1.º                        | Código escaneado del QR (token de referencia firmado). |
+| `token`          | 2.º                        | Alias de `qrValue`. |
+| `referralCode`   | 3.º                        | Mismo valor que `payload.referralCode` (p. ej. `L4D-...`). |
+| `couponCode`     | 4.º                        | Alias de búsqueda; mismo uso que `referralCode`. |
+
+La función `getCouponLookupInput` toma **el primer valor no vacío** en el orden: **`qrValue` → `token` → `referralCode` → `couponCode`**. Si varios vienen informados, **`qrValue` gana** sobre `token`, etc.
+
+Si **todos** faltan → **400**:
 
 ```json
 {
-  "qrValue": "<código escaneado del QR o ingresado a mano>"
+  "ok": false,
+  "errorCode": "QR_INVALID",
+  "message": "qrValue, token, referralCode o couponCode requerido"
 }
 ```
 
-- También se acepta el campo `token` como alias de `qrValue`: `{ "token": "<código>" }`.
-- Si falta `qrValue` y `token` → **400** con `message: "qrValue/token requerido"`.
+**Body – contexto opcional (validación tienda / producto)**
+
+| Campo       | Obligatorio | Descripción |
+|------------|-------------|-------------|
+| `shopId`   | No          | Si la promoción define `allowedShopIds` y este campo viene, debe estar en la lista o falla `PROMO_NOT_FOR_SHOP`. |
+| `productId`| No          | Análogo con `allowedProductIds` → `PROMO_NOT_FOR_PRODUCT`. |
+
+**Ejemplo mínimo**
+
+```json
+{
+  "qrValue": "LINK4DEAL-DISCOUNT.v1.<base64url>.<sig>"
+}
+```
+
+**Ejemplo con contexto de tienda**
+
+```json
+{
+  "qrValue": "…",
+  "shopId": "bizne-shop-123",
+  "productId": "optional-product-id"
+}
+```
 
 ---
 
-## 2. Respuesta éxito (cupón válido)
+### 1.2 `GET /api/discount-qr/verify`
 
-**HTTP 200**
+Misma semántica; los campos van en **query string**.
+
+**Query – identificador (uno obligatorio)**
+
+- `qrValue`, `token`, `referralCode` o `couponCode` (mismo orden de precedencia que en POST).
+
+**Query – opcional**
+
+- `shopId`, `productId` (misma validación que en POST).
+
+**Ejemplo**
+
+```http
+GET /api/discount-qr/verify?referralCode=L4D-XXXX&shopId=my-shop
+```
+
+---
+
+## 2. Respuesta éxito – HTTP 200
+
+### 2.1 Cupón encontrado en BD (flujo normal)
 
 ```json
 {
   "ok": true,
   "message": "QR válido",
-  "couponId": "abc123XYZ",
+  "couponId": "<tokenId del documento>",
   "payload": {
-    "deviceId": "string",
-    "influencerId": "string",
-    "promotionId": "string",
-    "referralCode": "string",
+    "deviceId": "…",
+    "influencerId": "…",
+    "promotionId": "…",
+    "referralCode": "…",
     "discountPercentage": 20,
-    "walletAddress": "0x..."
+    "luxaesRedeemed": 20,
+    "walletAddress": "0x…"
   },
   "redemption": {
     "redeemable": true,
@@ -75,75 +120,113 @@ Content-Type: application/json
 }
 ```
 
-**Campos que la app necesita para verificar el cupón**
+- **`couponId`**: es el `tokenId` almacenado en `DiscountQrToken` (no confundir solo con el código `referralCode` visible al usuario).
+- **`payload`**: copia del objeto guardado al **crear** el cupón (`POST`/`GET /api/discount-qr/create`). Incluye como mínimo lo anterior; puede incluir también campos opcionales fusionados en la creación, por ejemplo: `shopId`, `productId`, `brandId`, `gtmTag`, `campaignId`, `source`, `medium`, `metadata`, etc. (ver `mergeOptionalCouponFields` / `OPTIONAL_COUPON_PAYLOAD_KEYS` en `discountQr.js`).
+- **`redemption.redeemable`**: `true` si `usedAt` del token es nulo; `false` si el cupón **ya fue canjeado** (sigue siendo verify válido: la app debe mirar `redeemable` antes de llamar a redeem).
+- **`redemption.usedAt`**: fecha ISO si ya fue usado; si no, `null`.
 
-| Campo                   | Dónde               | Descripción breve |
-|-------------------------|---------------------|-------------------|
-| **couponId**            | raíz de la respuesta | **Id único del cupón.** Usar este id para toda la lógica (redimir, asociar a shop/producto vía backend). |
-| **walletAddress**       | `payload.walletAddress` | Dirección asociada al cupón. |
-| **discountPercentage**  | `payload.discountPercentage` | Porcentaje de descuento (0–100). |
-| **promotionId**         | `payload.promotionId` | ID de la promoción; con él el backend obtiene producto/tienda (no hay shopId ni productId en el cupón). |
-| **referralCode**        | `payload.referralCode` | Código de referencia. |
-| **influencerId**        | `payload.influencerId` | ID del influencer (opcional). |
+**Importante:** En **verify** un cupón ya canjeado **no** devuelve el código `QR_ALREADY_REDEEMED`; devuelve **200** con `redemption.redeemable: false` y `usedAt` informado. El código `QR_ALREADY_REDEEMED` aplica sobre todo al flujo **`POST /api/discount-qr/redeem`**.
 
-- **redemption.redeemable**: `true` si el cupón aún se puede redimir (one-time), `false` si ya fue usado.
-- **redemption.usedAt**: `null` si no se ha redimido, fecha ISO si ya se usó.
+### 2.2 POST verify: token decodificable pero **sin fila en BD** (“legacy”)
 
-**Producto / tienda:** no vienen en el payload del cupón. Se resuelven con **promotionId** (p. ej. `GET /api/promotions/:id`); la promoción tiene el contexto de producto y tienda. Toda la lógica de “a qué shop o producto aplica” se simplifica usando **couponId** + **promotionId**.
+Si no hay documento en Mongo pero el body se puede decodificar como JWT legacy (`verifyAndDecodeQrToken`), la respuesta 200 incluye:
+
+```json
+{
+  "ok": true,
+  "message": "QR válido",
+  "couponId": "<payload.jti o null>",
+  "payload": { ... },
+  "redemption": {
+    "redeemable": false,
+    "usedAt": null,
+    "legacyToken": true
+  }
+}
+```
+
+(GET `/verify` no usa este camino: usa `runVerify`, que exige documento en BD.)
 
 ---
 
-## 3. Respuestas de error (códigos unificados)
+## 3. Respuestas de error – HTTP 400
 
-Cuando el cupón **no aplica**, el backend responde con **`errorCode`** y **`message`**. La app debe mostrar **`message`** al usuario y puede usar **`errorCode`** para lógica o traducciones.
+La app debe mostrar **`message`** al usuario y puede usar **`errorCode`** para lógica o i18n.
 
-**Códigos y mensajes que envía el backend:**
+### 3.1 Errores genéricos (sin `errors[]`)
 
-| errorCode | message |
-|-----------|--------|
-| **PROMO_NOT_FOR_SHOP** | La promoción existe pero no está habilitada para esta tienda. |
-| **PROMO_NOT_FOR_PRODUCT** | La promoción existe pero no aplica para este producto. |
-| **PROMO_NOT_UNDER_TERMS** | La promoción existe pero no aplica bajo estos términos. |
-| **PROMO_ONE_PER_PERSON** | La promoción solo permite un producto por persona. |
-| **PROMO_INACTIVE** | La promoción no está activa. |
-| **PROMO_EXPIRED** | La promoción ha expirado. |
-| **PROMO_NOT_FOUND** | Promoción no encontrada. |
-| **QR_INVALID** | Código QR inválido o expirado. |
-| **QR_ALREADY_REDEEMED** | Este cupón ya fue redimido. |
+Ejemplos: cupón no encontrado / expirado (a nivel documento), token ilegible.
 
-**Formato de respuesta de error (siempre incluye `errorCode` y `message`):**
+```json
+{
+  "ok": false,
+  "errorCode": "QR_INVALID",
+  "message": "Código QR inválido o expirado."
+}
+```
+
+```json
+{
+  "ok": false,
+  "errorCode": "PROMO_EXPIRED",
+  "message": "La promoción ha expirado."
+}
+```
+
+(En verify, **PROMO_EXPIRED** puede aplicar por **expiración del documento del cupón** `expiresAt` o por **vigencia de la promoción** en reglas de negocio, según la rama que falle.)
+
+### 3.2 Errores de reglas de negocio (con `errors` y a veces `payload`)
 
 ```json
 {
   "ok": false,
   "errorCode": "PROMO_INACTIVE",
   "message": "La promoción no está activa.",
-  "errors": [{ "code": "PROMO_INACTIVE", "message": "La promoción no está activa." }],
+  "errors": [
+    { "code": "PROMO_INACTIVE", "message": "La promoción no está activa." }
+  ],
   "payload": { ... }
 }
 ```
 
-**Validación por tienda/producto:** si la app envía `shopId` o `productId` en el body de verify (o query en GET), el backend comprueba si la promoción tiene `allowedShopIds` / `allowedProductIds` y responde **PROMO_NOT_FOR_SHOP** o **PROMO_NOT_FOR_PRODUCT** cuando no aplica.
+**Códigos que `validateBusinessRules` puede devolver en verify** (según implementación actual):
+
+| errorCode | Mensaje (aprox.) |
+|-----------|------------------|
+| `QR_INVALID` | Código QR inválido o expirado. (También si `promotionId` no es ObjectId válido o `influencerId` no existe en BD.) |
+| `PROMO_NOT_FOUND` | Promoción no encontrada. |
+| `PROMO_INACTIVE` | La promoción no está activa. |
+| `PROMO_EXPIRED` | La promoción ha expirado. (ventana `validUntil`) |
+| `PROMO_NOT_UNDER_TERMS` | La promoción existe pero no aplica bajo estos términos. (Ej. aún no inicia `validFrom`, o `discountPercentage` fuera de 0–100.) |
+| `PROMO_NOT_FOR_SHOP` | La promoción existe pero no está habilitada para esta tienda. |
+| `PROMO_NOT_FOR_PRODUCT` | La promoción existe pero no aplica para este producto. |
+
+**Nota:** En `ERROR_CODES` existe también `PROMO_ONE_PER_PERSON`; **no está enlazado hoy** a `validateBusinessRules` en este archivo, así que verify **no** devolverá ese código hasta que se implemente la regla.
+
+**`QR_ALREADY_REDEEMED`:** pensado para **redeem**, no como respuesta típica de verify (verify indica estado con `redemption.redeemable`).
 
 ---
 
-## 4. Lógica que debe tener el backend (ya implementada aquí)
+## 4. Resumen para integradores
 
-1. Recibir `{ "qrValue": "<código>" }` (o `token`).
-2. Validar el token:
-   - **Formato referencia** `LINK4DEAL-DISCOUNT.v1.<id>.<sig>`: verificar firma con `QR_SIGN_KEY`, buscar token por `id` en BD, comprobar que no esté expirado.
-   - **Formato legacy** (7 partes): verificar firma y descifrar con `QR_ENC_KEY`/`QR_SIGN_KEY` si aplica.
-3. Reglas de negocio: promoción existente y activa, vigencia, `discountPercentage` 0–100, etc.
-4. Responder con `ok: true`, `payload` (con `walletAddress`, `discountPercentage`, `promotionId`, etc.) y `redemption` (redeemable, usedAt).
+| Necesidad | Uso |
+|-----------|-----|
+| Validar QR o código `L4D-…` | `POST` o `GET` verify con `qrValue` o `referralCode` / `couponCode`. |
+| Saber si se puede canjear | `redemption.redeemable` + `usedAt`. |
+| Atribución influencer | `payload.influencerId` (y datos de promoción vía `GET /api/promotions/:promotionId`). |
+| Validar en una tienda POS concreta | Enviar `shopId` (y si aplica `productId`) en body o query. |
+| Cupón ya usado | Verify sigue siendo 200; `redeemable: false`. |
 
-**Implementación en este repo**
+---
 
-- Ruta: `server/routes/discountQr.js` → `POST /verify`
-- Validación: `server/utils/qrCrypto.js` (`verifyReferenceQrToken`, `verifyAndDecodeQrToken`)
-- Modelo: `server/models/DiscountQrToken.js`
-- Montaje en app: `server/index.js` → `app.use('/api/discount-qr', ...)`
+## 5. Implementación y entorno
 
-Variables de entorno necesarias en el servidor (p. ej. bizneai.com):
+- **Rutas:** `server/routes/discountQr.js` → `GET /verify`, `POST /verify`.
+- **Crypto / formato QR:** `server/utils/qrCrypto.js` (`verifyReferenceQrToken`, `verifyAndDecodeQrToken`).
+- **Modelo:** `server/models/DiscountQrToken.js`.
+- **Montaje:** `server/index.js` → `app.use('/api/discount-qr', …)`.
+
+Variables de entorno típicas (QR de referencia):
 
 ```env
 QR_PREFIX=LINK4DEAL-DISCOUNT
@@ -152,35 +235,28 @@ QR_SIGN_KEY=<base64 de 32 bytes>
 QR_TTL_SECONDS=300
 ```
 
-Y MongoDB con la colección de tokens (creada por `create`).
-
 ---
 
-## 5. Para bizneai.com
+## 6. Puertos y ejemplos curl
 
-Si el backend de **bizneai.com** aún no tiene este endpoint:
-
-- **Opción A:** Desplegar en bizneai el mismo backend de este repo (Node + `server/routes/discountQr.js`, modelo `DiscountQrToken`, `qrCrypto`, env de QR) y exponer `POST https://www.bizneai.com/api/discount-qr/verify` con el contrato anterior.
-- **Opción B:** Implementar en bizneai un único endpoint que cumpla este contrato (mismo request/response y mismas validaciones), reutilizando la lógica de `server/utils/qrCrypto.js` y `server/routes/discountQr.js` (verify) si comparten código.
-
-La app solo necesita que **POST /api/discount-qr/verify** exista y responda como en las secciones 1–3 (en especial `payload.walletAddress`, `payload.discountPercentage`, `payload.promotionId` y `redemption.redeemable`).
-
----
-
-## 6. Puertos en este proyecto
-
-- **Backend (API):** por defecto usa el puerto **3000** (`server/.env` → `PORT=3000`). Al ejecutar `npm run server` o `node server/index.js`, la API queda en `http://localhost:3000`.
-- **Frontend (Vite):** en desarrollo corre en el puerto **5173** y hace proxy de `/api` y `/uploads` a `http://localhost:3000`.
-- En producción el puerto puede ser otro (p. ej. PM2 con `PORT=5001`) o no verse si Nginx hace proxy; la URL será la del dominio (ej. `https://www.damecodigo.com/api/...`).
-
-**Ejemplos de verify con puerto 3000 (local):**
+- **Backend:** según `PORT` (p. ej. 3000 local, 5001 en PM2).
+- **Vite:** `5173` con proxy `/api` al backend.
 
 ```bash
-# GET (ver JSON del cupón)
+# GET – ver JSON del cupón (mismo contrato de éxito que POST cuando hay documento en BD)
 curl -s "http://localhost:3000/api/discount-qr/verify?qrValue=LINK4DEAL-DISCOUNT.v1.XXX.sig"
 
-# POST (lo que usa la app)
+# GET – con tienda
+curl -s "http://localhost:3000/api/discount-qr/verify?referralCode=L4D-ABC123&shopId=mi-tienda"
+
+# POST – uso típico desde la app
 curl -s -X POST "http://localhost:3000/api/discount-qr/verify" \
   -H "Content-Type: application/json" \
-  -d '{"qrValue":"LINK4DEAL-DISCOUNT.v1.XXX.sig"}'
+  -d '{"qrValue":"LINK4DEAL-DISCOUNT.v1.XXX.sig","shopId":"mi-tienda"}'
 ```
+
+---
+
+## 7. Despliegue compartido (p. ej. bizneai.com)
+
+Para otro dominio, el contrato debe mantenerse: mismos campos de entrada (`qrValue` | `token` | `referralCode` | `couponCode`, opcionales `shopId`, `productId`) y misma forma de respuesta 200/400 descrita arriba.
