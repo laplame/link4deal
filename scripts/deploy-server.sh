@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Script para ejecutar EN EL SERVIDOR (ej. cto@damecode).
-# Actualiza el proyecto, aplica Nginx (puerto 3000), recarga y verifica con curl.
+# Actualiza el proyecto, aplica Nginx (sites-available; en VPS suele ser damecodigo.com), recarga y verifica con curl.
 #
 # Uso en el servidor:
 #   cd ~/project/link4deal && bash scripts/deploy-server.sh
@@ -10,8 +10,9 @@
 
 set -e
 PROJECT_DIR="${PROJECT_DIR:-$HOME/project/link4deal}"
-NGINX_SITE="link4deal"
-BACKEND_PORT="${BACKEND_PORT:-3000}"
+# En sites-enabled debe existir el enlace (ej. damecodigo.com -> sites-available/damecodigo.com).
+NGINX_SITE="${NGINX_SITE:-damecodigo.com}"
+BACKEND_PORT="${BACKEND_PORT:-5001}"
 
 echo "=========================================="
 echo "  Deploy en servidor - link4deal"
