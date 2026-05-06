@@ -28,10 +28,8 @@ git pull
 echo "   OK"
 echo ""
 
-# 2. Snippet compartido (locations SPA + /api) y sitio principal
-echo "2. Nginx: copiar snippet y sitio..."
-sudo mkdir -p /etc/nginx/snippets
-sudo cp "$PROJECT_DIR/nginx/snippets/link4deal-app.conf" /etc/nginx/snippets/link4deal-app.conf
+# 2. Sitio Nginx (un solo archivo; incluye /api/ y SPA)
+echo "2. Nginx: copiar config..."
 sudo cp "$PROJECT_DIR/nginx.conf" "/etc/nginx/sites-available/$NGINX_SITE"
 if sudo nginx -t 2>/dev/null; then
   sudo systemctl reload nginx
