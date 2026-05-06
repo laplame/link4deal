@@ -3,8 +3,11 @@
  * Prioridad: Cloudinary > url > /uploads/promotions/{filename} > placeholder.
  * No usa `path` porque es la ruta en disco del servidor, no accesible desde el navegador.
  * Normaliza URLs antiguas tipo /uploads/promotion-xxx a /uploads/promotions/promotion-xxx.
+ *
+ * En el navegador, rutas /uploads/ son relativas al origen (funciona en damecodigo.com y link4deal.com).
+ * Si la API guardó una URL absoluta a otro dominio pero mismo path /uploads/, se convierte a ruta relativa.
  */
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 /** Placeholder en data URL para no depender de servicios externos (via.placeholder.com puede fallar o bloquearse). */
 const DEFAULT_PLACEHOLDER =
@@ -17,6 +20,19 @@ function toPromotionsUrl(urlOrFilename: string): string {
   return `/uploads/promotions/${s}`;
 }
 
+/** Convierte https://cualquier-host/uploads/... en /uploads/... para servir desde el mismo dominio de la SPA. */
+function uploadsPathOnlyIfAbsolute(urlOrPath: string): string {
+  const s = urlOrPath.trim();
+  if (!s.startsWith('http://') && !s.startsWith('https://')) return s;
+  try {
+    const u = new URL(s);
+    if (u.pathname.startsWith('/uploads/')) return u.pathname + u.search;
+  } catch {
+    /* ignore */
+  }
+  return s;
+}
+
 export function getPromotionImageUrl(
   images: Array<{ cloudinaryUrl?: string; url?: string; filename?: string; path?: string }> | undefined | null,
   placeholder = DEFAULT_PLACEHOLDER
@@ -24,16 +40,23 @@ export function getPromotionImageUrl(
   if (!images || images.length === 0) return placeholder;
   const img = images[0];
   if (img.cloudinaryUrl) return img.cloudinaryUrl;
-  const relativeUrl = img.url
-    ? (img.url.startsWith('/uploads/') && !img.url.includes('/uploads/promotions/')
-        ? toPromotionsUrl(img.url)
-        : img.url)
+
+  let relativeUrl: string | null = img.url
+    ? uploadsPathOnlyIfAbsolute(
+        img.url.startsWith('/uploads/') && !img.url.includes('/uploads/promotions/')
+          ? toPromotionsUrl(img.url)
+          : img.url
+      )
     : img.filename
       ? `/uploads/promotions/${img.filename}`
       : null;
+
   if (relativeUrl) {
-    const url = relativeUrl.startsWith('http') ? relativeUrl : `${API_BASE}${relativeUrl}`;
-    return url;
+    relativeUrl = uploadsPathOnlyIfAbsolute(relativeUrl);
+    if (relativeUrl.startsWith('http')) return relativeUrl;
+    // SPA en el mismo host que Nginx (/api, /uploads): ruta relativa evita romper link4deal.com con VITE_API_URL de damecodigo.
+    if (typeof window !== 'undefined') return relativeUrl;
+    return API_BASE ? `${API_BASE}${relativeUrl}` : relativeUrl;
   }
   return placeholder;
 }
