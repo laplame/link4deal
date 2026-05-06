@@ -53,6 +53,10 @@ const promotionsUploadPath = path.resolve(getPromotionUploadDir());
 if (!fs.existsSync(promotionsUploadPath)) {
     fs.mkdirSync(promotionsUploadPath, { recursive: true });
 }
+const legacyPromotionsDir = path.join(__dirname, 'public/uploads/promotions');
+if (fs.existsSync(legacyPromotionsDir)) {
+    app.use('/uploads/promotions', express.static(legacyPromotionsDir));
+}
 app.use('/uploads', express.static(uploadsPath));
 console.log('📁 Serviendo uploads desde:', uploadsPath);
 

@@ -157,6 +157,12 @@ const promotionsPath = path.resolve(getPromotionUploadDir());
 if (!fsSync.existsSync(promotionsPath)) {
     fsSync.mkdirSync(promotionsPath, { recursive: true });
 }
+// Imágenes antiguas: antes podían vivir en server/public/uploads/promotions (no bajo getUploadDir).
+// Registrar ANTES del static general para que express.static intente aquí y luego siga al siguiente.
+const legacyPromotionsDir = path.join(__dirname, 'public/uploads/promotions');
+if (fsSync.existsSync(legacyPromotionsDir)) {
+    app.use('/uploads/promotions', express.static(legacyPromotionsDir));
+}
 app.use('/uploads', express.static(uploadsPath));
 
 // Servir archivos públicos (/public/...) y alias /assets (APK y estáticos en public/assets/)

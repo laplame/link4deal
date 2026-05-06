@@ -33,6 +33,28 @@ function uploadsPathOnlyIfAbsolute(urlOrPath: string): string {
   return s;
 }
 
+/** Origen de la API si VITE_API_URL está definida (SPA en otro host → imágenes deben pedirse al backend). */
+function apiOriginForUploads(): string | null {
+  const base = API_BASE.trim();
+  if (!base) return null;
+  try {
+    const url = base.includes('://') ? base : `${typeof window !== 'undefined' ? window.location.protocol : 'https:'}//${base}`;
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function absoluteUploadsUrlInBrowser(relativeUploadsPath: string): string {
+  if (typeof window === 'undefined') return relativeUploadsPath;
+  if (!relativeUploadsPath.startsWith('/uploads')) return relativeUploadsPath;
+  const apiOrigin = apiOriginForUploads();
+  if (apiOrigin && apiOrigin !== window.location.origin) {
+    return `${apiOrigin}${relativeUploadsPath}`;
+  }
+  return relativeUploadsPath;
+}
+
 export function getPromotionImageUrl(
   images: Array<{ cloudinaryUrl?: string; url?: string; filename?: string; path?: string }> | undefined | null,
   placeholder = DEFAULT_PLACEHOLDER
@@ -54,8 +76,8 @@ export function getPromotionImageUrl(
   if (relativeUrl) {
     relativeUrl = uploadsPathOnlyIfAbsolute(relativeUrl);
     if (relativeUrl.startsWith('http')) return relativeUrl;
-    // SPA en el mismo host que Nginx (/api, /uploads): ruta relativa evita romper link4deal.com con VITE_API_URL de damecodigo.
-    if (typeof window !== 'undefined') return relativeUrl;
+    // Mismo host que Nginx (/api, /uploads): relativo. SPA en otro origen que VITE_API_URL: prefijo al API (como antes).
+    if (typeof window !== 'undefined') return absoluteUploadsUrlInBrowser(relativeUrl);
     return API_BASE ? `${API_BASE}${relativeUrl}` : relativeUrl;
   }
   return placeholder;
