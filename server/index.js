@@ -53,6 +53,10 @@ const allowedOrigins = [
     'https://www.damecodigo.com',
     'http://damecodigo.com',
     'http://www.damecodigo.com',
+    'https://link4deal.com',
+    'https://www.link4deal.com',
+    'http://link4deal.com',
+    'http://www.link4deal.com',
 ];
 
 app.use(cors({
