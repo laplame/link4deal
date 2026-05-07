@@ -1,28 +1,12 @@
-import React, { useState } from 'react';
-import { X, Upload, Calendar, Target, DollarSign, Users, Clock, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Upload, Calendar, Target, DollarSign, Users, Clock, CheckCircle, Sparkles } from 'lucide-react';
+import { apiUrl } from '../utils/apiUrl';
+import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 
-interface Promotion {
-  id: string;
-  title: string;
-  brand: string;
-  category: string;
-  currentPrice: number;
-  currency: string;
-  commission: number;
-  timeLeft: string;
-  maxApplications: number;
-  totalApplications: number;
-}
-
-interface PromotionApplicationModalProps {
-  promotion: Promotion | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (applicationData: ApplicationData) => void;
-}
-
-interface ApplicationData {
+export interface ApplicationData {
   promotionId: string;
+  /** ObjectId del documento Influencer (copiado desde el perfil). */
+  influencerProfileId?: string;
   contentProposal: string;
   platforms: string[];
   estimatedReach: number;
@@ -40,6 +24,62 @@ interface ApplicationData {
   additionalNotes: string;
 }
 
+interface Promotion {
+  id: string;
+  title: string;
+  brand: string;
+  category: string;
+  currentPrice: number;
+  currency: string;
+  commission: number;
+  timeLeft: string;
+  maxApplications: number;
+  totalApplications: number;
+}
+
+type InfluencerApiPayload = {
+  name?: string;
+  username?: string;
+  bio?: string;
+  totalFollowers?: number;
+  followers?: { instagram?: number; tiktok?: number; youtube?: number; twitter?: number };
+  socialMedia?: { instagram?: string; tiktok?: string; youtube?: string; twitter?: string };
+};
+
+function platformsFromInfluencerApi(inv: InfluencerApiPayload): string[] {
+  const keys: [string, 'instagram' | 'tiktok' | 'youtube' | 'twitter'][] = [
+    ['Instagram', 'instagram'],
+    ['TikTok', 'tiktok'],
+    ['YouTube', 'youtube'],
+    ['Twitter', 'twitter'],
+  ];
+  const out: string[] = [];
+  for (const [label, key] of keys) {
+    const f = Number(inv.followers?.[key]) || 0;
+    const h = inv.socialMedia?.[key];
+    const hasHandle = typeof h === 'string' && h.trim().length > 0;
+    if (f > 0 || hasHandle) out.push(label);
+  }
+  return out;
+}
+
+function buildProposalDraft(inv: InfluencerApiPayload, promotion: Promotion): string {
+  const name = (inv.name || inv.username || 'Creador de contenido').trim();
+  const n = Math.max(0, Number(inv.totalFollowers) || 0);
+  const bio = (inv.bio || '').trim();
+  const bioLine = bio
+    ? `\n\nSobre mí: ${bio.length > 320 ? `${bio.slice(0, 320)}…` : bio}`
+    : '';
+  return `Soy ${name} (≈${n.toLocaleString()} seguidores totales). Me interesa colaborar en la campaña «${promotion.title}» de ${promotion.brand}.${bioLine}\n\nPropongo contenido alineado con la marca y con engagement real con mi audiencia.`;
+}
+
+interface PromotionApplicationModalProps {
+  promotion: Promotion | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (applicationData: ApplicationData) => void | Promise<void>;
+}
+
 export default function PromotionApplicationModal({ 
   promotion, 
   isOpen, 
@@ -47,8 +87,14 @@ export default function PromotionApplicationModal({
   onSubmit 
 }: PromotionApplicationModalProps) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [prefillError, setPrefillError] = useState('');
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const [influencerIdInput, setInfluencerIdInput] = useState('');
   const [formData, setFormData] = useState<ApplicationData>({
     promotionId: promotion?.id || '',
+    influencerProfileId: undefined,
     contentProposal: '',
     platforms: [],
     estimatedReach: 0,
@@ -66,7 +112,102 @@ export default function PromotionApplicationModal({
     additionalNotes: ''
   });
 
+  const loadProfileById = useCallback(
+    async (rawId: string, options: { preserveProposal: boolean }) => {
+      const id = rawId.trim();
+      if (!promotion) return;
+      if (!/^[a-f0-9]{24}$/i.test(id)) {
+        setPrefillError('El ID debe ser un identificador de 24 caracteres (el de tu perfil público).');
+        return;
+      }
+      setPrefillError('');
+      setPrefillLoading(true);
+      try {
+        const res = await fetch(apiUrl(`/api/influencers/${id}`));
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success || !data.data) {
+          setPrefillError(
+            typeof data.message === 'string' ? data.message : 'No se encontró un influencer con ese ID.'
+          );
+          return;
+        }
+        const inv = data.data as InfluencerApiPayload;
+        try {
+          sessionStorage.setItem(LAST_COPIED_INFLUENCER_ID_KEY, id);
+        } catch {
+          /* ignore */
+        }
+        setFormData((prev) => ({
+          ...prev,
+          influencerProfileId: id,
+          platforms: platformsFromInfluencerApi(inv),
+          estimatedReach: Math.max(0, Number(inv.totalFollowers) || 0),
+          contentProposal:
+            options.preserveProposal && prev.contentProposal.trim()
+              ? prev.contentProposal
+              : buildProposalDraft(inv, promotion),
+          pricing: {
+            ...prev.pricing,
+            type: 'commission',
+            amount:
+              promotion.commission != null && promotion.commission !== undefined
+                ? Number(promotion.commission)
+                : prev.pricing.amount,
+            currency: promotion.currency || prev.pricing.currency || 'MXN',
+          },
+        }));
+      } catch {
+        setPrefillError('Error de red al cargar el perfil.');
+      } finally {
+        setPrefillLoading(false);
+      }
+    },
+    [promotion]
+  );
+
+  useEffect(() => {
+    if (!isOpen || !promotion) return;
+
+    setCurrentStep(1);
+    setSubmitError('');
+    setPrefillError('');
+    setIsSubmitting(false);
+
+    let stored = '';
+    try {
+      stored = (sessionStorage.getItem(LAST_COPIED_INFLUENCER_ID_KEY) || '').trim();
+    } catch {
+      /* ignore */
+    }
+    setInfluencerIdInput(stored);
+
+    setFormData({
+      promotionId: promotion.id,
+      influencerProfileId: undefined,
+      contentProposal: '',
+      platforms: [],
+      estimatedReach: 0,
+      portfolio: [],
+      pricing: {
+        type: 'commission',
+        amount: Number(promotion.commission) || 0,
+        currency: promotion.currency || 'MXN',
+      },
+      timeline: {
+        startDate: '',
+        endDate: '',
+        deliverables: [],
+      },
+      additionalNotes: '',
+    });
+
+    if (!/^[a-f0-9]{24}$/i.test(stored)) return;
+
+    void loadProfileById(stored, { preserveProposal: false });
+  }, [isOpen, promotion?.id, loadProfileById]);
+
   const platforms = ['Instagram', 'TikTok', 'YouTube', 'Twitter', 'Facebook', 'LinkedIn'];
+
   const deliverableTypes = [
     'Post de Instagram',
     'Story de Instagram',
@@ -126,9 +267,19 @@ export default function PromotionApplicationModal({
     }
   };
 
-  const handleSubmit = () => {
-    onSubmit(formData);
-    onClose();
+  const handleSubmit = async () => {
+    if (!promotion) return;
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      const payload = { ...formData, promotionId: promotion.id };
+      await Promise.resolve(onSubmit(payload));
+      onClose();
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'No se pudo enviar la aplicación.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen || !promotion) return null;
@@ -171,6 +322,50 @@ export default function PromotionApplicationModal({
           {/* Step 1: Propuesta de Contenido */}
           {currentStep === 1 && (
             <div className="space-y-6">
+              <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50/80 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-purple-900">Datos desde tu perfil</p>
+                    <p className="text-xs text-purple-800/90 mt-1">
+                      Pega el ID que copiaste en tu perfil de influencer. Si ya usaste &quot;Copiar mi ID&quot;
+                      allí, intentamos cargarlo automáticamente al abrir este formulario.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={influencerIdInput}
+                        onChange={(e) => setInfluencerIdInput(e.target.value.trim())}
+                        placeholder="Ej: 69d7dfc5fde91526607458d9"
+                        className="flex-1 min-w-0 px-3 py-2.5 border border-purple-200 rounded-lg text-sm font-mono bg-white/90 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        disabled={prefillLoading}
+                        onClick={() => loadProfileById(influencerIdInput, { preserveProposal: false })}
+                        className="px-4 py-2.5 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 shrink-0"
+                      >
+                        {prefillLoading ? 'Cargando…' : 'Cargar datos'}
+                      </button>
+                    </div>
+                    {prefillError ? (
+                      <p className="text-xs text-red-600 mt-2" role="alert">
+                        {prefillError}
+                      </p>
+                    ) : null}
+                    {formData.influencerProfileId ? (
+                      <p className="text-xs text-emerald-800 mt-2">
+                        Listo: solicitud vinculada al perfil{' '}
+                        <span className="font-mono">{formData.influencerProfileId}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
               <div className="text-center mb-6">
                 <Target className="w-12 h-12 text-purple-600 mx-auto mb-3" />
                 <h3 className="text-xl font-semibold text-gray-900">Propuesta de Contenido</h3>
@@ -222,7 +417,9 @@ export default function PromotionApplicationModal({
                 <input
                   type="number"
                   value={formData.estimatedReach}
-                  onChange={(e) => handleInputChange('estimatedReach', parseInt(e.target.value))}
+                  onChange={(e) =>
+                    handleInputChange('estimatedReach', Math.max(0, parseInt(e.target.value, 10) || 0))
+                  }
                   placeholder="Ej: 50000"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
@@ -412,6 +609,12 @@ export default function PromotionApplicationModal({
               <div className="bg-blue-50 rounded-lg p-4">
                 <h4 className="font-medium text-blue-900 mb-2">Tu Aplicación</h4>
                 <div className="space-y-2 text-sm">
+                  {formData.influencerProfileId ? (
+                    <div>
+                      <span className="text-blue-600">ID influencer:</span>
+                      <span className="ml-2 text-blue-900 font-mono text-xs">{formData.influencerProfileId}</span>
+                    </div>
+                  ) : null}
                   <div>
                     <span className="text-blue-600">Plataformas:</span>
                     <span className="ml-2 text-blue-900">{formData.platforms.join(', ')}</span>
@@ -446,6 +649,12 @@ export default function PromotionApplicationModal({
             </div>
           )}
 
+          {submitError ? (
+            <div className="mb-4 rounded-lg bg-red-50 text-red-800 text-sm px-4 py-3" role="alert">
+              {submitError}
+            </div>
+          ) : null}
+
           {/* Navigation Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <button
@@ -477,11 +686,13 @@ export default function PromotionApplicationModal({
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleSubmit}
-                className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2"
+                disabled={isSubmitting}
+                className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 disabled:opacity-60"
               >
                 <CheckCircle className="w-4 h-4" />
-                Enviar Aplicación
+                {isSubmitting ? 'Enviando…' : 'Enviar Aplicación'}
               </button>
             )}
           </div>

@@ -34,9 +34,12 @@ import {
   TrendingUp as TrendingUpIcon,
   DollarSign as DollarSignIcon,
   FileCode2,
-  ExternalLink
+  ExternalLink,
+  Copy,
+  Check
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
+import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 
 interface Influencer {
   id: string;
@@ -122,6 +125,7 @@ export default function InfluencerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>(() => getSavedIds());
+  const [copiedInfluencerId, setCopiedInfluencerId] = useState(false);
 
   // Estado para el módulo de pujas
   const [showBidModal, setShowBidModal] = useState(false);
@@ -310,6 +314,28 @@ export default function InfluencerProfilePage() {
     return `${minutes}m`;
   };
 
+  const copyMyIdForPromotions = async () => {
+    if (!influencer) return;
+    const id = influencer.id;
+    try {
+      await navigator.clipboard.writeText(id);
+      try {
+        sessionStorage.setItem(LAST_COPIED_INFLUENCER_ID_KEY, id);
+      } catch {
+        /* ignore */
+      }
+      setCopiedInfluencerId(true);
+      window.setTimeout(() => setCopiedInfluencerId(false), 2000);
+    } catch {
+      try {
+        sessionStorage.setItem(LAST_COPIED_INFLUENCER_ID_KEY, id);
+      } catch {
+        /* ignore */
+      }
+      window.prompt('Copia tu ID de influencer:', id);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -344,27 +370,47 @@ export default function InfluencerProfilePage() {
       {/* Header del Perfil */}
       <div className="bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-700 text-white">
         <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
             <Link
               to="/influencers"
-              className="flex items-center gap-2 text-pink-100 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-pink-100 hover:text-white transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
               Volver al Marketplace
             </Link>
-            <button
-              type="button"
-              onClick={toggleSaveProfile}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                isSaved
-                  ? 'bg-white/25 text-white'
-                  : 'bg-white/15 text-pink-100 hover:bg-white/25 hover:text-white'
-              }`}
-              title={isSaved ? 'Quitar de guardados' : 'Guardar perfil'}
-            >
-              <Heart className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
-              Guardar perfil
-            </button>
+            <div className="flex flex-wrap items-stretch sm:items-center justify-stretch sm:justify-end gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={copyMyIdForPromotions}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0"
+                title="Copia el ID de este perfil para usarlo al aplicar a promociones"
+              >
+                {copiedInfluencerId ? (
+                  <>
+                    <Check className="w-5 h-5 text-emerald-600 shrink-0" />
+                    ¡Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-5 h-5 shrink-0" />
+                    <span className="text-left leading-snug">Copiar mi ID para aplicar a promociones</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={toggleSaveProfile}
+                className={`flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  isSaved
+                    ? 'bg-white/25 text-white'
+                    : 'bg-white/15 text-pink-100 hover:bg-white/25 hover:text-white'
+                }`}
+                title={isSaved ? 'Quitar de guardados' : 'Guardar perfil'}
+              >
+                <Heart className={`w-5 h-5 shrink-0 ${isSaved ? 'fill-current' : ''}`} />
+                Guardar perfil
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-8">

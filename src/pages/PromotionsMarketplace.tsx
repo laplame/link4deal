@@ -28,6 +28,8 @@ import {
   Store
 } from 'lucide-react';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
+import type { ApplicationData } from '../components/PromotionApplicationModal';
+import { submitPromotionApplication } from '../services/promotionApplications';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 import {
   CARD_ROUNDED_BY_TIER,
@@ -120,6 +122,7 @@ export default function PromotionsMarketplace() {
   const [error, setError] = useState<string | null>(null);
   const [apiMessage, setApiMessage] = useState<string | null>(null);
   const [chainPresetList, setChainPresetList] = useState<ChainPresetMeta[]>([]);
+  const [applicationFeedback, setApplicationFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -344,10 +347,16 @@ export default function PromotionsMarketplace() {
     setIsModalOpen(true);
   };
 
-  const handleApplicationSubmit = (applicationData: any) => {
-    console.log('Aplicación enviada:', applicationData);
-    // Aquí se enviaría la aplicación a la API
-    // Por ahora solo mostramos en consola
+  const handleApplicationSubmit = async (applicationData: ApplicationData) => {
+    try {
+      await submitPromotionApplication(applicationData);
+      setApplicationFeedback({ ok: true, text: 'Tu aplicación fue enviada. La marca podrá revisarla en su panel.' });
+    } catch (e) {
+      setApplicationFeedback({
+        ok: false,
+        text: e instanceof Error ? e.message : 'No se pudo enviar la aplicación.',
+      });
+    }
   };
 
   const handleCloseModal = () => {
@@ -357,6 +366,22 @@ export default function PromotionsMarketplace() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {applicationFeedback ? (
+        <div
+          className={`fixed top-0 inset-x-0 z-[60] px-4 py-3 text-center text-sm font-medium shadow-md ${
+            applicationFeedback.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+          }`}
+        >
+          {applicationFeedback.text}
+          <button
+            type="button"
+            onClick={() => setApplicationFeedback(null)}
+            className="ml-4 underline opacity-90 hover:opacity-100"
+          >
+            Cerrar
+          </button>
+        </div>
+      ) : null}
       {/* Header del Marketplace */}
       <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-700 text-white">
         <div className="container mx-auto px-4 py-12">
@@ -372,6 +397,12 @@ export default function PromotionsMarketplace() {
                 tiendas BizneAI
               </Link>
               .
+            </p>
+            <p className="text-sm text-purple-200/95 mb-6">
+              ¿Eres marca?{' '}
+              <Link to="/brand/aplicaciones" className="underline decoration-white/50 font-medium hover:text-white">
+                Ver solicitudes de influencers
+              </Link>
             </p>
             <div className="flex justify-center space-x-4">
               <div className="bg-white/20 rounded-lg p-3">

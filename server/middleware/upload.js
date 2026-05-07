@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 
 // Configuración de almacenamiento en memoria para procesamiento OCR
 const memoryStorage = multer.memoryStorage();
@@ -25,6 +26,9 @@ const getPromotionUploadDir = () => path.join(getUploadDir(), 'promotions');
 
 /** Avatares de influencer (registro / foto de perfil). URL: /uploads/influencers/<filename> */
 const getInfluencerUploadDir = () => path.join(getUploadDir(), 'influencers');
+
+/** Archivos de portfolio en aplicaciones a promoción. URL: /uploads/application-portfolio/<filename> */
+const getApplicationPortfolioUploadDir = () => path.join(getUploadDir(), 'application-portfolio');
 
 // Configuración de almacenamiento en disco para respaldo local
 const diskStorage = multer.diskStorage({
@@ -119,6 +123,49 @@ const diskUpload = multer({
         fieldSize: 10 * 1024 * 1024 // Tamaño máximo de campos (10MB)
     }
 });
+
+const applicationPortfolioFileFilter = (req, file, cb) => {
+    const allowedMimeTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'application/pdf'
+    ];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+        return cb(null, true);
+    }
+    const error = new Error('En portfolio solo se permiten imágenes (JPEG, PNG, WEBP, GIF) o PDF.');
+    error.code = 'INVALID_FILE_TYPE';
+    return cb(error, false);
+};
+
+const applicationPortfolioDiskStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        try {
+            const dir = getApplicationPortfolioUploadDir();
+            fsSync.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        } catch (err) {
+            cb(err);
+        }
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '') || '';
+        cb(null, `pf-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+    }
+});
+
+const applicationPortfolioUpload = multer({
+    storage: applicationPortfolioDiskStorage,
+    fileFilter: applicationPortfolioFileFilter,
+    limits: {
+        fileSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024,
+        files: 12,
+        fieldSize: 5 * 1024 * 1024
+    }
+}).array('portfolio', 12);
 
 // Middleware principal que combina ambos almacenamientos
 const upload = (req, res, next) => {
@@ -283,10 +330,12 @@ module.exports = {
     getUploadDir,
     getPromotionUploadDir,
     getInfluencerUploadDir,
+    getApplicationPortfolioUploadDir,
     upload,
     memoryUpload,
     promotionImageUpload,
     diskUpload,
+    applicationPortfolioUpload,
     validateFiles,
     cleanupTempFiles,
     optimizeImages,

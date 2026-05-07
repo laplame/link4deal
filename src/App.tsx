@@ -50,6 +50,7 @@ import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerHubDemoPage from './pages/demo/InfluencerHubDemoPage';
 import InfluencerHubPage from './pages/InfluencerHubPage';
 import BrandDashboard from './pages/dashboards/BrandDashboard';
+import BrandApplicationsDashboardPage from './pages/BrandApplicationsDashboardPage';
 import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
@@ -142,6 +143,7 @@ function App() {
                   <Route path="/quick-promotion" element={<QuickPromotionPage />} />
                   <Route path="/add-promotion" element={<QuickPromotionPage />} />
                   <Route path="/marketplace" element={<PromotionsMarketplace />} />
+                  <Route path="/brand/aplicaciones" element={<BrandApplicationsDashboardPage />} />
                   <Route path="/brands" element={<BrandPage />} />
                   <Route path="/tiendas" element={<BizneStoresPage />} />
                   <Route path="/brand/:brandId" element={<BrandProfilePage />} />

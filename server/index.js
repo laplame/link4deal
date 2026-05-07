@@ -18,6 +18,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const agencyRoutes = require('./routes/agencies');
 const promotionRoutes = require('./routes/promotions');
+const promotionApplicationsRoutes = require('./routes/promotionApplications');
 const influencerRoutes = require('./routes/influencers');
 const discountQrRoutes = require('./routes/discountQr');
 const analyzeProfileRoutes = require('./routes/analyzeProfile');
@@ -78,6 +79,7 @@ app.use(cors({
         'Content-Type',
         'Authorization',
         'X-API-Key',
+        'X-Brand-Dashboard-Password',
         'X-Requested-With',
         'Accept',
         'Origin'
@@ -147,7 +149,7 @@ app.use((req, res, next) => {
 // ===== ARCHIVOS ESTÁTICOS =====
 
 // Servir archivos de uploads (misma ruta que middleware/upload.js)
-const { getUploadDir, getPromotionUploadDir } = require('./middleware/upload');
+const { getUploadDir, getPromotionUploadDir, getApplicationPortfolioUploadDir } = require('./middleware/upload');
 const uploadsPath = path.resolve(getUploadDir());
 const fsSync = require('fs');
 if (!fsSync.existsSync(uploadsPath)) {
@@ -156,6 +158,10 @@ if (!fsSync.existsSync(uploadsPath)) {
 const promotionsPath = path.resolve(getPromotionUploadDir());
 if (!fsSync.existsSync(promotionsPath)) {
     fsSync.mkdirSync(promotionsPath, { recursive: true });
+}
+const applicationPortfolioPath = path.resolve(getApplicationPortfolioUploadDir());
+if (!fsSync.existsSync(applicationPortfolioPath)) {
+    fsSync.mkdirSync(applicationPortfolioPath, { recursive: true });
 }
 // Imágenes antiguas: antes podían vivir en server/public/uploads/promotions (no bajo getUploadDir).
 // Registrar ANTES del static general para que express.static intente aquí y luego siga al siguiente.
@@ -250,6 +256,9 @@ app.use('/api/agencies', agencyRoutes);
 
 // Promotion routes - La ruta principal para la app móvil
 app.use('/api/promotions', promotionRoutes);
+
+// Aplicaciones de influencers a promociones (alta pública + panel marcas)
+app.use('/api/promotion-applications', promotionApplicationsRoutes);
 
 // Influencer routes (listado y detalle; datos compatibles con OCR de perfil)
 app.use('/api/influencers', influencerRoutes);
