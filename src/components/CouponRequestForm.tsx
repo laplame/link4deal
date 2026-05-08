@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { findNearestChainBranch, haversineDistanceMeters } from '../utils/geo';
+import { apiUrl } from '../utils/apiUrl';
+import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 
 interface CouponRequestFormProps {
     /** ID de la promoción (MongoDB _id). Se envía como promotionId al backend; debe ser el mismo en index y en promotion-details. */
@@ -43,6 +45,11 @@ interface CouponRequestFormProps {
     source?: string;
     medium?: string;
     couponMetadata?: Record<string, string | number | boolean>;
+    /**
+     * Si se envía (ObjectId 24 hex), se usa como `influencerId` al crear el cupón.
+     * Si no: se intenta `sessionStorage` (último ID copiado), luego `GET /api/influencers/me` con JWT.
+     */
+    influencerProfileId?: string;
 }
 
 interface FormData {
@@ -75,7 +82,8 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     campaignId,
     source: sourceProp,
     medium: mediumProp,
-    couponMetadata
+    couponMetadata,
+    influencerProfileId: influencerProfileIdProp,
 }) => {
     const [step, setStep] = useState<'form' | 'qr' | 'success'>('form');
     const [formData, setFormData] = useState<FormData>({
@@ -111,15 +119,34 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
         return generated;
     };
 
-    const getAuthUserId = () => {
+    const resolveInfluencerIdForQrCreate = async (): Promise<string> => {
+        const forced = influencerProfileIdProp?.trim();
+        if (forced && /^[a-f0-9]{24}$/i.test(forced)) return forced;
+
         try {
-            const raw = localStorage.getItem('auth_user');
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            return parsed?.id || parsed?._id || null;
+            const last = sessionStorage.getItem(LAST_COPIED_INFLUENCER_ID_KEY)?.trim();
+            if (last && /^[a-f0-9]{24}$/i.test(last)) return last;
         } catch {
-            return null;
+            /* ignore */
         }
+
+        const token = localStorage.getItem('auth_token');
+        if (!token) return 'guest';
+
+        try {
+            const res = await fetch(apiUrl('/api/influencers/me'), {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success && data.data?.id) {
+                const id = String(data.data.id).trim();
+                if (/^[a-f0-9]{24}$/i.test(id)) return id;
+            }
+        } catch {
+            /* ignore */
+        }
+
+        return 'guest';
     };
 
     const validateForm = () => {
@@ -242,6 +269,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
 
             // Intentar generar token QR seguro desde backend (issuer)
             try {
+                const influencerIdResolved = await resolveInfluencerIdForQrCreate();
                 const optionalPayload: Record<string, string | number | Record<string, string | number | boolean>> = {};
                 if (brandId?.trim()) optionalPayload.brandId = brandId.trim();
                 if (shopId?.trim()) optionalPayload.shopId = shopId.trim();
@@ -258,7 +286,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         deviceId: getOrCreateDeviceId(),
-                        influencerId: getAuthUserId() || 'guest',
+                        influencerId: influencerIdResolved,
                         promotionId: productId,
                         referralCode: generatedCouponCode,
                         discountPercentage: typeof discountPercentageProp === 'number' && discountPercentageProp >= 0 && discountPercentageProp <= 100 ? discountPercentageProp : 0,

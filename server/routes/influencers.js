@@ -32,11 +32,12 @@ router.patch('/messages/:messageId/read', authenticateToken, (req, res) => influ
 
 // Perfil del influencer logueado (debe ir antes de /:id)
 router.get('/me', authenticateToken, (req, res) => influencerController.getMe(req, res));
+router.patch('/me/ugc-profile', authenticateToken, (req, res) => influencerController.updateMeUgcProfile(req, res));
 
 // POST /api/influencers/:influencerId/contact - Enviar mensaje (opcional: con sesión para nombre/email)
 router.post('/:influencerId/contact', optionalAuth, (req, res) => influencerController.contactInfluencer(req, res));
 
-// GET /api/influencers/:id/bids - Pujas del influencer (datos reales; por ahora [])
+// GET /api/influencers/:id/bids — Pujas reales + aplicaciones aprobadas vigentes + cupones QR (forma unificada para el perfil)
 router.get('/:id/bids', (req, res) => influencerController.getBids(req, res));
 
 // GET /api/influencers/:id/coupon-redemptions — solo redimidos (compatibilidad)
@@ -44,6 +45,9 @@ router.get('/:id/coupon-redemptions', (req, res) => influencerController.getCoup
 
 // GET /api/influencers/:id/coupons-activity — abiertos, redimidos y caducados (perfil público)
 router.get('/:id/coupons-activity', (req, res) => influencerController.getCouponsActivity(req, res));
+
+// GET /api/influencers/:id/qr-promotions-summary — cupones agrupados por promoción + campañas con puja vigente sin cupones
+router.get('/:id/qr-promotions-summary', (req, res) => influencerController.getQrPromotionsSummary(req, res));
 
 // GET /api/influencers/:id - Obtener un influencer por ID
 router.get('/:id', (req, res) => influencerController.getInfluencerById(req, res));

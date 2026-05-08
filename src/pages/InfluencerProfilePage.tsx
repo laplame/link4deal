@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SalesAndBidsRealtimeChart, buildSalesAndBidsChartData, hasCouponRedemptionEvidence, chartShowsActivity, type PublicCouponRedemption } from '../components/SalesAndBidsRealtimeChart';
+import { CouponQrActivitySection } from '../components/CouponQrActivitySection';
 import { 
   ArrowLeft,
   Instagram, 
@@ -29,7 +30,6 @@ import {
   Star,
   Plus,
   XCircle,
-  Ticket,
   Eye as EyeIcon,
   Users as UsersIcon,
   TrendingUp as TrendingUpIcon,
@@ -37,11 +37,15 @@ import {
   FileCode2,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  Ticket,
+  Megaphone,
+  LayoutGrid,
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 import { apiUrl } from '../utils/apiUrl';
+import { InfluencerUgcShowcase, type UgcProfilePublic } from '../components/influencer/InfluencerUgcShowcase';
 
 interface Influencer {
   id: string;
@@ -77,6 +81,7 @@ interface Influencer {
   couponStats: CouponStats;
   hot: boolean;
   featured: boolean;
+  ugcProfile?: UgcProfilePublic;
 }
 
 interface PromotionHistory {
@@ -108,57 +113,25 @@ interface CouponStats {
   averageConversion: number;
 }
 
+interface QrPromotionSummaryRow {
+  promotionId: string;
+  title: string | null;
+  brand: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  catalogActiveWindow: boolean;
+  promotionStatus: string | null;
+  bidStatus: string | null;
+  bidAmountUsd: number | null;
+  open: number;
+  redeemed: number;
+  expiredUnused: number;
+  totalTokens: number;
+  lastRedeemedAt: string | null;
+  noQrActivityYet?: boolean;
+}
+
 const SAVED_INFLUENCERS_KEY = 'link4deal_saved_influencers';
-
-function formatIsoDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
-  } catch {
-    return '—';
-  }
-}
-
-function LocationMapLink(props: {
-  location: { lat: number; lng: number; accuracyM?: number | null } | null | undefined;
-}) {
-  if (!props.location) {
-    return <span className="text-gray-400 text-xs">Sin coordenadas</span>;
-  }
-  const { lat, lng, accuracyM } = props.location;
-  const href = `https://www.google.com/maps?q=${lat},${lng}`;
-  const acc =
-    accuracyM != null && Number.isFinite(accuracyM)
-      ? ` · ±${Math.round(accuracyM)} m`
-      : '';
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs font-medium"
-    >
-      <MapPin className="w-3.5 h-3.5 shrink-0" />
-      Mapa{acc}
-      <ExternalLink className="w-3 h-3 opacity-70" />
-    </a>
-  );
-}
-
-function shortId(id: string | null | undefined, head = 8): string {
-  if (!id) return '—';
-  return id.length > head ? `${id.slice(0, head)}…` : id;
-}
-
-function formatReferral(code: string | null | undefined): string {
-  if (!code) return '—';
-  return code.length > 14 ? `${code.slice(0, 6)}…${code.slice(-4)}` : code;
-}
-
-function promoShop(row: PublicCouponRedemption): string | null {
-  const s = row.promoShopId ?? row.shopId ?? null;
-  return s && String(s).trim() !== '' ? String(s).trim() : null;
-}
 
 function getSavedIds(): string[] {
   try {
@@ -190,6 +163,12 @@ export default function InfluencerProfilePage() {
     expiredUnused: PublicCouponRedemption[];
   } | null>(null);
   const [couponsActivityLoading, setCouponsActivityLoading] = useState(false);
+  const [qrPromoSummary, setQrPromoSummary] = useState<{
+    rows: QrPromotionSummaryRow[];
+    tokensWithoutPromotionId: number;
+  } | null>(null);
+  const [qrPromoSummaryLoading, setQrPromoSummaryLoading] = useState(false);
+  const [viewerInfluencerId, setViewerInfluencerId] = useState<string | null>(null);
 
   const isSaved = influencer ? savedIds.includes(influencer.id) : false;
 
@@ -293,7 +272,26 @@ export default function InfluencerProfilePage() {
       .finally(() => setLoading(false));
   }, [influencerSlug]);
 
-  // Pujas desde la API (datos de la BD; por ahora el endpoint devuelve [] hasta que exista colección de pujas)
+  useEffect(() => {
+    if (!isAuthenticated || !isInfluencer) {
+      setViewerInfluencerId(null);
+      return;
+    }
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setViewerInfluencerId(null);
+      return;
+    }
+    fetch(apiUrl('/api/influencers/me'), { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.id) setViewerInfluencerId(String(data.data.id));
+        else setViewerInfluencerId(null);
+      })
+      .catch(() => setViewerInfluencerId(null));
+  }, [isAuthenticated, isInfluencer]);
+
+  // Pujas y colaboraciones: GET /api/influencers/:id/bids (bids reales + aplicaciones aprobadas + cupones QR)
   useEffect(() => {
     if (!influencer?.id) {
       setBids([]);
@@ -334,6 +332,28 @@ export default function InfluencerProfilePage() {
       .finally(() => setCouponsActivityLoading(false));
   }, [influencer?.id]);
 
+  useEffect(() => {
+    if (!influencer?.id) {
+      setQrPromoSummary(null);
+      return;
+    }
+    setQrPromoSummaryLoading(true);
+    fetch(apiUrl(`/api/influencers/${influencer.id}/qr-promotions-summary`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.rows)) {
+          setQrPromoSummary({
+            rows: data.rows as QrPromotionSummaryRow[],
+            tokensWithoutPromotionId: Number(data.tokensWithoutPromotionId) || 0,
+          });
+        } else {
+          setQrPromoSummary({ rows: [], tokensWithoutPromotionId: 0 });
+        }
+      })
+      .catch(() => setQrPromoSummary({ rows: [], tokensWithoutPromotionId: 0 }))
+      .finally(() => setQrPromoSummaryLoading(false));
+  }, [influencer?.id]);
+
   const redeemedForChart = couponsActivity?.redeemed ?? [];
 
   const chartBuilt = useMemo(
@@ -350,11 +370,6 @@ export default function InfluencerProfilePage() {
   const chartWeekHasActivity = useMemo(() => chartShowsActivity(chartBuilt), [chartBuilt]);
 
   const chartForView = hasRedeemDataForCharts || chartWeekHasActivity ? chartBuilt : [];
-
-  const couponLedgerTotal =
-    (couponsActivity?.open.length ?? 0) +
-    (couponsActivity?.redeemed.length ?? 0) +
-    (couponsActivity?.expiredUnused.length ?? 0);
 
   // Funciones del módulo de pujas
   const handlePlaceBid = (bid: any) => {
@@ -496,6 +511,24 @@ export default function InfluencerProfilePage() {
                   </>
                 )}
               </button>
+              <Link
+                to={`/redenciones-en-vivo?influencerId=${encodeURIComponent(influencer.id)}`}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
+                title="Cupones redimidos filtrados por tu influencerId"
+              >
+                <Ticket className="w-5 h-5 shrink-0" />
+                <span className="text-left leading-snug">Redenciones en vivo (solo tú)</span>
+              </Link>
+              {viewerInfluencerId === influencer.id ? (
+                <Link
+                  to="/admin/influencers?hub=ugc"
+                  className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-amber-300 text-gray-900 hover:bg-amber-200 transition-all min-w-0 shadow-md ring-2 ring-white/30"
+                  title="Editar vitrina UGC: enlaces a piezas y frases públicas"
+                >
+                  <LayoutGrid className="w-5 h-5 shrink-0 text-gray-900" />
+                  <span className="text-left leading-snug">Mi perfil UGC</span>
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={toggleSaveProfile}
@@ -579,8 +612,9 @@ export default function InfluencerProfilePage() {
               <p className="text-2xl font-bold text-gray-900">{influencer.activePromotions}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">Ingresos totales</p>
+              <p className="text-sm text-gray-600">Ingresos totales (USD estimado)</p>
               <p className="text-2xl font-bold text-gray-900">${influencer.totalEarnings.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 mt-1">Canjes × comisión por venta (puja o tarifa de solicitud aprobada).</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4">
               <p className="text-sm text-gray-600">Valoración</p>
@@ -597,6 +631,12 @@ export default function InfluencerProfilePage() {
             </p>
           )}
         </section>
+
+        <InfluencerUgcShowcase
+          influencerName={influencer.name}
+          ugc={influencer.ugcProfile}
+          ownerEditHref={viewerInfluencerId === influencer.id ? '/admin/influencers?hub=ugc' : undefined}
+        />
 
         {/* Pujas - justo después del resumen */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -624,7 +664,10 @@ export default function InfluencerProfilePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total de Pujas</p>
-                  <p className="text-2xl font-bold text-gray-900">{bids.reduce((sum, bid) => sum + (Number(bid.totalBids) || 0), 0)}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {bids.reduce((sum, bid) => sum + (Number(bid.totalBids) || 0), 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">{bids.length} campaña(s)</p>
                 </div>
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Users className="h-5 w-5 text-blue-600" />
@@ -813,8 +856,10 @@ export default function InfluencerProfilePage() {
               <div className="text-gray-400 mb-4">
                 <DollarSign className="w-16 h-16 mx-auto" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay pujas activas</h3>
-              <p className="text-gray-500">Este influencer no tiene campañas con pujas activas en este momento</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Sin campañas que mostrar aquí</h3>
+              <p className="text-gray-500">
+                Cuando haya subastas registradas, solicitudes aprobadas vigentes o cupones QR de este perfil, aparecerán como tarjetas encima.
+              </p>
             </div>
           )}
         </section>
@@ -876,12 +921,164 @@ export default function InfluencerProfilePage() {
         </section>
         )}
 
+        {/* Cupones QR por promoción (público) */}
+        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-emerald-600" />
+            Promociones con cupones QR y redenciones
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Campañas donde este perfil tiene cupones emitidos (<code className="text-xs bg-gray-100 px-1 rounded">influencerId</code>{' '}
+            en el payload) o puja vigente en fechas sin cupones aún registrados en MongoDB. Las cifras no tienen el límite del
+            listado de actividad: son todas las fichas conocidas agrupadas por promoción.
+          </p>
+          {qrPromoSummaryLoading && (
+            <p className="text-sm text-gray-500 py-6">Cargando resumen por promoción…</p>
+          )}
+          {!qrPromoSummaryLoading && qrPromoSummary && qrPromoSummary.rows.length === 0 && (
+            <p className="text-gray-500 py-4">
+              No hay campañas con cupones agrupados por <code className="text-xs bg-gray-100 px-1 rounded">promotionId</code>,
+              ni puja vigente en fechas con campaña pendiente sin cupón.
+            </p>
+          )}
+          {!qrPromoSummaryLoading && qrPromoSummary && qrPromoSummary.rows.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="min-w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2.5 font-medium">Promoción</th>
+                    <th className="px-3 py-2.5 font-medium">Estado catálogo</th>
+                    <th className="px-3 py-2.5 font-medium whitespace-nowrap">Puja</th>
+                    <th className="px-3 py-2.5 font-medium tabular-nums text-center">Abiertos</th>
+                    <th className="px-3 py-2.5 font-medium tabular-nums text-center text-emerald-800">Canjeados</th>
+                    <th className="px-3 py-2.5 font-medium tabular-nums text-center">Caducados</th>
+                    <th className="px-3 py-2.5 font-medium tabular-nums text-center">Total</th>
+                    <th className="px-3 py-2.5 font-medium">Último canje</th>
+                    <th className="px-3 py-2.5 font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {qrPromoSummary.rows.map((row) => {
+                    const title = row.title || 'Sin título en catálogo';
+                    const subtitle = row.brand ? row.brand : null;
+                    return (
+                      <tr key={row.promotionId} className="hover:bg-gray-50/80">
+                        <td className="px-3 py-2.5 align-top min-w-[10rem]">
+                          <p className="font-medium text-gray-900">{title}</p>
+                          {subtitle ? <p className="text-xs text-gray-500">{subtitle}</p> : null}
+                          <p className="text-[10px] text-gray-400 font-mono mt-1" title={row.promotionId}>
+                            {row.promotionId.length > 18
+                              ? `${row.promotionId.slice(0, 10)}…${row.promotionId.slice(-6)}`
+                              : row.promotionId}
+                          </p>
+                          {row.noQrActivityYet ? (
+                            <p className="text-[11px] text-amber-700 mt-1">Sin cupones emitidos aún en este ID</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                          {row.catalogActiveWindow ? (
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-900 px-2 py-0.5 text-xs font-medium">
+                              Activa
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-xs">
+                              No activa
+                            </span>
+                          )}
+                          {row.promotionStatus ? (
+                            <span className="block text-[10px] text-gray-500 mt-1">BD: {row.promotionStatus}</span>
+                          ) : (
+                            <span className="block text-[10px] text-gray-400 mt-1">Sin ficha Promotion</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 align-top text-xs text-gray-700">
+                          {row.bidStatus ? <span>{row.bidStatus}</span> : <span className="text-gray-400">—</span>}
+                          {row.bidAmountUsd != null && Number.isFinite(row.bidAmountUsd) ? (
+                            <span className="block text-gray-600 tabular-nums">${row.bidAmountUsd.toFixed(2)} USD</span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2.5 text-center tabular-nums">{row.open}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums font-medium text-emerald-700">{row.redeemed}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums text-gray-600">{row.expiredUnused}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums font-medium">{row.totalTokens}</td>
+                        <td className="px-3 py-2.5 align-top text-xs text-gray-600 whitespace-nowrap">
+                          {row.lastRedeemedAt ? formatDate(row.lastRedeemedAt) : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 align-top">
+                          <div className="flex flex-col gap-1.5">
+                            <Link
+                              to={`/promotion-details/${row.promotionId}`}
+                              className="text-purple-600 hover:text-purple-800 text-xs font-medium"
+                            >
+                              Ver campaña
+                            </Link>
+                            <Link
+                              to={`/redenciones-en-vivo?influencerId=${encodeURIComponent(influencer.id)}&promotionId=${encodeURIComponent(row.promotionId)}`}
+                              className="text-emerald-700 hover:text-emerald-900 text-xs font-medium"
+                            >
+                              Redenciones (filtro)
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!qrPromoSummaryLoading && qrPromoSummary && qrPromoSummary.tokensWithoutPromotionId > 0 ? (
+            <p className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Hay <strong>{qrPromoSummary.tokensWithoutPromotionId}</strong> cupón(es) con{' '}
+              <code className="text-[11px]">promotionId</code> vacío o no parseable en el payload; no aparecen en la tabla por
+              campaña.
+            </p>
+          ) : null}
+        </section>
+
         {/* Analytics */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-purple-500" />
             Analytics
           </h2>
+
+          {!couponsActivityLoading && couponsActivity && (
+            <div className="mb-6 rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-4 py-4 shadow-sm">
+              <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-emerald-100 p-2 text-emerald-800">
+                    <Ticket className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 leading-tight">Cupones QR descuentos (Mongo)</h3>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed max-w-xl">
+                      <strong className="font-semibold text-green-700">{couponsActivity.redeemed.length}</strong> canjes con tu{' '}
+                      <code className="bg-emerald-100/90 px-1 rounded text-emerald-900 text-[11px]">influencerId</code>;{' '}
+                      <strong className="font-semibold">{couponsActivity.open.length}</strong> vigentes sin canje.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to={`/redenciones-en-vivo?influencerId=${encodeURIComponent(influencer.id)}`}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs font-medium hover:bg-emerald-800"
+                  >
+                    <TrendingUpIcon className="w-4 h-4 shrink-0" />
+                    Panel en vivo (tu ID)
+                  </Link>
+                  {influencerSlug && !/^[a-f0-9]{24}$/i.test(influencerSlug) ? (
+                    <Link
+                      to={`/redenciones-en-vivo?influencerSlug=${encodeURIComponent(influencerSlug.trim())}`}
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-900 hover:bg-emerald-50"
+                    >
+                      Por slug ({influencerSlug})
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
 
           {!hasRedeemDataForCharts && (
             <div className="mb-4 rounded-lg bg-amber-50 border border-amber-100 text-amber-950 px-4 py-3 text-sm leading-relaxed">
@@ -935,164 +1132,12 @@ export default function InfluencerProfilePage() {
             <SalesAndBidsRealtimeChart data={chartForView} />
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              <Ticket className="w-5 h-5 text-emerald-600" />
-              Cupones QR · actividad en tienda
-            </h3>
-            <p className="text-sm text-gray-500 mb-1">
-              Comparación explícita: cupones <span className="font-medium text-green-700">abiertos</span> (sin canjear, aún válidos){' '}
-              frente a <span className="font-medium text-purple-800">canjeados</span>{' '}
-              (fecha y hora de redención en negrita en la tabla).
-            </p>
-            <p className="text-xs text-gray-500 mb-4">
-              <strong>Última apertura / escaneo:</strong> última vez que el comercio validó el QR (
-              <code className="bg-gray-100 px-1 rounded">GET/POST /api/discount-qr/verify</code>). Si el lector envía{' '}
-              <code className="bg-gray-100 px-1 rounded">latitude</code>,{' '}
-              <code className="bg-gray-100 px-1 rounded">longitude</code> y{' '}
-              <code className="bg-gray-100 px-1 rounded">shopId</code>, verás ubicación en mapa y tienda donde se escaneó.
-              <strong> Ubicación al canjear</strong> corresponde a los datos del <code className="bg-gray-100 px-1 rounded">POST /api/discount-qr/redeem</code>.
-            </p>
-
-            {couponsActivity && couponLedgerTotal === 0 && !couponsActivityLoading && (
-              <p className="text-sm text-gray-500 py-4">
-                Todavía no hay cupones vinculados a este influencer en el sistema de descuentos QR.
-              </p>
-            )}
-
-            {/* Abiertos */}
-            {couponsActivity && couponsActivity.open.length > 0 && (
-              <div className="mb-8">
-                <h4 className="text-md font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                    Abiertos
-                  </span>
-                  {couponsActivity.open.length} vigentes sin canje
-                </h4>
-                <div className="overflow-x-auto rounded-lg border border-green-100">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-green-50/80 text-left text-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Referencia</th>
-                        <th className="px-3 py-2 font-medium">Válido hasta</th>
-                        <th className="px-3 py-2 font-medium">Emitido</th>
-                        <th className="px-3 py-2 font-medium">Últ. escaneo en tienda</th>
-                        <th className="px-3 py-2 font-medium">Tienda (lector)</th>
-                        <th className="px-3 py-2 font-medium">Mapa · escaneo</th>
-                        <th className="px-3 py-2 font-medium">Promoción</th>
-                        <th className="px-3 py-2 font-medium">Tienda (promo)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {couponsActivity.open.map((row) => (
-                        <tr key={row.couponId} className="bg-white hover:bg-green-50/30">
-                          <td className="px-3 py-2 font-mono text-xs">{formatReferral(row.referralCode)}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-gray-900 font-medium">{formatIsoDateTime(row.expiresAt)}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-gray-600">{formatIsoDateTime(row.createdAt)}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-gray-900">{formatIsoDateTime(row.lastOpenedAt)}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-gray-700">{shortId(row.openedAtShopId, 14)}</td>
-                          <td className="px-3 py-2"><LocationMapLink location={row.openLocation} /></td>
-                          <td className="px-3 py-2 font-mono text-xs">{shortId(row.promotionId)}</td>
-                          <td className="px-3 py-2 font-mono text-xs">{shortId(promoShop(row), 12)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Redimidos */}
-            {couponsActivity && couponsActivity.redeemed.length > 0 && (
-              <div className="mb-8">
-                <h4 className="text-md font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-900">
-                    Redimidos
-                  </span>
-                  {couponsActivity.redeemed.length} canjes completados
-                </h4>
-                <div className="overflow-x-auto rounded-lg border border-purple-100">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-purple-50/80 text-left text-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Fecha y hora del canje</th>
-                        <th className="px-3 py-2 font-medium">Desc.</th>
-                        <th className="px-3 py-2 font-medium">Promoción</th>
-                        <th className="px-3 py-2 font-medium">Tienda (promo)</th>
-                        <th className="px-3 py-2 font-medium">Últ. escaneo antes del canje</th>
-                        <th className="px-3 py-2 font-medium">Tienda (lector)</th>
-                        <th className="px-3 py-2 font-medium">Mapa · escaneo</th>
-                        <th className="px-3 py-2 font-medium">Mapa · canje</th>
-                        <th className="px-3 py-2 font-medium">Código</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {couponsActivity.redeemed.map((row) => {
-                        const redeemWhen = row.redeemedAt || row.usedAt;
-                        return (
-                          <tr key={`${row.couponId}-${redeemWhen ?? ''}`} className="bg-white hover:bg-purple-50/30">
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <span className="font-semibold text-gray-900">{formatIsoDateTime(redeemWhen)}</span>
-                            </td>
-                            <td className="px-3 py-2">
-                              {row.discountPercentage != null && !Number.isNaN(row.discountPercentage)
-                                ? `${row.discountPercentage}%`
-                                : '—'}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-xs">{shortId(row.promotionId)}</td>
-                            <td className="px-3 py-2 font-mono text-xs">{shortId(promoShop(row), 12)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap text-gray-800">{formatIsoDateTime(row.lastOpenedAt)}</td>
-                            <td className="px-3 py-2 font-mono text-xs">{shortId(row.openedAtShopId, 14)}</td>
-                            <td className="px-3 py-2"><LocationMapLink location={row.openLocation} /></td>
-                            <td className="px-3 py-2"><LocationMapLink location={row.redeemLocation} /></td>
-                            <td className="px-3 py-2 font-mono text-xs">{formatReferral(row.referralCode)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Caducados sin uso */}
-            {couponsActivity && couponsActivity.expiredUnused.length > 0 && (
-              <div>
-                <h4 className="text-md font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-800">
-                    Caducados (sin canje)
-                  </span>
-                  {couponsActivity.expiredUnused.length}
-                </h4>
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-gray-600">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Referencia</th>
-                        <th className="px-3 py-2 font-medium">Expiró</th>
-                        <th className="px-3 py-2 font-medium">Últ. escaneo</th>
-                        <th className="px-3 py-2 font-medium">Tienda (lector)</th>
-                        <th className="px-3 py-2 font-medium">Mapa · escaneo</th>
-                        <th className="px-3 py-2 font-medium">Promoción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {couponsActivity.expiredUnused.map((row) => (
-                        <tr key={row.couponId} className="bg-white hover:bg-gray-50/80">
-                          <td className="px-3 py-2 font-mono text-xs">{formatReferral(row.referralCode)}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{formatIsoDateTime(row.expiresAt)}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{formatIsoDateTime(row.lastOpenedAt)}</td>
-                          <td className="px-3 py-2 font-mono text-xs">{shortId(row.openedAtShopId, 14)}</td>
-                          <td className="px-3 py-2"><LocationMapLink location={row.openLocation} /></td>
-                          <td className="px-3 py-2 font-mono text-xs">{shortId(row.promotionId)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <CouponQrActivitySection
+            theme="profile"
+            activity={couponsActivity}
+            loading={couponsActivityLoading}
+            emptyMessage="Todavía no hay cupones vinculados a este influencer en el sistema de descuentos QR."
+          />
         </section>
 
         {/* Footer con acciones */}

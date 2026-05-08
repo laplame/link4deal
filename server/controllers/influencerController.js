@@ -2,86 +2,21 @@ const path = require('path');
 const fs = require('fs').promises;
 const Influencer = require('../models/Influencer');
 const InfluencerMessage = require('../models/InfluencerMessage');
-const Bid = require('../models/Bid');
 const DiscountQrToken = require('../models/DiscountQrToken');
 const database = require('../config/database');
 const mongoose = require('mongoose');
 const { getInfluencerUploadDir } = require('../middleware/upload');
 const cloudinaryConfig = require('../config/cloudinary');
-const { getDisplayContractAddress, getPolygonscanAddressUrl } = require('../utils/polygonContract');
-const { parseLatLngFromUnknown } = require('../utils/geoParseCoupon');
+const { partitionDiscountQrDocsToActivity } = require('../utils/couponActivityRow');
+const { buildInfluencerQrPromotionSummary } = require('../utils/influencerQrPromotionSummary');
+const { toFrontendUgc, normalizeUgcProfileInput } = require('../utils/ugcProfileValidate');
+const {
+    buildPublicInfluencerBidCards,
+    buildPublicProfileFieldOverrides,
+} = require('../utils/influencerProfileEnrichment');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
-
-function extractRedeemGpsForApi(redeemedBy) {
-    if (!redeemedBy || typeof redeemedBy !== 'object') return null;
-    if (
-        typeof redeemedBy.redeemLatitude === 'number' &&
-        typeof redeemedBy.redeemLongitude === 'number'
-    ) {
-        const o = { latitude: redeemedBy.redeemLatitude, longitude: redeemedBy.redeemLongitude };
-        if (typeof redeemedBy.redeemGpsAccuracyMeters === 'number') {
-            o.locationAccuracyM = redeemedBy.redeemGpsAccuracyMeters;
-        }
-        return o;
-    }
-    if (typeof redeemedBy.latitude === 'number' && typeof redeemedBy.longitude === 'number') {
-        const o = { latitude: redeemedBy.latitude, longitude: redeemedBy.longitude };
-        if (typeof redeemedBy.locationAccuracyM === 'number') {
-            o.locationAccuracyM = redeemedBy.locationAccuracyM;
-        }
-        return o;
-    }
-    return parseLatLngFromUnknown(redeemedBy.metadata) || null;
-}
-
-function formatInfluencerCouponActivityRow(doc) {
-    const p = doc.payload && typeof doc.payload === 'object' ? doc.payload : {};
-    const redeemGps = extractRedeemGpsForApi(doc.redeemedBy);
-    let openLocation = null;
-    if (
-        doc.verifyLatitude != null &&
-        doc.verifyLongitude != null &&
-        Number.isFinite(Number(doc.verifyLatitude)) &&
-        Number.isFinite(Number(doc.verifyLongitude))
-    ) {
-        openLocation = {
-            lat: Number(doc.verifyLatitude),
-            lng: Number(doc.verifyLongitude),
-            accuracyM:
-                doc.verifyLocationAccuracyM != null && Number.isFinite(Number(doc.verifyLocationAccuracyM))
-                    ? Number(doc.verifyLocationAccuracyM)
-                    : null,
-        };
-    }
-    let redeemLocation = null;
-    if (redeemGps) {
-        redeemLocation = {
-            lat: redeemGps.latitude,
-            lng: redeemGps.longitude,
-            accuracyM: redeemGps.locationAccuracyM != null ? redeemGps.locationAccuracyM : null,
-        };
-    }
-    return {
-        couponId: doc.tokenId,
-        referralCode: p.referralCode != null ? String(p.referralCode) : null,
-        promotionId: p.promotionId != null ? String(p.promotionId) : null,
-        promoShopId: p.shopId != null ? String(p.shopId) : null,
-        discountPercentage:
-            p.discountPercentage != null && p.discountPercentage !== '' ? Number(p.discountPercentage) : null,
-        createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
-        expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null,
-        lastOpenedAt: doc.lastVerifiedAt ? new Date(doc.lastVerifiedAt).toISOString() : null,
-        openedAtShopId:
-            doc.verifyShopId != null && String(doc.verifyShopId).trim() !== ''
-                ? String(doc.verifyShopId).trim()
-                : null,
-        openLocation,
-        redeemedAt: doc.usedAt ? new Date(doc.usedAt).toISOString() : null,
-        redeemLocation,
-    };
-}
 
 function buildFollowersAndSocial(socialMediaArray) {
     const followers = { instagram: 0, tiktok: 0, youtube: 0, twitter: 0 };
@@ -170,7 +105,8 @@ class InfluencerController {
                 averageConversion: d.couponStats?.averageConversion ?? 0
             },
             hot: !!d.hot,
-            featured: !!d.featured
+            featured: !!d.featured,
+            ugcProfile: toFrontendUgc(d.ugcProfile),
         };
     }
 
@@ -373,9 +309,20 @@ class InfluencerController {
                     message: 'Influencer no encontrado'
                 });
             }
+
+            let data = this.toFrontendFormat({ toObject: () => doc });
+            if (this.isMongoConnected()) {
+                try {
+                    const enriched = await buildPublicProfileFieldOverrides(String(doc._id), data);
+                    data = { ...data, ...enriched };
+                } catch (e) {
+                    console.warn('⚠️ enrich perfil público influencer (slug):', e.message);
+                }
+            }
+
             res.json({
                 success: true,
-                data: this.toFrontendFormat({ toObject: () => doc }),
+                data,
                 message: 'Influencer obtenido correctamente'
             });
         } catch (error) {
@@ -416,9 +363,19 @@ class InfluencerController {
                 });
             }
 
+            let data = this.toFrontendFormat({ toObject: () => doc });
+            if (this.isMongoConnected()) {
+                try {
+                    const enriched = await buildPublicProfileFieldOverrides(id, data);
+                    data = { ...data, ...enriched };
+                } catch (e) {
+                    console.warn('⚠️ enrich perfil público influencer:', e.message);
+                }
+            }
+
             res.json({
                 success: true,
-                data: this.toFrontendFormat({ toObject: () => doc }),
+                data,
                 message: 'Influencer obtenido correctamente'
             });
         } catch (error) {
@@ -498,9 +455,19 @@ class InfluencerController {
                     message: 'No tienes perfil de influencer vinculado'
                 });
             }
+            let data = this.toFrontendFormat({ toObject: () => doc });
+            if (this.isMongoConnected()) {
+                try {
+                    const enriched = await buildPublicProfileFieldOverrides(doc._id.toString(), data);
+                    data = { ...data, ...enriched };
+                } catch (e) {
+                    console.warn('⚠️ enrich perfil influencer /me:', e.message);
+                }
+            }
+
             res.json({
                 success: true,
-                data: this.toFrontendFormat({ toObject: () => doc }),
+                data,
                 message: 'Perfil obtenido'
             });
         } catch (error) {
@@ -509,6 +476,49 @@ class InfluencerController {
                 success: false,
                 message: 'Error al cargar el perfil',
                 error: error.message
+            });
+        }
+    }
+
+    /** PATCH /api/influencers/me/ugc-profile — Guardar vitrina UGC (enlaces + frases). Solo influencer con userId vinculado. */
+    async updateMeUgcProfile(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({ success: false, message: 'Debes iniciar sesión' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({ success: false, message: 'Servicio no disponible' });
+            }
+            const influencer = await Influencer.findOne({ userId: user._id });
+            if (!influencer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No tienes perfil de influencer vinculado',
+                });
+            }
+
+            const normalized = normalizeUgcProfileInput(req.body);
+            if (!normalized.ok) {
+                return res.status(400).json({ success: false, message: normalized.message });
+            }
+
+            influencer.ugcProfile = normalized.ugcProfile;
+            influencer.updatedAt = new Date();
+            await influencer.save();
+
+            const docObj = influencer.toObject();
+            return res.json({
+                success: true,
+                data: toFrontendUgc(docObj.ugcProfile),
+                message: 'Perfil UGC guardado',
+            });
+        } catch (error) {
+            console.error('❌ Error guardando perfil UGC:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al guardar perfil UGC',
+                error: error.message,
             });
         }
     }
@@ -527,49 +537,11 @@ class InfluencerController {
             if (!exists) {
                 return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
             }
-            const now = new Date();
-            const bidDocs = await Bid.find({ influencer: influencerId })
-                .populate('promotion')
-                .sort({ createdAt: -1 })
-                .lean();
-            const out = [];
-            for (const b of bidDocs) {
-                const promo = b.promotion;
-                if (!promo || !promo.validUntil || new Date(promo.validUntil) < now) continue;
-                const validFrom = promo.validFrom ? new Date(promo.validFrom) : now;
-                const validUntil = promo.validUntil ? new Date(promo.validUntil) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-                const tags = Array.isArray(promo.tags) ? promo.tags : [];
-                const promoIdStr = (promo._id || promo.id).toString();
-                const smartContractAddress = getDisplayContractAddress(promoIdStr, promo.smartContract);
-                const polygonscanUrl = getPolygonscanAddressUrl(smartContractAddress);
-                out.push({
-                    id: b._id.toString(),
-                    promotionId: promoIdStr,
-                    smartContractAddress,
-                    polygonscanUrl,
-                    smartContractPagePath: `/promocion/${promoIdStr}/smart-contract`,
-                    campaignTitle: promo.title || 'Sin título',
-                    brandName: promo.brand || 'Sin marca',
-                    status: b.status || 'active',
-                    currentBid: Number(b.amountUsd) || 1,
-                    requirements: tags.length ? tags.slice(0, 5) : ['General'],
-                    targetMetrics: {
-                        reach: (promo.views || 0) * 10 || 5000,
-                        engagement: 4,
-                        conversions: promo.conversions || 0
-                    },
-                    initialBid: Math.max(1, (Number(b.amountUsd) || 1) - 0.15),
-                    bidIncrement: 0.05,
-                    totalBids: (b.bidHistory && b.bidHistory.length) ? b.bidHistory.length : 1,
-                    startDate: validFrom.toISOString(),
-                    endDate: validUntil.toISOString(),
-                    bidHistory: (b.bidHistory || []).map(h => ({ amount: h.amount || b.amountUsd, timestamp: (h.timestamp || b.createdAt).toISOString?.() || h.timestamp }))
-                });
-            }
+            const out = await buildPublicInfluencerBidCards(influencerId);
             return res.status(200).json({
                 success: true,
                 data: out,
-                message: 'Pujas del influencer (promociones vigentes)'
+                message: 'Pujas y colaboraciones (BD: bids, solicitudes aprobadas, cupones QR)'
             });
         } catch (error) {
             console.error('❌ Error obteniendo pujas:', error);
@@ -612,36 +584,7 @@ class InfluencerController {
             )
             .lean();
 
-        const nowMs = Date.now();
-        const open = [];
-        const redeemed = [];
-        const expiredUnused = [];
-        for (const doc of docs) {
-            const row = formatInfluencerCouponActivityRow(doc);
-            if (doc.usedAt) {
-                redeemed.push(row);
-            } else if (doc.expiresAt && new Date(doc.expiresAt).getTime() <= nowMs) {
-                expiredUnused.push(row);
-            } else {
-                open.push(row);
-            }
-        }
-        redeemed.sort((a, b) => {
-            const ta = a.redeemedAt ? new Date(a.redeemedAt).getTime() : 0;
-            const tb = b.redeemedAt ? new Date(b.redeemedAt).getTime() : 0;
-            return tb - ta;
-        });
-        open.sort((a, b) => {
-            const ta = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-            const tb = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-            return ta - tb;
-        });
-        expiredUnused.sort((a, b) => {
-            const ta = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
-            const tb = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
-            return tb - ta;
-        });
-        return { open, redeemed, expiredUnused };
+        return partitionDiscountQrDocsToActivity(docs);
     }
 
     /** GET /api/influencers/:id/coupon-redemptions — solo redimidos (compatibilidad). */
@@ -700,6 +643,41 @@ class InfluencerController {
             return res.status(500).json({
                 success: false,
                 message: 'Error al cargar actividad de cupones',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * GET /api/influencers/:id/qr-promotions-summary
+     * Por promoción: cupones abiertos / canjeados / caducados + si la campaña sigue vigente en catálogo; incluye pujas vigentes sin cupones emitidos.
+     */
+    async getQrPromotionsSummary(req, res) {
+        try {
+            const influencerId = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(influencerId)) {
+                return res.status(400).json({ success: false, message: 'ID de influencer inválido' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(200).json({
+                    success: true,
+                    rows: [],
+                    tokensWithoutPromotionId: 0,
+                    generatedAt: new Date().toISOString(),
+                    message: 'Sin conexión a BD',
+                });
+            }
+            const exists = await Influencer.findById(influencerId).select('_id').lean();
+            if (!exists) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+            const data = await buildInfluencerQrPromotionSummary(influencerId);
+            return res.status(200).json({ success: true, ...data });
+        } catch (error) {
+            console.error('❌ Error resumen QR por promoción:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al cargar resumen de promociones QR',
                 error: error.message,
             });
         }

@@ -83,7 +83,8 @@ app.use(cors({
         'X-Requested-With',
         'Accept',
         'Origin',
-        'X-Redemptions-Api-Key'
+        'X-Redemptions-Api-Key',
+        'X-Short-Codes-Registry-Key',
     ],
     exposedHeaders: ['X-Total-Count', 'X-Page-Count']
 }));
@@ -102,7 +103,26 @@ const generalLimiter = rateLimit({
     skip: (req) => {
         if (req.method !== 'GET') return false;
         const base = (req.originalUrl || req.url || '').split('?')[0];
-        return base === '/api/discount-qr/redemptions/recent' || base.endsWith('/discount-qr/redemptions/recent');
+        if (base === '/api/discount-qr/redemptions/recent' || base.endsWith('/discount-qr/redemptions/recent')) return true;
+        if (base === '/api/discount-qr/coupons/dashboard' || base.endsWith('/discount-qr/coupons/dashboard')) return true;
+        if (base === '/api/discount-qr/stats/luxae-usd' || base.endsWith('/discount-qr/stats/luxae-usd')) return true;
+        if (
+            base === '/api/discount-qr/stats/redemptions-by-influencer' ||
+            base.endsWith('/discount-qr/stats/redemptions-by-influencer')
+        ) {
+            return true;
+        }
+        if (
+            base === '/api/discount-qr/stats/verify-vs-redeem' ||
+            base.endsWith('/discount-qr/stats/verify-vs-redeem')
+        ) {
+            return true;
+        }
+        // Buscador app por código corto (GET sólo `/codes/:code`, no `/issue`).
+        if (/\/discount-qr\/codes\/[^/]+\/?$/.test(base)) {
+            return true;
+        }
+        return false;
     }
 });
 
@@ -308,11 +328,19 @@ app.use('*', (req, res) => {
             'POST /api/promotions',
             'GET /api/influencers/:id/coupon-redemptions',
             'GET /api/influencers/:id/coupons-activity',
+            'GET /api/influencers/:id/qr-promotions-summary',
             'POST /api/discount-qr/create',
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
             'POST /api/discount-qr/redeem',
             'GET /api/discount-qr/redemptions/recent',
+            'GET /api/discount-qr/coupons/dashboard',
+            'GET /api/discount-qr/stats/luxae-usd',
+            'GET /api/discount-qr/stats/redemptions-by-influencer',
+            'GET /api/discount-qr/stats/verify-vs-redeem',
+            'POST /api/discount-qr/codes/registry',
+            'GET /api/discount-qr/codes/:code',
+            'POST /api/discount-qr/codes/:code/issue',
             'POST /api/kyc/whatsapp/request-code',
             'POST /api/kyc/whatsapp/verify-code',
             'GET /api/loyalty/coffee',
@@ -413,6 +441,18 @@ async function startServer() {
             console.log('☁️ Cloudinary listo para uploads');
         } else {
             console.log('⚠️ Cloudinary no configurado — imágenes usarán almacenamiento local (/uploads/...) donde aplique');
+        }
+
+        const { parseQrRedeemRetentionDays } = require('./utils/qrRedemptionsEnv');
+        const qrRet = parseQrRedeemRetentionDays();
+        if (qrRet.kind === 'ok') {
+            console.log(`📌 Cupones QR: QR_REDEEM_RETENTION_DAYS=${qrRet.days} (TTL extiende tras canje)`);
+        } else if (qrRet.kind === 'invalid') {
+            console.warn(`⚠️ Cupones QR: QR_REDEEM_RETENTION_DAYS inválido (${JSON.stringify(qrRet.raw)}) — revisa .env`);
+        } else {
+            console.warn(
+                '⚠️ Cupones QR: QR_REDEEM_RETENTION_DAYS no definido; sin retención el TTL original del QR puede borrar canjes del historial. Ej.: QR_REDEEM_RETENTION_DAYS=90',
+            );
         }
         
         // Iniciar servidor

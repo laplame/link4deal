@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import InfluencerHubLayout, { type InfluencerHubNavEntry } from '../../components/dashboard/InfluencerHubLayout';
 import InfluencerThreadsView, { type ThreadItem } from '../../components/dashboard/InfluencerThreadsView';
@@ -28,8 +28,11 @@ import {
     Wallet,
     Tag,
     ShoppingBag,
-    Gift
+    Gift,
+    LayoutGrid
 } from 'lucide-react';
+import { InfluencerUgcEditor } from '../../components/dashboard/InfluencerUgcEditor';
+import type { UgcProfilePublic } from '../../components/influencer/InfluencerUgcShowcase';
 
 type HubSection =
     | 'channels-threads'
@@ -37,7 +40,8 @@ type HubSection =
     | 'cursos'
     | 'recursos'
     | 'pagos'
-    | 'directorio';
+    | 'directorio'
+    | 'ugc';
 
 interface Influencer {
     id: string;
@@ -99,6 +103,7 @@ interface InboxMessage {
 
 export default function InfluencerDashboard() {
     const { hasRole } = useAuth();
+    const [searchParams] = useSearchParams();
     const isInfluencerRole = hasRole('influencer');
     const [influencers, setInfluencers] = useState<Influencer[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -109,6 +114,7 @@ export default function InfluencerDashboard() {
     const [inboxLoading, setInboxLoading] = useState(false);
     const [section, setSection] = useState<HubSection>('eventos');
     const [campaignTab, setCampaignTab] = useState<'proximas' | 'activas' | 'pasadas'>('activas');
+    const [meUgc, setMeUgc] = useState<UgcProfilePublic | undefined>(undefined);
 
     useEffect(() => {
         if (!isInfluencerRole) return;
@@ -127,6 +133,12 @@ export default function InfluencerDashboard() {
             .catch(() => {})
             .finally(() => setInboxLoading(false));
     }, [isInfluencerRole]);
+
+    useEffect(() => {
+        if (searchParams.get('hub') === 'ugc' && isInfluencerRole) {
+            setSection('ugc');
+        }
+    }, [searchParams, isInfluencerRole]);
 
     // Datos desde la API (BD); con populate en backend
     useEffect(() => {
@@ -158,6 +170,7 @@ export default function InfluencerDashboard() {
                             socialMedia: inf.socialMedia || {},
                         };
                         setInfluencers([asDashboardInfluencer]);
+                        setMeUgc(inf.ugcProfile ?? { enabled: false, headline: '', intro: '', quotes: [], videos: [] });
                         const promos = Array.isArray(inf.recentPromotions) ? inf.recentPromotions : [];
                         setCampaigns(promos.map((p: any) => ({
                             id: p.id || '',
@@ -187,12 +200,14 @@ export default function InfluencerDashboard() {
                         setInfluencers([]);
                         setCampaigns([]);
                         setEarnings([]);
+                        setMeUgc(undefined);
                     }
                 })
                 .catch(() => {
                     setInfluencers([]);
                     setCampaigns([]);
                     setEarnings([]);
+                    setMeUgc(undefined);
                 });
         } else {
             fetch('/api/influencers?limit=50&page=1')
@@ -262,6 +277,12 @@ export default function InfluencerDashboard() {
                     }
                 ]
             });
+            tree.push({
+                type: 'item',
+                id: 'ugc',
+                label: 'Perfil UGC',
+                icon: <LayoutGrid className="h-4 w-4" />
+            });
         }
         if (!isInfluencerRole) {
             tree.push({
@@ -320,6 +341,8 @@ export default function InfluencerDashboard() {
                 return 'Recursos';
             case 'pagos':
                 return 'Pagos';
+            case 'ugc':
+                return 'Perfil UGC público';
             case 'directorio':
                 return 'Directorio';
             default:
@@ -538,6 +561,21 @@ export default function InfluencerDashboard() {
                     Los hilos y mensajes personales del creador están disponibles con cuenta influencer.
                 </p>
             )}
+
+            {section === 'ugc' && isInfluencerRole && influencers[0] ? (
+                <InfluencerUgcEditor
+                    key={`ugc-${influencers[0].id}`}
+                    initial={meUgc}
+                    publicProfilePath={`/influencer/${encodeURIComponent(influencers[0].id)}`}
+                    onSaved={setMeUgc}
+                />
+            ) : null}
+
+            {section === 'ugc' && !isInfluencerRole ? (
+                <p className="text-gray-400 text-sm">
+                    Esta sección es solo para creadores con perfil influencer.
+                </p>
+            ) : null}
 
             {section === 'cursos' && (
                 <div className="max-w-2xl rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-sm p-10 text-center">

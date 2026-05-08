@@ -128,6 +128,8 @@ export interface PublicCouponRedemption {
   openedAtShopId?: string | null;
   openLocation?: { lat: number; lng: number; accuracyM?: number | null } | null;
   redeemLocation?: { lat: number; lng: number; accuracyM?: number | null } | null;
+  /** Presente en el panel global cuando el payload incluye influencerId. */
+  influencerId?: string | null;
 }
 
 /** Hay señal de cupones redimidos o uso registrado por promoción (no inventamos barras si esto es falso). */

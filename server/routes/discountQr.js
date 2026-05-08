@@ -11,9 +11,29 @@ const {
     getQrMetaConfig
 } = require('../utils/qrCrypto');
 const { parseLatLngFromUnknown } = require('../utils/geoParseCoupon');
+const { partitionDiscountQrDocsToActivity } = require('../utils/couponActivityRow');
+const { parseQrRedeemRetentionDays, qrRedemptionsRetentionHintEs } = require('../utils/qrRedemptionsEnv');
+const { computeLuxaeUsdStatsFromRedemptions } = require('../utils/redemptionLuxaeStats');
+const { buildRedeemedTokenFilter, buildDashboardTokenFilter } = require('../utils/discountQrPayloadMatch');
+const { summarizeRedemptionsByInfluencer } = require('../utils/redemptionsInfluencerBreakdown');
+const { computeVerifyVsRedeemStats } = require('../utils/discountQrVerifyRedeemStats');
+const {
+    normalizeIncomingCode,
+    resolveActiveNormalizedCode,
+    serializeResolvePayload,
+    createRegistryEntry,
+    computeDiscountPctFromPromotion,
+} = require('../utils/influencerPromoShortCodes');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
+
+(function warnQrRetentionEnvOnce() {
+    const r = parseQrRedeemRetentionDays();
+    if (r.kind === 'invalid') {
+        console.warn('[discount-qr] QR_REDEEM_RETENTION_DAYS ignorado (no es entero positivo):', JSON.stringify(r.raw));
+    }
+})();
 const STRICT_CREATE_VALIDATION = process.env.QR_STRICT_CREATE_VALIDATION === 'true';
 
 /** Límite tipo panel POS: crear, verificar y canjear cupón (por IP). */
@@ -35,6 +55,30 @@ const redemptionsRecentListLimiter = rateLimit({
     message: {
         ok: false,
         message: 'Demasiadas consultas al listado en vivo. Espera unos minutos o reduce la frecuencia de actualización.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/** Buscador app: resolver código corto influencer + promoción */
+const shortCodesLookupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Math.min(2500, Math.max(240, parseInt(String(process.env.SHORT_CODES_LOOKUP_RATE_MAX || '900'), 10) || 900)),
+    message: {
+        ok: false,
+        message: 'Demasiadas búsquedas por código. Espera unos minutos.',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/** Alta de filas código→campaña (operador/backoffice). */
+const shortCodesRegistryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 45,
+    message: {
+        ok: false,
+        message: 'Demasiados registros de códigos. Intenta más tarde.',
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -774,6 +818,164 @@ router.get('/create', discountQrWriteLimiter, async (req, res) => {
     }
 });
 
+/** Auth para POST /codes/registry — define SHORT_PROMO_CODES_REGISTRY_KEY en el servidor. */
+function shortCodesRegistryAuth(req, res) {
+    const secret = process.env.SHORT_PROMO_CODES_REGISTRY_KEY;
+    if (!secret || !String(secret).trim()) {
+        res.status(503).json({
+            ok: false,
+            message:
+                'Registro de códigos cortos desactivado. Configura SHORT_PROMO_CODES_REGISTRY_KEY en el servidor.',
+        });
+        return false;
+    }
+    const sent =
+        req.get('x-short-codes-registry-key') || req.get('X-Short-Codes-Registry-Key') || '';
+    if (sent !== secret) {
+        res.status(401).json({ ok: false, message: 'No autorizado' });
+        return false;
+    }
+    return true;
+}
+
+// POST /api/discount-qr/codes/registry — vincula código corto ↔ influencer ↔ promoción (operador/backoffice).
+router.post('/codes/registry', shortCodesRegistryLimiter, async (req, res) => {
+    try {
+        if (!shortCodesRegistryAuth(req, res)) return;
+        const b = req.body || {};
+        let expiresAt = null;
+        if (b.expiresAt != null && b.expiresAt !== '') {
+            const d = new Date(b.expiresAt);
+            if (!Number.isNaN(d.getTime())) expiresAt = d;
+        }
+        const row = await createRegistryEntry({
+            influencerId: b.influencerId,
+            promotionId: b.promotionId,
+            code: b.code,
+            label: b.label,
+            referralPrefix: b.referralPrefix,
+            expiresAt,
+            active: b.active,
+        });
+        return res.status(201).json({
+            ok: true,
+            data: {
+                code: row.code,
+                influencerId: String(row.influencer),
+                promotionId: String(row.promotion),
+                label: row.label || '',
+                referralPrefix: row.referralPrefix || 'L4D',
+                expiresAt: row.expiresAt || null,
+            },
+        });
+    } catch (e) {
+        const st = typeof e.status === 'number' ? e.status : 500;
+        return res.status(st).json({ ok: false, message: e.message || 'Error al registrar código' });
+    }
+});
+
+// GET /api/discount-qr/codes/:code — buscador app: influencer + promo (no crea cupón).
+router.get('/codes/:code', shortCodesLookupLimiter, async (req, res) => {
+    try {
+        const norm = normalizeIncomingCode(req.params.code);
+        if (!norm) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Código inválido (usa 6–16 caracteres alfanuméricos).',
+            });
+        }
+        const resolved = await resolveActiveNormalizedCode(norm);
+        if (!resolved) {
+            return res.status(404).json({ ok: false, message: 'Código no encontrado, inactivo o expirado' });
+        }
+        return res.json(serializeResolvePayload(norm, resolved));
+    } catch (e) {
+        return res.status(500).json({ ok: false, message: e.message || 'Error al resolver código' });
+    }
+});
+
+// POST /api/discount-qr/codes/:code/issue — igual que POST /create con ids desde el código corto → qrValue listo para renderizar.
+router.post('/codes/:code/issue', discountQrWriteLimiter, async (req, res) => {
+    try {
+        const norm = normalizeIncomingCode(req.params.code);
+        if (!norm) {
+            return res.status(400).json({ ok: false, message: 'Código inválido' });
+        }
+        const resolved = await resolveActiveNormalizedCode(norm);
+        if (!resolved) {
+            return res.status(404).json({ ok: false, message: 'Código no encontrado o inactivo' });
+        }
+        const { doc, influencer, promotion } = resolved;
+        if (!influencer) {
+            return res.status(409).json({ ok: false, message: 'Influencer ya no existe en base de datos' });
+        }
+        if (influencer.username === 'influencer-general') {
+            return res.status(403).json({ ok: false, message: 'Este código no puede emitir cupón' });
+        }
+        if (!promotion) {
+            return res.status(409).json({ ok: false, message: 'Promoción ya no existe en base de datos' });
+        }
+
+        const redirect = await getRedirectInsteadOfQr(String(promotion._id));
+        if (redirect) {
+            return res.json({
+                ok: true,
+                shortCode: norm,
+                issueMode: 'redirect',
+                ...redirect,
+            });
+        }
+
+        const body = req.body || {};
+        const deviceId = body.deviceId;
+        if (!deviceId || String(deviceId).trim() === '') {
+            return res.status(400).json({ ok: false, message: 'Falta deviceId en el body (JSON).' });
+        }
+        const referralFromBody =
+            body.referralCode != null && String(body.referralCode).trim() !== ''
+                ? String(body.referralCode).trim()
+                : null;
+        const prefix = String(doc.referralPrefix || 'L4D').trim() || 'L4D';
+        const referralCode = referralFromBody ?? `${prefix}-${norm}`;
+        const discountPercentage = computeDiscountPctFromPromotion(promotion);
+        const walletAddress =
+            body.walletAddress != null && String(body.walletAddress).trim() !== ''
+                ? String(body.walletAddress).trim()
+                : 'not-provided';
+
+        const basePayload = {
+            deviceId: String(deviceId).trim(),
+            influencerId: String(influencer._id),
+            promotionId: String(promotion._id),
+            referralCode,
+            discountPercentage,
+            walletAddress,
+        };
+        const payloadInput = mergeOptionalCouponFields(basePayload, body);
+
+        const result = await createCouponToken(payloadInput);
+        return res.json({
+            ok: true,
+            shortCode: norm,
+            issueMode: 'qr',
+            ...result,
+        });
+    } catch (error) {
+        if (error.code && error.errors) {
+            return res.status(400).json({
+                ok: false,
+                errorCode: error.code,
+                message: error.message,
+                errors: error.errors,
+            });
+        }
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error al emitir cupón desde código corto',
+        });
+    }
+});
+
 /**
  * Actualiza huella de “apertura” en tienda (scan/verify). Opcional: tienda y GPS del lector/POS.
  * @param {mongoose.Document} tokenDoc
@@ -1071,12 +1273,12 @@ router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
             });
         }
 
-        const retentionDays = Number(process.env.QR_REDEEM_RETENTION_DAYS || '');
-        if (Number.isFinite(retentionDays) && retentionDays > 0) {
+        const retention = parseQrRedeemRetentionDays();
+        if (retention.kind === 'ok') {
             const anchor = redeemed.usedAt && !Number.isNaN(new Date(redeemed.usedAt).getTime())
                 ? new Date(redeemed.usedAt)
                 : serverNow;
-            const newExp = new Date(anchor.getTime() + retentionDays * 86400000);
+            const newExp = new Date(anchor.getTime() + retention.days * 86400000);
             await DiscountQrToken.updateOne({ tokenId: redeemed.tokenId }, { $set: { expiresAt: newExp } });
         }
 
@@ -1093,6 +1295,7 @@ router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
 // GET /api/discount-qr/redemptions/recent — cupones redimidos recientes (auditoría).
 // Query: limit (default 50, max 200), promotionId, shopId.
 // Si existe env REDEMPTIONS_LIST_API_KEY, header x-redemptions-api-key debe coincidir.
+// Query: limit, promotionId, shopId, influencerId (ObjectId; sólo cupones emitidos/atribuidos a ese perfil).
 // Nota: solo existen filas mientras el documento siga en MongoDB (TTL por expiresAt).
 //       Tras un canje exitoso, QR_REDEEM_RETENTION_DAYS alarga expiresAt para conservar historial.
 router.get('/redemptions/recent', redemptionsRecentListLimiter, async (req, res) => {
@@ -1106,18 +1309,7 @@ router.get('/redemptions/recent', redemptionsRecentListLimiter, async (req, res)
         }
 
         const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
-        const promotionId = req.query.promotionId != null ? String(req.query.promotionId).trim() : '';
-        const shopId = req.query.shopId != null ? String(req.query.shopId).trim() : '';
-
-        const filter = {
-            usedAt: { $exists: true, $ne: null, $type: 'date' }
-        };
-        if (promotionId && isValidObjectId(promotionId)) {
-            filter['payload.promotionId'] = promotionId;
-        }
-        if (shopId) {
-            filter['payload.shopId'] = shopId;
-        }
+        const filter = buildRedeemedTokenFilter(req.query || {});
 
         const docs = await DiscountQrToken.find(filter)
             .sort({ usedAt: -1 })
@@ -1160,18 +1352,141 @@ router.get('/redemptions/recent', redemptionsRecentListLimiter, async (req, res)
             }
             return row;
         });
+        const retention = parseQrRedeemRetentionDays();
         return res.json({
             ok: true,
             count: data.length,
             data,
-            hint: process.env.QR_REDEEM_RETENTION_DAYS
-                ? null
-                : 'Configura QR_REDEEM_RETENTION_DAYS (días) para no perder redenciones al expirar el TTL del cupón.'
+            qrRedeemRetention: retention.kind === 'ok' ? { configured: true, daysAfterRedeem: retention.days } : { configured: false },
+            hint: qrRedemptionsRetentionHintEs(),
         });
     } catch (error) {
         return res.status(500).json({
             ok: false,
             message: error.message || 'Error al listar redenciones'
+        });
+    }
+});
+
+// GET /api/discount-qr/coupons/dashboard — abiertos / redimidos / caducados (panel global, mismos filtros que redemptions/recent).
+// Query: limit (default 80, max 200), promotionId, shopId. Auth opcional: REDEMPTIONS_LIST_API_KEY + x-redemptions-api-key.
+router.get('/coupons/dashboard', redemptionsRecentListLimiter, async (req, res) => {
+    try {
+        const secret = process.env.REDEMPTIONS_LIST_API_KEY;
+        if (secret) {
+            const sent = req.get('x-redemptions-api-key') || req.get('X-Redemptions-Api-Key') || '';
+            if (sent !== secret) {
+                return res.status(401).json({ ok: false, message: 'No autorizado' });
+            }
+        }
+
+        const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '80'), 10) || 80));
+        const filter = buildDashboardTokenFilter(req.query || {});
+
+        const docs = await DiscountQrToken.find(filter)
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .select(
+                'tokenId payload expiresAt createdAt lastVerifiedAt usedAt redeemedBy verifyShopId verifyLatitude verifyLongitude verifyLocationAccuracyM'
+            )
+            .lean();
+
+        const pack = partitionDiscountQrDocsToActivity(docs);
+        return res.json({
+            ok: true,
+            success: true,
+            counts: {
+                open: pack.open.length,
+                redeemed: pack.redeemed.length,
+                expiredUnused: pack.expiredUnused.length,
+            },
+            open: pack.open,
+            redeemed: pack.redeemed,
+            expiredUnused: pack.expiredUnused,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            success: false,
+            message: error.message || 'Error al cargar actividad de cupones',
+        });
+    }
+});
+
+// GET /api/discount-qr/stats/luxae-usd — USDLXE acumulado (1 LUXAE ≈ 1 USD, PSCS-1).
+// Query opcional: influencerId (ObjectId). Misma API key opcional que redemptions/recent.
+router.get('/stats/luxae-usd', redemptionsRecentListLimiter, async (req, res) => {
+    try {
+        const secret = process.env.REDEMPTIONS_LIST_API_KEY;
+        if (secret) {
+            const sent = req.get('x-redemptions-api-key') || req.get('X-Redemptions-Api-Key') || '';
+            if (sent !== secret) {
+                return res.status(401).json({ ok: false, message: 'No autorizado' });
+            }
+        }
+
+        const influencerIdNorm =
+            req.query.influencerId != null ? String(req.query.influencerId).trim() : '';
+
+        const stats = await computeLuxaeUsdStatsFromRedemptions(
+            influencerIdNorm ? { influencerId: influencerIdNorm } : {},
+        );
+        const retention = parseQrRedeemRetentionDays();
+        return res.json({
+            ok: true,
+            ...stats,
+            qrRedeemRetention:
+                retention.kind === 'ok'
+                    ? { configured: true, daysAfterRedeem: retention.days }
+                    : { configured: false },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error al calcular estadísticas LUXAE',
+        });
+    }
+});
+
+// GET /api/discount-qr/stats/redemptions-by-influencer — desglose de canjes por payload.influencerId + nombre/username en BD.
+router.get('/stats/redemptions-by-influencer', redemptionsRecentListLimiter, async (req, res) => {
+    try {
+        const secret = process.env.REDEMPTIONS_LIST_API_KEY;
+        if (secret) {
+            const sent = req.get('x-redemptions-api-key') || req.get('X-Redemptions-Api-Key') || '';
+            if (sent !== secret) {
+                return res.status(401).json({ ok: false, message: 'No autorizado' });
+            }
+        }
+
+        const data = await summarizeRedemptionsByInfluencer();
+        return res.json({ ok: true, ...data });
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error al agrupar redenciones por influencer',
+        });
+    }
+});
+
+// GET /api/discount-qr/stats/verify-vs-redeem — embudo POS (verify) vs canje; mismos filtros que coupons/dashboard (sin limite por fila).
+router.get('/stats/verify-vs-redeem', redemptionsRecentListLimiter, async (req, res) => {
+    try {
+        const secret = process.env.REDEMPTIONS_LIST_API_KEY;
+        if (secret) {
+            const sent = req.get('x-redemptions-api-key') || req.get('X-Redemptions-Api-Key') || '';
+            if (sent !== secret) {
+                return res.status(401).json({ ok: false, message: 'No autorizado' });
+            }
+        }
+
+        const filter = buildDashboardTokenFilter(req.query || {});
+        const data = await computeVerifyVsRedeemStats(filter);
+        return res.json({ ok: true, ...data });
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            message: error.message || 'Error al calcular verify vs redeem',
         });
     }
 });

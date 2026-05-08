@@ -83,6 +83,33 @@ const influencerSchema = new mongoose.Schema({
     hot: { type: Boolean, default: false },
     featured: { type: Boolean, default: false },
 
+    /**
+     * Escaparate público UGC: enlaces a piezas en redes (sin embeds) + frases del creador.
+     * Editable por el influencer vinculado vía PATCH /api/influencers/me/ugc-profile
+     */
+    ugcProfile: {
+        enabled: { type: Boolean, default: false },
+        headline: { type: String, trim: true, default: '', maxlength: 120 },
+        intro: { type: String, trim: true, default: '', maxlength: 2000 },
+        quotes: [
+            {
+                text: { type: String, trim: true, maxlength: 550 },
+            },
+        ],
+        videos: [
+            {
+                url: { type: String, trim: true, maxlength: 2048 },
+                platform: {
+                    type: String,
+                    enum: ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin', 'pinterest', 'other'],
+                    default: 'other',
+                },
+                label: { type: String, trim: true, maxlength: 140 },
+                sortOrder: { type: Number, default: 0 },
+            },
+        ],
+    },
+
     // OCR metadata (cuando se rellene por OCR)
     ocrData: {
         extractedAt: Date,

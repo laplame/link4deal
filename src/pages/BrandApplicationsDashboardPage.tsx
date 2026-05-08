@@ -11,6 +11,7 @@ import {
   Lock,
   LogOut,
   Send,
+  Copy,
   Target,
   Users,
   XCircle,
@@ -101,6 +102,7 @@ export default function BrandApplicationsDashboardPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [copiedApplicantObjectId, setCopiedApplicantObjectId] = useState<string | null>(null);
 
   const effectivePassword = storedPw;
 
@@ -114,6 +116,18 @@ export default function BrandApplicationsDashboardPage() {
       throw new Error(msg);
     }
     setRows(Array.isArray(json.data) ? json.data : []);
+  }, []);
+
+  const copyApplicantObjectId = useCallback(async (mongoId: string) => {
+    try {
+      await navigator.clipboard.writeText(mongoId);
+      setCopiedApplicantObjectId(mongoId);
+      window.setTimeout(() => {
+        setCopiedApplicantObjectId((cur) => (cur === mongoId ? null : cur));
+      }, 2000);
+    } catch {
+      setLoginError('No se pudo copiar al portapapeles.');
+    }
   }, []);
 
   const filteredRows = useMemo(() => {
@@ -288,6 +302,13 @@ export default function BrandApplicationsDashboardPage() {
             </h1>
             <p className="text-sm text-gray-600 mt-1">
               Revisa plataformas, alcance, entregables y notas; aprueba o rechaza cada solicitud.
+            </p>
+            <p className="text-xs text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2 max-w-3xl leading-relaxed">
+              <strong className="font-semibold">Cupón QR versus solicitud:</strong> aprobar aquí registra la
+              colaboración. El payload del cupón (por ejemplo influencerId literal «guest») lo fija únicamente
+              el momento en que se crea el QR. Si ese cupón muestra «guest», se emitió sin ObjectId público del
+              perfil influencer (sin sesión de influencer enlazada o cliente que mandó ese valor). En el detalle
+              de cada ficha aparece ese ObjectId para atribución y verificación del perfil.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -494,6 +515,41 @@ export default function BrandApplicationsDashboardPage() {
                           </div>
                         ) : null}
                       </div>
+                      {r.influencerApplicant?.id ? (
+                        <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 space-y-2">
+                          <div className="font-medium text-amber-950">
+                            ObjectId del influencer (atribución de cupón QR en Link4Deal)
+                          </div>
+                          <p className="text-xs text-amber-900 leading-relaxed">
+                            Este es el documento público influencer en la base de datos (24 caracteres
+                            hexadecimales). El formulario que emite cupones debe enviarlo como{' '}
+                            <code className="rounded bg-white/70 px-1 py-px border border-amber-200/80 text-[11px]">
+                              influencerId
+                            </code>{' '}
+                            o estar logueado con una cuenta influencer vinculada a este perfil. No se actualiza al
+                            aprobar la solicitud.
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <code className="text-xs bg-white/80 px-2 py-1 rounded border border-amber-200 break-all max-w-full flex-1 min-w-[12rem]">
+                              {r.influencerApplicant.id}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => copyApplicantObjectId(r.influencerApplicant!.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-800 text-white text-xs font-medium hover:bg-amber-900"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              {copiedApplicantObjectId === r.influencerApplicant.id ? 'Copiado' : 'Copiar'}
+                            </button>
+                            <Link
+                              to={`/influencer/${encodeURIComponent(r.influencerApplicant.id)}`}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-950 text-xs font-medium hover:bg-amber-100/80"
+                            >
+                              Ver perfil
+                            </Link>
+                          </div>
+                        </div>
+                      ) : null}
                       {r.pricing ? (
                         <div className="text-gray-700">
                           <span className="font-medium">Propuesta económica:</span>{' '}
