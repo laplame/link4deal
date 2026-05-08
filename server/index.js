@@ -29,7 +29,7 @@ const geoToolsRoutes = require('./routes/geoTools');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // Sin PORT: desarrollo típico. PM2/production: ver ecosystem.config.cjs (ej. 5001).
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -296,6 +296,7 @@ app.use('*', (req, res) => {
             'GET /api',
             'POST /api/auth/register',
             'POST /api/auth/login',
+            'POST /api/analyze-profile-image',
             'GET /api/promotions',
             'POST /api/promotions',
             'GET /api/influencers',

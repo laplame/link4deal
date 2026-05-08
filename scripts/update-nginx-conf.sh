@@ -10,7 +10,7 @@
 #   ./scripts/update-nginx-conf.sh --check-backend     # Comprueba si el backend responde en BACKEND_PORT
 #
 # Variables de entorno (opcionales):
-#   BACKEND_PORT      Puerto del backend (PM2 / upstream). Por defecto: 5001 (como nginx.conf)
+#   BACKEND_PORT      Puerto PM2; por defecto: ecosystem.config.cjs (apps[0].env.PORT)
 #   PROJECT_ROOT      Ruta del proyecto. Por defecto: /home/cto/project/link4deal
 #   SERVER_NAME       server_name. Por defecto: damecodigo.com www.damecodigo.com
 #   NGINX_CONF_SOURCE Ruta del nginx.conf. Por defecto: repo/nginx.conf
@@ -22,7 +22,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_CONF="${NGINX_CONF_SOURCE:-$REPO_ROOT/nginx.conf}"
-BACKEND_PORT="${BACKEND_PORT:-5001}"
+PM2_PORT="$(cd "$REPO_ROOT" && node scripts/read-pm2-backend-port.cjs)"
+BACKEND_PORT="${BACKEND_PORT:-$PM2_PORT}"
 PROJECT_ROOT="${PROJECT_ROOT:-/home/cto/project/link4deal}"
 SERVER_NAME="${SERVER_NAME:-damecodigo.com www.damecodigo.com}"
 TARGET_CONF="${NGINX_SITES_AVAILABLE:-/etc/nginx/sites-available/damecodigo.com}"
@@ -46,8 +47,8 @@ check_backend() {
   if [ "$code" = "000" ]; then
     echo "⚠️  El backend NO responde en el puerto ${BACKEND_PORT}." >&2
     echo "   Comprueba: pm2 list && pm2 logs" >&2
-    echo "   Si el backend usa otro puerto (ej. 3000), ejecuta:" >&2
-    echo "   BACKEND_PORT=3000 $0 --install" >&2
+    echo "   Ajusta PORT en ecosystem.config.cjs + Nginx, o prueba:" >&2
+    echo "   BACKEND_PORT=<puerto> $0 --install" >&2
     return 1
   fi
   echo "✅ Backend responde en ${BACKEND_PORT}: HTTP ${code}"
@@ -95,8 +96,9 @@ case "${1:-}" in
     echo "  git pull"
     echo "  ./scripts/update-nginx-conf.sh --install"
     echo ""
-    echo "Si el backend va en otro puerto (ej. 3000):"
-    echo "  BACKEND_PORT=3000 ./scripts/update-nginx-conf.sh --install"
+    echo "Si cambias PORT en ecosystem.config.cjs, ejecuta de nuevo:"
+    echo "  ./scripts/update-nginx-conf.sh --install"
+    echo "  # o una sola vez: BACKEND_PORT=XXXX ./scripts/update-nginx-conf.sh --install"
     echo ""
     echo "Solo comprobar que el backend responde:"
     echo "  ./scripts/update-nginx-conf.sh --check-backend"

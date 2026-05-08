@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiUrl } from '../utils/apiUrl';
+import { parseJsonBody } from '../utils/parseApiBody';
 import { 
     ArrowLeft, 
     Target, 
@@ -204,8 +206,8 @@ const BrandSetup: React.FC = () => {
             const fd = new FormData();
             fd.append('image', brandScreenshotFile);
             fd.append('type', 'brand');
-            const res = await fetch('/api/analyze-profile-image', { method: 'POST', body: fd });
-            const json = await res.json();
+            const res = await fetch(apiUrl('/api/analyze-profile-image'), { method: 'POST', body: fd });
+            const json = (await parseJsonBody(res)) as { message?: string; data?: Record<string, unknown> };
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
             const d = json.data || {};
             setFormData(prev => ({

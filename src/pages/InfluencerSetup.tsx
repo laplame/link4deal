@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiUrl } from '../utils/apiUrl';
+import { parseJsonBody } from '../utils/parseApiBody';
 import { 
     ArrowLeft, 
     Star, 
@@ -171,7 +172,7 @@ const InfluencerSetup: React.FC = () => {
             fd.append('image', influencerScreenshotFile);
             fd.append('type', 'influencer');
             const res = await fetch(apiUrl('/api/analyze-profile-image'), { method: 'POST', body: fd });
-            const json = await res.json();
+            const json = (await parseJsonBody(res)) as { message?: string; data?: Record<string, unknown> };
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
             const d = json.data || {};
             const social = Array.isArray(d.socialMedia)

@@ -12,7 +12,7 @@ set -e
 PROJECT_DIR="${PROJECT_DIR:-$HOME/project/link4deal}"
 # En sites-enabled debe existir el enlace (ej. damecodigo.com -> sites-available/damecodigo.com).
 NGINX_SITE="${NGINX_SITE:-damecodigo.com}"
-BACKEND_PORT="${BACKEND_PORT:-5001}"
+BACKEND_PORT="${BACKEND_PORT:-$(cd "$PROJECT_DIR" && node scripts/read-pm2-backend-port.cjs 2>/dev/null || echo 5001)}"
 
 echo "=========================================="
 echo "  Deploy en servidor - link4deal"

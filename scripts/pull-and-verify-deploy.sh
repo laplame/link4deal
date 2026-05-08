@@ -7,7 +7,7 @@
 set -e
 cd "$(dirname "$0")/.."
 PROJECT_DIR="$(pwd)"
-BACKEND_PORT="${BACKEND_PORT:-5001}"
+BACKEND_PORT="${BACKEND_PORT:-$(node scripts/read-pm2-backend-port.cjs)}"
 
 echo "=========================================="
 echo "1. GIT PULL"

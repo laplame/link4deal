@@ -8,8 +8,8 @@
 #   chmod +x scripts/install-nginx-vps.sh
 #   ./scripts/install-nginx-vps.sh
 #
-# Opcional (cuando tu proyecto o PM2 no usan los valores por defecto):
-#   PROJECT_ROOT=/home/ubuntu/apps/link4deal BACKEND_PORT=3000 NGINX_SITE=mi-dominio.com ./scripts/install-nginx-vps.sh
+# El puerto del upstream se toma de ecosystem.config.cjs (salvo BACKEND_PORT=... explícito).
+#   PROJECT_ROOT=/home/ubuntu/apps/link4deal NGINX_SITE=mi-dominio.com ./scripts/install-nginx-vps.sh
 #
 set -euo pipefail
 
@@ -18,7 +18,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 SOURCE_CONF="${SOURCE_CONF:-$REPO_ROOT/nginx.conf}"
 PROJECT_ROOT="${PROJECT_ROOT:-/home/cto/project/link4deal}"
-BACKEND_PORT="${BACKEND_PORT:-5001}"
+PM2_BACKEND_PORT="$(cd "$REPO_ROOT" && node scripts/read-pm2-backend-port.cjs)"
+BACKEND_PORT="${BACKEND_PORT:-$PM2_BACKEND_PORT}"
 NGINX_SITE="${NGINX_SITE:-damecodigo.com}"
 TARGET_AVAILABLE="/etc/nginx/sites-available/$NGINX_SITE"
 TARGET_ENABLED="/etc/nginx/sites-enabled/$NGINX_SITE"

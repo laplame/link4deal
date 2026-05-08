@@ -9,6 +9,7 @@ module.exports = {
       watch: false,
       max_memory_restart: '1G',
       env: {
+        // Puerto que escucha Express en prod (PM2). Debe coincidir con nginx.conf upstream link4deal_node.
         NODE_ENV: 'production',
         PORT: 5001
       },
