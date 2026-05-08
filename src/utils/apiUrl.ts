@@ -1,6 +1,6 @@
 /**
  * Origen del backend cuando la SPA no comparte el mismo host que Express.
- * Ej.: VITE_API_URL=https://link4deal.com — ver también `promotionImage.ts` (API_BASE).
+ * Ej.: VITE_API_URL=https://www.damecodigo.com — ver también `promotionImage.ts` (API_BASE).
  */
 export function getApiBase(): string {
   return (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');

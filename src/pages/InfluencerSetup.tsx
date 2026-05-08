@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiUrl } from '../utils/apiUrl';
 import { 
     ArrowLeft, 
     Star, 
@@ -169,7 +170,7 @@ const InfluencerSetup: React.FC = () => {
             const fd = new FormData();
             fd.append('image', influencerScreenshotFile);
             fd.append('type', 'influencer');
-            const res = await fetch('/api/analyze-profile-image', { method: 'POST', body: fd });
+            const res = await fetch(apiUrl('/api/analyze-profile-image'), { method: 'POST', body: fd });
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
             const d = json.data || {};
@@ -241,7 +242,7 @@ const InfluencerSetup: React.FC = () => {
                 const tokenUpload = localStorage.getItem('auth_token');
                 const uploadHeaders: HeadersInit = {};
                 if (tokenUpload) uploadHeaders['Authorization'] = `Bearer ${tokenUpload}`;
-                const uploadRes = await fetch('/api/influencers/avatar', {
+                const uploadRes = await fetch(apiUrl('/api/influencers/avatar'), {
                     method: 'POST',
                     headers: uploadHeaders,
                     body: fd
@@ -272,7 +273,7 @@ const InfluencerSetup: React.FC = () => {
             const token = localStorage.getItem('auth_token');
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
-            const res = await fetch('/api/influencers', {
+            const res = await fetch(apiUrl('/api/influencers'), {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(payload)

@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
+import { apiUrl } from '../utils/apiUrl';
 
 interface Influencer {
   id: string;
@@ -180,7 +181,7 @@ export default function InfluencerProfilePage() {
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     try {
-      const res = await fetch(`/api/influencers/${influencer.id}/contact`, {
+      const res = await fetch(apiUrl(`/api/influencers/${influencer.id}/contact`), {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -215,9 +216,10 @@ export default function InfluencerProfilePage() {
     }
     const slug = influencerSlug.trim();
     const isMongoId = /^[a-f0-9]{24}$/i.test(slug);
-    const url = isMongoId
+    const path = isMongoId
       ? `/api/influencers/${slug}`
       : `/api/influencers/by-slug/${encodeURIComponent(slug)}`;
+    const url = apiUrl(path);
     setLoading(true);
     setError(null);
     setInfluencer(null);
@@ -240,7 +242,7 @@ export default function InfluencerProfilePage() {
       setBids([]);
       return;
     }
-    fetch(`/api/influencers/${influencer.id}/bids`)
+    fetch(apiUrl(`/api/influencers/${influencer.id}/bids`))
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {

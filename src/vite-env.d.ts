@@ -7,6 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_REDEMPTIONS_LIST_API_KEY?: string;
   /** Clave de la API de JavaScript de Google Maps (mapa en el index). Origen: `google_maps` o `VITE_GOOGLE_MAPS_API_KEY` en .env vía vite.config. */
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
-  /** Origen del servidor Node (misma app en otro subdominio o sin proxy /api en el host estático). Ej.: https://link4deal.com */
+  /** Origen del servidor Node (misma app en otro subdominio o sin proxy /api en el host estático). Ej.: https://www.damecodigo.com */
   readonly VITE_API_URL?: string;
 }
