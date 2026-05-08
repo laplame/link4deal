@@ -22,6 +22,12 @@ const discountQrTokenSchema = new mongoose.Schema({
     lastVerifiedAt: {
         type: Date
     },
+    /** Presentación en tienda (verify/scan): id de tienda informado por el lector. */
+    verifyShopId: { type: String, trim: true },
+    /** GPS en el momento del último scan en tienda (si el cliente lo envía en verify). */
+    verifyLatitude: { type: Number },
+    verifyLongitude: { type: Number },
+    verifyLocationAccuracyM: { type: Number },
     usedAt: {
         type: Date,
         default: null
@@ -79,6 +85,11 @@ const discountQrTokenSchema = new mongoose.Schema({
 // TTL automático: Mongo borra el documento cuando expiresAt ya pasó.
 discountQrTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 discountQrTokenSchema.index({ 'payload.referralCode': 1 });
+/** Perfil público influencer: listar cupones redimidos por influencerId */
+discountQrTokenSchema.index(
+    { 'payload.influencerId': 1, usedAt: -1 },
+    { partialFilterExpression: { usedAt: { $type: 'date' } } }
+);
 discountQrTokenSchema.index(
     { usedAt: -1 },
     { partialFilterExpression: { usedAt: { $type: 'date' } } }

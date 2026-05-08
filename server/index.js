@@ -82,7 +82,8 @@ app.use(cors({
         'X-Brand-Dashboard-Password',
         'X-Requested-With',
         'Accept',
-        'Origin'
+        'Origin',
+        'X-Redemptions-Api-Key'
     ],
     exposedHeaders: ['X-Total-Count', 'X-Page-Count']
 }));
@@ -96,7 +97,13 @@ const generalLimiter = rateLimit({
         message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo en 15 minutos.'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    /** Listado público/cron de redenciones: va por polling (~cada pocos s); no debe compartir el mismo cubo ni agotarlo. */
+    skip: (req) => {
+        if (req.method !== 'GET') return false;
+        const base = (req.originalUrl || req.url || '').split('?')[0];
+        return base === '/api/discount-qr/redemptions/recent' || base.endsWith('/discount-qr/redemptions/recent');
+    }
 });
 
 const strictLimiter = rateLimit({
@@ -266,8 +273,8 @@ app.use('/api/influencers', influencerRoutes);
 const bidRoutes = require('./routes/bids');
 app.use('/api/bids', bidRoutes);
 
-// Discount QR routes (issuer + scanner verifier)
-app.use('/api/discount-qr', strictLimiter, discountQrRoutes);
+// Discount QR: límite estricto aplicado dentro del router solo a creación / verify / redeem (no al listado "en vivo")
+app.use('/api/discount-qr', discountQrRoutes);
 app.use('/api/analyze-profile-image', analyzeProfileRoutes);
 app.use('/api/kyc/whatsapp', strictLimiter, kycWhatsappRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
@@ -299,8 +306,8 @@ app.use('*', (req, res) => {
             'POST /api/analyze-profile-image',
             'GET /api/promotions',
             'POST /api/promotions',
-            'GET /api/influencers',
-            'GET /api/influencers/:id',
+            'GET /api/influencers/:id/coupon-redemptions',
+            'GET /api/influencers/:id/coupons-activity',
             'POST /api/discount-qr/create',
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',

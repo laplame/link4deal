@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   ComposedChart,
   Line,
@@ -32,8 +32,11 @@ export function SalesAndBidsRealtimeChart({ data, refreshIntervalMs = 0 }: Sales
 
   if (!hasData) {
     return (
-      <div className="h-72 flex items-center justify-center text-gray-500 bg-gray-50 rounded-lg">
-        <p>No hay datos de ventas y pujas para mostrar aún.</p>
+      <div className="h-72 flex flex-col items-center justify-center text-center px-4 text-gray-500 bg-gray-50 rounded-lg">
+        <p className="font-medium text-gray-700">Sin datos suficientes en este periodo</p>
+        <p className="text-sm mt-2 max-w-md">
+          Las barras muestran cupones redimidos por día; la línea, comisión de pujas (USD). Hasta que haya registros reales no se muestran estimaciones visuales.
+        </p>
       </div>
     );
   }
@@ -103,7 +106,50 @@ export function SalesAndBidsRealtimeChart({ data, refreshIntervalMs = 0 }: Sales
   );
 }
 
-/** Genera datos de ejemplo para la gráfica a partir de influencer y bids (mock/API). */
+/** Fila de GET /api/influencers/:id/coupons-activity o :id/coupon-redemptions (redimidos). */
+export interface PublicCouponRedemption {
+  couponId: string;
+  /** Fecha/hora del canje (única fuente para redimidos). */
+  redeemedAt?: string | null;
+  /** @deprecated usar redeemedAt */
+  usedAt?: string | null;
+  promotionId: string | null;
+  /** shopId del payload de la promoción */
+  promoShopId?: string | null;
+  /** alias legado */
+  shopId?: string | null;
+  discountPercentage: number | null;
+  referralCode: string | null;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  /** Último escaneo / verify en tienda */
+  lastOpenedAt?: string | null;
+  /** Tienda informada por el lector al verificar */
+  openedAtShopId?: string | null;
+  openLocation?: { lat: number; lng: number; accuracyM?: number | null } | null;
+  redeemLocation?: { lat: number; lng: number; accuracyM?: number | null } | null;
+}
+
+/** Hay señal de cupones redimidos o uso registrado por promoción (no inventamos barras si esto es falso). */
+export function hasCouponRedemptionEvidence(
+  redemptions: PublicCouponRedemption[],
+  influencer: { recentPromotions?: Array<{ couponUsage?: number }> } | null | undefined,
+): boolean {
+  if (redemptions.length > 0) return true;
+  return Boolean(
+    influencer?.recentPromotions?.some((p) => (Number(p.couponUsage) || 0) > 0),
+  );
+}
+
+export function chartShowsActivity(chartData: ChartDataPoint[]): boolean {
+  return chartData.some((d) => d.ventas > 0 || d.pujas > 0);
+}
+
+/**
+ * Serie diaria últimos 7 días solo con datos reales:
+ * - Cupones redimidos (Mongo) agrupados por día, o si no hay listado API, uso `couponUsage` en recentPromotions.
+ * - Pujas: historial por fecha / currentBid solo en día de inicio (sin curvas sintéticas).
+ */
 export function buildSalesAndBidsChartData(
   influencer: {
     recentPromotions?: Array<{ date?: string; couponUsage?: number; totalSales?: number }>;
@@ -114,13 +160,13 @@ export function buildSalesAndBidsChartData(
     currentBid?: number;
     startDate?: string;
     endDate?: string;
-  }>
+  }>,
+  redemptions: PublicCouponRedemption[] = [],
 ): ChartDataPoint[] {
   const now = new Date();
   const points: ChartDataPoint[] = [];
   const dayMap = new Map<string, { ventas: number; pujas: number }>();
 
-  // Inicializar últimos 7 días
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
@@ -128,56 +174,42 @@ export function buildSalesAndBidsChartData(
     dayMap.set(key, { ventas: 0, pujas: 0 });
   }
 
-  // Ventas desde promociones (recentPromotions) por fecha
-  if (influencer?.recentPromotions?.length) {
+  const usePromotionFallback = redemptions.length === 0;
+
+  if (!usePromotionFallback) {
+    redemptions.forEach((r) => {
+      const when = r.redeemedAt || r.usedAt;
+      if (!when) return;
+      const dateStr = new Date(when).toISOString().slice(0, 10);
+      if (!dayMap.has(dateStr)) return;
+      const cur = dayMap.get(dateStr)!;
+      cur.ventas += 1;
+    });
+  } else if (influencer?.recentPromotions?.length) {
     influencer.recentPromotions.forEach((p) => {
       const dateStr = (p.date || '').toString().slice(0, 10);
       if (dateStr && dayMap.has(dateStr)) {
         const cur = dayMap.get(dateStr)!;
-        cur.ventas += p.couponUsage ?? 0;
+        cur.ventas += Number(p.couponUsage) || 0;
       }
     });
   }
-  // Si no hay por día, repartir total en los últimos días
-  if (influencer?.couponStats && !influencer?.recentPromotions?.length) {
-    const total = influencer.couponStats.totalCoupons ?? 0;
-    const perDay = Math.max(0, Math.floor(total / 7));
-    dayMap.forEach((val, key) => {
-      val.ventas = perDay + Math.floor(Math.random() * 5);
-    });
-  }
 
-  // Pujas desde bidHistory por fecha
   bids.forEach((bid) => {
     bid.bidHistory?.forEach((h) => {
-      const ts = h.timestamp || '';
+      const ts = (h.timestamp || '').toString();
       const dateStr = ts.slice(0, 10);
       if (dateStr && dayMap.has(dateStr)) {
         const cur = dayMap.get(dateStr)!;
         cur.pujas = Math.max(cur.pujas, h.amount ?? 0);
       }
     });
-    // También considerar currentBid en el rango startDate–endDate
     const start = bid.startDate ? bid.startDate.toString().slice(0, 10) : '';
     if (start && dayMap.has(start)) {
       const cur = dayMap.get(start)!;
       if ((bid.currentBid ?? 0) > cur.pujas) cur.pujas = bid.currentBid ?? 0;
     }
   });
-
-  // Si no hay pujas por día en el rango, mostrar tendencia hasta currentBid en el último día
-  const anyBidAmount = bids.map((b) => b.currentBid ?? 0).filter(Boolean);
-  if (anyBidAmount.length > 0) {
-    const maxBid = Math.max(...anyBidAmount);
-    const keys = Array.from(dayMap.keys()).sort();
-    const allPujasZero = keys.every((k) => dayMap.get(k)!.pujas === 0);
-    if (allPujasZero) {
-      keys.forEach((key, idx) => {
-        const val = dayMap.get(key)!;
-        val.pujas = Number((1 + (idx / Math.max(1, keys.length - 1)) * (maxBid - 1)).toFixed(2));
-      });
-    }
-  }
 
   dayMap.forEach((val, key) => {
     const d = new Date(key);

@@ -39,6 +39,12 @@ router.post('/:influencerId/contact', optionalAuth, (req, res) => influencerCont
 // GET /api/influencers/:id/bids - Pujas del influencer (datos reales; por ahora [])
 router.get('/:id/bids', (req, res) => influencerController.getBids(req, res));
 
+// GET /api/influencers/:id/coupon-redemptions — solo redimidos (compatibilidad)
+router.get('/:id/coupon-redemptions', (req, res) => influencerController.getCouponRedemptions(req, res));
+
+// GET /api/influencers/:id/coupons-activity — abiertos, redimidos y caducados (perfil público)
+router.get('/:id/coupons-activity', (req, res) => influencerController.getCouponsActivity(req, res));
+
 // GET /api/influencers/:id - Obtener un influencer por ID
 router.get('/:id', (req, res) => influencerController.getInfluencerById(req, res));
 

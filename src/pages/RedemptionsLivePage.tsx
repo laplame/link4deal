@@ -14,7 +14,7 @@ import {
   UserCircle,
 } from 'lucide-react';
 
-const POLL_MS = 6000;
+const POLL_MS = 10_000;
 
 export interface RedemptionDevice {
   readerId: string | null;
@@ -290,9 +290,12 @@ export default function RedemptionsLivePage() {
         return;
       }
 
-      if (!res.ok || !data.ok) {
-        setError(typeof data.message === 'string' ? data.message : 'No se pudo cargar el listado');
-        setRows([]);
+      if (res.status === 429) {
+        setError(
+          typeof data.message === 'string'
+            ? data.message
+            : 'Demasiadas consultas seguidas. Espera unos minutos (el servidor limita refrescos muy frecuentes).',
+        );
         setHint(null);
         return;
       }

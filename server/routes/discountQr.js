@@ -10,9 +10,35 @@ const {
     verifyAndDecodeQrToken,
     getQrMetaConfig
 } = require('../utils/qrCrypto');
+const { parseLatLngFromUnknown } = require('../utils/geoParseCoupon');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 const STRICT_CREATE_VALIDATION = process.env.QR_STRICT_CREATE_VALIDATION === 'true';
+
+/** Límite tipo panel POS: crear, verificar y canjear cupón (por IP). */
+const discountQrWriteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: {
+        ok: false,
+        message: 'Demasiadas solicitudes. Intenta de nuevo más tarde.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/** Página «redenciones en vivo»: lecturas GET frecuentes; tope alto pero acotado. */
+const redemptionsRecentListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Math.min(3000, Math.max(180, parseInt(String(process.env.REDEMPTIONS_RECENT_RATE_MAX || '600'), 10) || 600)),
+    message: {
+        ok: false,
+        message: 'Demasiadas consultas al listado en vivo. Espera unos minutos o reduce la frecuencia de actualización.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 /** Claves opcionales que se fusionan al payload del cupón si vienen informadas (sin validar contra BD). */
 const OPTIONAL_COUPON_PAYLOAD_KEYS = [
@@ -35,42 +61,6 @@ function safeMetadataObject(obj) {
     } catch {
         return null;
     }
-}
-
-/**
- * Interpreta lat/lng desde body o metadata (POS / app).
- * @param {object} source
- * @returns {{ latitude: number, longitude: number, locationAccuracyM?: number } | null}
- */
-function parseLatLngFromUnknown(source) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
-    let lat = source.latitude ?? source.lat;
-    let lng = source.longitude ?? source.lng ?? source.lon;
-    let acc = source.accuracy ?? source.locationAccuracy ?? source.locationAccuracyM;
-    if (lat == null || lng == null) {
-        const loc = source.location;
-        if (loc && typeof loc === 'object' && !Array.isArray(loc)) {
-            lat = loc.latitude ?? loc.lat;
-            lng = loc.longitude ?? loc.lng ?? loc.lon;
-            if (acc == null) acc = loc.accuracy ?? loc.locationAccuracyM;
-        }
-    }
-    if (lat == null || lng == null) {
-        const gps = source.gps;
-        if (gps && typeof gps === 'object' && !Array.isArray(gps)) {
-            lat = gps.latitude ?? gps.lat;
-            lng = gps.longitude ?? gps.lng ?? gps.lon;
-            if (acc == null) acc = gps.accuracy ?? gps.locationAccuracyM;
-        }
-    }
-    const la = Number(lat);
-    const lo = Number(lng);
-    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
-    if (la < -90 || la > 90 || lo < -180 || lo > 180) return null;
-    const out = { latitude: la, longitude: lo };
-    const acn = Number(acc);
-    if (Number.isFinite(acn) && acn >= 0 && acn < 1e7) out.locationAccuracyM = acn;
-    return out;
 }
 
 /**
@@ -676,7 +666,7 @@ async function createCouponToken(payloadInput) {
 }
 
 // POST /api/discount-qr/create
-router.post('/create', async (req, res) => {
+router.post('/create', discountQrWriteLimiter, async (req, res) => {
     try {
         const {
             deviceId,
@@ -727,7 +717,7 @@ router.post('/create', async (req, res) => {
 
 // GET /api/discount-qr/create — Pedir cupón por query (p. ej. desde app o enlace)
 // Parámetros: deviceId, influencerId, promotionId, referralCode, discountPercentage (opcional, default 0), walletAddress (opcional, default "not-provided")
-router.get('/create', async (req, res) => {
+router.get('/create', discountQrWriteLimiter, async (req, res) => {
     try {
         const q = req.query || {};
         const {
@@ -784,6 +774,32 @@ router.get('/create', async (req, res) => {
     }
 });
 
+/**
+ * Actualiza huella de “apertura” en tienda (scan/verify). Opcional: tienda y GPS del lector/POS.
+ * @param {mongoose.Document} tokenDoc
+ * @param {object} context
+ */
+function applyVerifyPresentation(tokenDoc, context) {
+    if (!tokenDoc) return;
+    if (!context || typeof context !== 'object') {
+        tokenDoc.lastVerifiedAt = new Date();
+        return;
+    }
+    tokenDoc.lastVerifiedAt = new Date();
+    const sid = context.shopId != null ? String(context.shopId).trim() : '';
+    if (sid) {
+        tokenDoc.verifyShopId = sid;
+    }
+    const ll = parseLatLngFromUnknown(context);
+    if (ll) {
+        tokenDoc.verifyLatitude = ll.latitude;
+        tokenDoc.verifyLongitude = ll.longitude;
+        if (ll.locationAccuracyM != null) {
+            tokenDoc.verifyLocationAccuracyM = ll.locationAccuracyM;
+        }
+    }
+}
+
 async function runVerify(tokenOrCode, context = {}) {
     const tokenDoc = await findDiscountTokenDoc(tokenOrCode);
     if (!tokenDoc) {
@@ -797,7 +813,7 @@ async function runVerify(tokenOrCode, context = {}) {
         throw err;
     }
     const payload = tokenDoc.payload;
-    tokenDoc.lastVerifiedAt = new Date();
+    applyVerifyPresentation(tokenDoc, context);
     await tokenDoc.save();
 
     const businessErrors = await validateBusinessRules(payload, context);
@@ -826,7 +842,7 @@ async function runVerify(tokenOrCode, context = {}) {
 
 // GET /api/discount-qr/verify?qrValue=<token>&shopId=...&productId=... — ver el JSON del cupón
 // También: ?referralCode= o ?couponCode= (mismo valor que payload.referralCode, ej. L4D-...)
-router.get('/verify', async (req, res) => {
+router.get('/verify', discountQrWriteLimiter, async (req, res) => {
     try {
         const token = getCouponLookupInput(req.query);
         if (!token) {
@@ -837,8 +853,11 @@ router.get('/verify', async (req, res) => {
             });
         }
         const context = {
-            shopId: req.query.shopId || null,
-            productId: req.query.productId || null
+            shopId: req.query.shopId || req.query.shop_id || null,
+            productId: req.query.productId || null,
+            latitude: req.query.latitude ?? req.query.lat,
+            longitude: req.query.longitude ?? req.query.lng ?? req.query.lon,
+            locationAccuracyM: req.query.locationAccuracyM ?? req.query.accuracy,
         };
         const result = await runVerify(token, context);
         return res.json(result);
@@ -863,7 +882,7 @@ router.get('/verify', async (req, res) => {
 
 // POST /api/discount-qr/verify (lector/scanner). Opcional: body.shopId, body.productId para validar tienda/producto.
 // Body: qrValue | token | referralCode | couponCode (código alfanumérico del cupón).
-router.post('/verify', async (req, res) => {
+router.post('/verify', discountQrWriteLimiter, async (req, res) => {
     try {
         const input = getCouponLookupInput(req.body);
         if (!input) {
@@ -874,9 +893,14 @@ router.post('/verify', async (req, res) => {
             });
         }
 
-        const context = {
+        const presentationCtx = {
             shopId: req.body.shopId || null,
-            productId: req.body.productId || null
+            productId: req.body.productId || null,
+            latitude: req.body.latitude ?? req.body.lat,
+            longitude: req.body.longitude ?? req.body.lng ?? req.body.lon,
+            locationAccuracyM: req.body.locationAccuracyM ?? req.body.accuracy ?? req.body.locationAccuracy,
+            location: req.body.location,
+            gps: req.body.gps,
         };
 
         let payload = null;
@@ -892,7 +916,7 @@ router.post('/verify', async (req, res) => {
                 });
             }
             payload = tokenDoc.payload;
-            tokenDoc.lastVerifiedAt = new Date();
+            applyVerifyPresentation(tokenDoc, presentationCtx);
             await tokenDoc.save();
         } else {
             try {
@@ -906,7 +930,7 @@ router.post('/verify', async (req, res) => {
             }
         }
 
-        const businessErrors = await validateBusinessRules(payload, context);
+        const businessErrors = await validateBusinessRules(payload, presentationCtx);
         if (businessErrors.length > 0) {
             const first = businessErrors[0];
             return res.status(400).json({
@@ -946,7 +970,7 @@ router.post('/verify', async (req, res) => {
 
 // POST /api/discount-qr/redeem (one-time redemption)
 // Body: qrValue | token | referralCode | couponCode + opcional shopId, productId, datos de auditoría (redeemedBy*).
-router.post('/redeem', async (req, res) => {
+router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
     try {
         const input = getCouponLookupInput(req.body);
         if (!input) {
@@ -1071,7 +1095,7 @@ router.post('/redeem', async (req, res) => {
 // Si existe env REDEMPTIONS_LIST_API_KEY, header x-redemptions-api-key debe coincidir.
 // Nota: solo existen filas mientras el documento siga en MongoDB (TTL por expiresAt).
 //       Tras un canje exitoso, QR_REDEEM_RETENTION_DAYS alarga expiresAt para conservar historial.
-router.get('/redemptions/recent', async (req, res) => {
+router.get('/redemptions/recent', redemptionsRecentListLimiter, async (req, res) => {
     try {
         const secret = process.env.REDEMPTIONS_LIST_API_KEY;
         if (secret) {
