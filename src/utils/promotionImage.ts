@@ -1,3 +1,5 @@
+import { getApiBase } from './apiUrl';
+
 /**
  * Obtiene la URL pública de la imagen principal de una promoción.
  * Prioridad: Cloudinary > url > /uploads/promotions/{filename} > placeholder.
@@ -7,7 +9,6 @@
  * En el navegador, rutas /uploads/ son relativas al origen (funciona en damecodigo.com y link4deal.com).
  * Si la API guardó una URL absoluta a otro dominio pero mismo path /uploads/, se convierte a ruta relativa.
  */
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 /** Placeholder en data URL para no depender de servicios externos (via.placeholder.com puede fallar o bloquearse). */
 const DEFAULT_PLACEHOLDER =
@@ -35,7 +36,7 @@ function uploadsPathOnlyIfAbsolute(urlOrPath: string): string {
 
 /** Origen de la API si VITE_API_URL está definida (SPA en otro host → imágenes deben pedirse al backend). */
 function apiOriginForUploads(): string | null {
-  const base = API_BASE.trim();
+  const base = getApiBase().trim();
   if (!base) return null;
   try {
     const url = base.includes('://') ? base : `${typeof window !== 'undefined' ? window.location.protocol : 'https:'}//${base}`;
@@ -78,7 +79,8 @@ export function getPromotionImageUrl(
     if (relativeUrl.startsWith('http')) return relativeUrl;
     // Mismo host que Nginx (/api, /uploads): relativo. SPA en otro origen que VITE_API_URL: prefijo al API (como antes).
     if (typeof window !== 'undefined') return absoluteUploadsUrlInBrowser(relativeUrl);
-    return API_BASE ? `${API_BASE}${relativeUrl}` : relativeUrl;
+    const b = getApiBase().trim();
+    return b ? `${b}${relativeUrl}` : relativeUrl;
   }
   return placeholder;
 }

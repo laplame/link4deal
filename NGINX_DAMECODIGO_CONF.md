@@ -6,7 +6,15 @@ Editar: `sudo nano /etc/nginx/sites-available/damecodigo.com`
 
 **Importante:** Backend en **puerto 3000** (`ecosystem.config.cjs`). Front en producción: Nginx sirve `dist` (no 5173). **Assets del front** (favicon, logo, etc.): están en `dist` y se sirven con `location /`. **Imágenes subidas** (promociones): el backend Express sirve `server/uploads` en la ruta `/uploads`; Nginx hace proxy con `location ^~ /uploads/` al backend (3000). Para actualizar el .conf en el servidor: `./scripts/update-nginx-conf.sh --install`.
 
----
+### CORS y `apex` vs `www`
+
+Express ya aplica [`cors`](https://expressjs.com/) con `credentials: true` y **refleja** el `Origin` permitido (`https://damecodigo.com`, `https://www.damecodigo.com`, …). No debes repetir **`add_header Access-Control-Allow-Origin *`** (ni otro ACAO/ACAM en el `location /api/`). Si lo haces, el navegador puede recibir **dos valores** (p. ej. `Origin` + `*`) en la misma cabecera → error *“multiple values … only one is allowed”*, y cualquier **`fetch`** cross-origin desde el otro hostname fallará.
+
+Mitigaciones:
+
+1. **En Nginx:** quita todas las líneas `add_header Access-Control-*` dentro de **`location … /api/`** y el `if ($request_method = 'OPTIONS') …` corto prefabricado para la API — deja que Node responda al preflight OPTIONS.
+2. **En el front:** donde sea posible usa **`VITE_API_URL` vacío** para que `/api` sea **ruta relativa** al mismo origen; el código en `src/utils/apiUrl.ts` también normaliza mismo sitio apex/www.
+3. Opcional pero recomendado: redirect 301 desde un host canónico (solo `www` o solo apex) para no mezclar orígenes.
 
 ## Config completa (server listen 443 ssl)
 
@@ -63,13 +71,8 @@ server {
         proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 86400;
 
-        add_header Access-Control-Allow-Origin *;
-        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
-        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization";
-
-        if ($request_method = 'OPTIONS') {
-            return 204;
-        }
+        # No CORS desde Nginx: Express ya envía Access-Control-Allow-Origin (credenciales = un solo valor).
+        # Ver sección «CORS y apex vs www» arriba.
     }
 
     # Health check

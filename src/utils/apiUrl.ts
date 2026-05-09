@@ -1,9 +1,27 @@
 /**
  * Origen del backend cuando la SPA no comparte el mismo host que Express.
- * Ej.: VITE_API_URL=https://www.damecodigo.com — ver también `promotionImage.ts` (API_BASE).
+ * Si configuras solo un host (ej. www) y sirves también el apex detrás del mismo nginx, las fetch
+ * serían cross-origin y además pueden chocar CORS mal configurado — ver NGINX_DAMECODIGO_CONF.md.
+ *
+ * Si el hostname efectivo coincide (apex vs www se normalizan), devuelve '' para usar rutas
+ * relativas `/api` en el mismo origen donde se cargó la página.
  */
 export function getApiBase(): string {
-  return (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+  const trimmed = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+  if (!trimmed || typeof window === 'undefined' || !window.location) return trimmed;
+
+  try {
+    const pageHostNorm = window.location.hostname.replace(/^www\./i, '');
+    let apiUrlStr =
+      trimmed.startsWith('http://') || trimmed.startsWith('https://')
+        ? trimmed
+        : `${window.location.protocol}//${trimmed}`;
+    const apiHostNorm = new URL(apiUrlStr).hostname.replace(/^www\./i, '');
+    if (apiHostNorm === pageHostNorm) return '';
+  } catch {
+    /* mantener trimmed */
+  }
+  return trimmed;
 }
 
 export function apiUrl(path: string): string {
