@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Promotion = require('../models/Promotion');
 const PromotionApplication = require('../models/PromotionApplication');
 const Influencer = require('../models/Influencer');
+const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 
 function parseApplicationPayload(req) {
     const raw = req.body && req.body.application;
@@ -188,10 +189,17 @@ class PromotionApplicationController {
                 id,
                 { status: nextStatus },
                 { new: true }
-            ).select('_id status').lean();
+            ).select('_id status influencerApplicant promotion').lean();
 
             if (!updated) {
                 return res.status(404).json({ success: false, message: 'Aplicación no encontrada.' });
+            }
+
+            if (nextStatus === 'approved' && updated.influencerApplicant && updated.promotion) {
+                queueEnsurePromoShortCodesForInfluencer(String(updated.influencerApplicant), {
+                    extraPromotionIds: [String(updated.promotion)],
+                    includeEnvDefaults: false,
+                });
             }
 
             return res.json({

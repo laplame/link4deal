@@ -13,10 +13,41 @@ Base URL típica: `{API_ORIGIN}/api/discount-qr`
 |----------|-----|
 | `SHORT_PROMO_CODES_REGISTRY_KEY` | Secret compartido para **registrar** códigos vía POST `/codes/registry`. Header: `X-Short-Codes-Registry-Key`. Si no está definido, ese endpoint responde 503. |
 | `SHORT_CODES_LOOKUP_RATE_MAX` | Opcional. Tope por IP cada 15 min para **GET** `/codes/:code` (buscador). Por defecto 900; máximo 2500. |
+| `AUTO_NEW_INFLUENCER_PROMO_SHORT_CODE_PROMOTION_IDS` | Opcional. Lista separada por **comas** de `promotionId` (`ObjectId`). Al **registrarse un influencer nuevo** (`POST /api/influencers`), el servidor intenta crear un código corto por cada ID listado que exista en `promotions`. Así pueden tener código desde el día uno aunque aún no tengan puja ni aplicación aprobada. Sin esta variable (o sin lista), solo se crearán códigos cuando ya existan datos enlazados o al **aprobar** una solicitud (`promotion_applications` → `approved`). |
+
+### Creación automática en servidor
+
+Tras **`POST /api/influencers`** exitoso se encola (`setImmediate`) `ensurePromoShortCodesForInfluencer` con **`includeEnvDefaults: true`** (usa la env anterior si está definida) además de cualquier vínculo ya persistido.
+
+Cuando una marca pasa una solicitud a **`approved`** (`PATCH` aplicación), se encola el mismo proceso con **`extraPromotionIds`** = esa promoción, sin volver a aplicar por defecto la lista de env (solo el par influencer + esa promo).
+
+Errores al crear código (promo borrada, etc.) solo se registran en log; **no rompen** el HTTP 201 ni el PATCH de estado.
 
 ## Alfabeto recomendado (registro manual)
 
 Los códigos generados aleatoriamente en servidor usan: `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (sin `0`, `O`, `I`, `1`). En **lookup**, la API acepta cualquier entrada alfanumérica normalizada 6–16 tras quitar espacios y caracteres especiales.
+
+## Listado para la web pública (perfil influencer)
+
+Para mostrar todos los **códigos cortos activos** de un influencer en `damecodigo.com/influencer/…`:
+
+```http
+GET /api/influencers/{influencerId}/promo-short-codes
+```
+
+Respuesta `{ success: true, data: [{ code, label, referralPrefix, expiresAt, promotion: { id, title, brand, status } | null }] }`. Solo incluye registros **`active`** y no expirados; el influencer **sistema** responde 404 como el resto de rutas públicas.
+
+### Rellenar códigos en masa (script)
+
+Para generar automáticamente códigos por cada par (influencer, promoción) conocido por la BD (pujas aprobadas, solicitudes `approved`, `recentPromotions`, cupones QR):
+
+```bash
+node server/scripts/backfill-influencer-promo-short-codes.js --dry-run
+node server/scripts/backfill-influencer-promo-short-codes.js
+node server/scripts/backfill-influencer-promo-short-codes.js --influencer=69abc...
+```
+
+Si un influencer no tiene ninguna promoción enlazada por esos orígenes, el script lo omite (no inventa campañas).
 
 ## Flujo recomendado en la app
 

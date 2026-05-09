@@ -131,6 +131,19 @@ interface QrPromotionSummaryRow {
   noQrActivityYet?: boolean;
 }
 
+interface InfluencerPromoShortCodeRow {
+  code: string;
+  label: string;
+  referralPrefix: string;
+  expiresAt: string | null;
+  promotion: {
+    id: string;
+    title: string;
+    brand: string;
+    status: string | null;
+  } | null;
+}
+
 const SAVED_INFLUENCERS_KEY = 'link4deal_saved_influencers';
 
 function getSavedIds(): string[] {
@@ -169,6 +182,9 @@ export default function InfluencerProfilePage() {
   } | null>(null);
   const [qrPromoSummaryLoading, setQrPromoSummaryLoading] = useState(false);
   const [viewerInfluencerId, setViewerInfluencerId] = useState<string | null>(null);
+  const [promoShortCodes, setPromoShortCodes] = useState<InfluencerPromoShortCodeRow[]>([]);
+  const [promoShortCodesLoading, setPromoShortCodesLoading] = useState(false);
+  const [copiedPromoCode, setCopiedPromoCode] = useState<string | null>(null);
 
   const isSaved = influencer ? savedIds.includes(influencer.id) : false;
 
@@ -354,6 +370,35 @@ export default function InfluencerProfilePage() {
       .finally(() => setQrPromoSummaryLoading(false));
   }, [influencer?.id]);
 
+  useEffect(() => {
+    if (!influencer?.id) {
+      setPromoShortCodes([]);
+      setPromoShortCodesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPromoShortCodesLoading(true);
+    fetch(apiUrl(`/api/influencers/${influencer.id}/promo-short-codes`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.success && Array.isArray(data.data)) {
+          setPromoShortCodes(data.data as InfluencerPromoShortCodeRow[]);
+        } else {
+          setPromoShortCodes([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPromoShortCodes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPromoShortCodesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [influencer?.id]);
+
   const redeemedForChart = couponsActivity?.redeemed ?? [];
 
   const chartBuilt = useMemo(
@@ -450,6 +495,16 @@ export default function InfluencerProfilePage() {
     }
   };
 
+  const copyPromoShortCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedPromoCode(code);
+      window.setTimeout(() => setCopiedPromoCode((c) => (c === code ? null : c)), 2000);
+    } catch {
+      window.prompt('Copiar código de campaña:', code);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -497,7 +552,7 @@ export default function InfluencerProfilePage() {
                 type="button"
                 onClick={copyMyIdForPromotions}
                 className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0"
-                title="Copia el ID de este perfil para usarlo al aplicar a promociones"
+                title="Copiar el ID técnico del influencer (MongoDB)"
               >
                 {copiedInfluencerId ? (
                   <>
@@ -507,7 +562,7 @@ export default function InfluencerProfilePage() {
                 ) : (
                   <>
                     <Copy className="w-5 h-5 shrink-0" />
-                    <span className="text-left leading-snug">Copiar mi ID para aplicar a promociones</span>
+                    <span className="text-left leading-snug">Copiar ID técnico del perfil</span>
                   </>
                 )}
               </button>
@@ -569,8 +624,101 @@ export default function InfluencerProfilePage() {
             </div>
 
             <div className="flex-1">
-              <h1 className="text-4xl font-bold mb-2">{influencer.name}</h1>
-              <p className="text-2xl text-pink-100 mb-4">{influencer.username}</p>
+              <h1 className="text-4xl font-bold mb-3">{influencer.name}</h1>
+              <div className="mb-4 max-w-2xl">
+                <div className="flex items-center gap-2 text-pink-200/95 text-xs font-semibold uppercase tracking-wide mb-1.5">
+                  <Megaphone className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                  Códigos cortos para rastrear promociones (app)
+                </div>
+                {promoShortCodesLoading ? (
+                  <p className="text-sm text-pink-100/95">Cargando códigos de campaña…</p>
+                ) : promoShortCodes.length === 0 ? (
+                  <p className="text-sm text-pink-100/90 leading-relaxed">
+                    Aún no hay códigos alfanuméricos activos enlazados a este perfil. Cuando existan, podrás
+                    copiarlos aquí e introducirlos en el buscador de la app para ver la promoción y generar el
+                    cupón QR.
+                  </p>
+                ) : (
+                  <ul className="space-y-2.5">
+                    {promoShortCodes.map((row) => (
+                      <li
+                        key={row.code}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-black/25 border border-white/20 px-3 py-2.5 backdrop-blur-sm"
+                      >
+                        <code className="text-lg md:text-xl font-mono font-bold tracking-wider text-white shrink-0">
+                          {row.code}
+                        </code>
+                        <div className="flex-1 min-w-[10rem] text-sm text-pink-50/95">
+                          {row.promotion ? (
+                            <>
+                              <span className="font-medium text-white">
+                                {[row.promotion.brand, row.promotion.title].filter(Boolean).join(' · ') ||
+                                  'Promoción vinculada'}
+                              </span>
+                              {row.label ? (
+                                <span className="block text-xs text-pink-100/80 mt-0.5">{row.label}</span>
+                              ) : null}
+                              {row.expiresAt ? (
+                                <span className="block text-xs text-pink-100/75 mt-0.5">
+                                  Válido hasta {formatDate(row.expiresAt)}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-pink-100/85">Promoción asociada no disponible</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copyPromoShortCode(row.code)}
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                          title={`Copiar ${row.code}`}
+                        >
+                          {copiedPromoCode === row.code ? (
+                            <>
+                              <Check className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden />
+                              Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4 shrink-0" aria-hidden />
+                              Copiar
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs text-pink-100/85 mt-2">
+                  Equivale al flujo{' '}
+                  <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px]">GET /api/discount-qr/codes/…</code>{' '}
+                  — introdúcelo en el buscador de DameCodigo.
+                </p>
+              </div>
+              <details className="mb-4 max-w-2xl text-pink-100/85 group">
+                <summary className="cursor-pointer text-xs font-medium text-pink-100 hover:text-white list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+                  <FileCode2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                  <span className="underline-offset-2 group-open:underline">ID técnico del perfil (integraciones)</span>
+                </summary>
+                <div className="mt-2 rounded-lg bg-black/20 border border-white/15 px-3 py-2 flex flex-wrap items-center gap-2">
+                  <code className="text-xs font-mono text-white break-all flex-1 min-w-[12rem]">
+                    {influencer.id}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyMyIdForPromotions}
+                    className="shrink-0 text-xs font-medium underline hover:text-white"
+                  >
+                    {copiedInfluencerId ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </details>
+              {(influencer.username || '').trim() ? (
+                <p className="text-2xl text-pink-100 mb-4">
+                  @{String(influencer.username).trim().replace(/^@/, '')}
+                </p>
+              ) : null}
               <p className="text-lg text-pink-100 leading-relaxed max-w-3xl">{influencer.bio}</p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {influencer.categories.map((category, index) => (

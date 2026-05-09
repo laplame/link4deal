@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const Influencer = require('../models/Influencer');
 const InfluencerMessage = require('../models/InfluencerMessage');
+const InfluencerPromoShortCode = require('../models/InfluencerPromoShortCode');
 const DiscountQrToken = require('../models/DiscountQrToken');
 const database = require('../config/database');
 const mongoose = require('mongoose');
@@ -14,6 +15,7 @@ const {
     buildPublicInfluencerBidCards,
     buildPublicProfileFieldOverrides,
 } = require('../utils/influencerProfileEnrichment');
+const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -205,6 +207,9 @@ class InfluencerController {
             });
             await influencer.save();
             const doc = influencer.toObject();
+            queueEnsurePromoShortCodesForInfluencer(String(doc._id || influencer._id), {
+                includeEnvDefaults: true,
+            });
             return res.status(201).json({
                 success: true,
                 data: this.toFrontendFormat({ toObject: () => doc }),
@@ -678,6 +683,71 @@ class InfluencerController {
             return res.status(500).json({
                 success: false,
                 message: 'Error al cargar resumen de promociones QR',
+                error: error.message,
+            });
+        }
+    }
+
+    /** GET /api/influencers/:id/promo-short-codes — códigos alfanuméricos cortos (app / rackeo promo) públicos si la campaña sigue activa. */
+    async getPromoShortCodes(req, res) {
+        try {
+            const influencerId = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(influencerId)) {
+                return res.status(400).json({ success: false, message: 'ID de influencer inválido' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(200).json({
+                    success: true,
+                    data: [],
+                    message: 'Sin conexión a BD',
+                });
+            }
+            const inf = await Influencer.findById(influencerId).select('username').lean();
+            if (!inf || inf.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Influencer no encontrado',
+                });
+            }
+            const now = new Date();
+            const docs = await InfluencerPromoShortCode.find({
+                influencer: influencerId,
+                active: true,
+                $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+            })
+                .populate('promotion', 'title brand status')
+                .sort({ code: 1 })
+                .lean();
+
+            const data = docs.map((d) => {
+                const p = d.promotion;
+                return {
+                    code: d.code,
+                    label: (d.label && String(d.label).trim()) || '',
+                    referralPrefix: d.referralPrefix || 'L4D',
+                    expiresAt: d.expiresAt ? new Date(d.expiresAt).toISOString() : null,
+                    promotion:
+                        p && p._id
+                            ? {
+                                  id: String(p._id),
+                                  title: p.title || '',
+                                  brand: p.brand || '',
+                                  status: p.status || null,
+                              }
+                            : null,
+                };
+            });
+
+            return res.json({
+                success: true,
+                data,
+                message: 'Códigos cortos de campaña',
+            });
+        } catch (error) {
+            console.error('❌ Error listando códigos cortos influencer:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al cargar códigos de campaña',
                 error: error.message,
             });
         }

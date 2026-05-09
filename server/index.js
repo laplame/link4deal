@@ -329,6 +329,7 @@ app.use('*', (req, res) => {
             'GET /api/influencers/:id/coupon-redemptions',
             'GET /api/influencers/:id/coupons-activity',
             'GET /api/influencers/:id/qr-promotions-summary',
+            'GET /api/influencers/:id/promo-short-codes',
             'POST /api/discount-qr/create',
             'GET /api/discount-qr/create',
             'POST /api/discount-qr/verify',
