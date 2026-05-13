@@ -1,9 +1,27 @@
 /**
  * Tipos de usuario y auth alineados con la API /api/auth
- * primaryRole: user (solo usuario), influencer (content creator), brand (marketing/marca), agency (agencia de mkt), admin (owner)
+ *
+ * Paneles de producto (según primaryRole o suite multi-rol):
+ * - user: Mi cuenta / marketplace (usuario final).
+ * - influencer: hub creador (`/admin/influencers`).
+ * - brand: panel marca (`BrandDashboard` en `/dashboard` o suite).
+ * - agency: panel agencia (`AgencyDashboard`).
+ * - admin | moderator: `AdminPage` / rutas `/admin/*`.
+ *
+ * Superusuario de plataforma (`isPlatformSuperuser`, email en lista servidor):
+ * acceso al suite `/dashboard/suite` con las tres vistas creador + marca + agencia.
  */
 
 export type PrimaryRole = 'user' | 'influencer' | 'brand' | 'agency' | 'admin' | 'moderator' | 'support' | 'analyst';
+
+/** Vistas del suite multi-panel (superusuario). */
+export type DashboardPersona = 'influencer' | 'brand' | 'agency';
+
+export const DASHBOARD_PERSONA_LABELS: Record<DashboardPersona, string> = {
+  influencer: 'Creador',
+  brand: 'Marca',
+  agency: 'Agencia',
+};
 
 export type ProfileType = 'influencer' | 'brand' | 'agency';
 
@@ -22,6 +40,9 @@ export interface AuthUser {
   lastName: string;
   primaryRole: PrimaryRole;
   isSuperAdmin?: boolean;
+  /** Lista fija influencer|brand|agency cuando el email está en PLATFORM_SUPERUSER_EMAILS (servidor). */
+  isPlatformSuperuser?: boolean;
+  dashboardAccess?: DashboardPersona[];
   profileTypes: ProfileType[];
   roles?: ApiRole[];
   isVerified?: boolean;

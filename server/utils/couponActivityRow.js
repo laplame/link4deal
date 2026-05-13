@@ -92,26 +92,52 @@ function partitionDiscountQrDocsToActivity(docs) {
             open.push(row);
         }
     }
-    redeemed.sort((a, b) => {
+    sortRedeemedActivityRows(redeemed);
+    sortOpenActivityRows(open);
+    sortExpiredUnusedActivityRows(expiredUnused);
+    return { open, redeemed, expiredUnused };
+}
+
+function sortRedeemedActivityRows(rows) {
+    rows.sort((a, b) => {
         const ta = a.redeemedAt ? new Date(a.redeemedAt).getTime() : 0;
         const tb = b.redeemedAt ? new Date(b.redeemedAt).getTime() : 0;
         return tb - ta;
     });
-    open.sort((a, b) => {
+}
+
+function sortOpenActivityRows(rows) {
+    rows.sort((a, b) => {
         const ta = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
         const tb = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
         return ta - tb;
     });
-    expiredUnused.sort((a, b) => {
+}
+
+function sortExpiredUnusedActivityRows(rows) {
+    rows.sort((a, b) => {
         const ta = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
         const tb = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
         return tb - ta;
     });
-    return { open, redeemed, expiredUnused };
+}
+
+/**
+ * Convierte docs lean ya filtrados por estado (canjeado / abierto / caducado sin uso) en filas API ordenadas.
+ * @param {object[]} docs
+ * @param {'redeemed'|'open'|'expiredUnused'} kind
+ */
+function mapDocsToSortedActivityRows(docs, kind) {
+    const rows = docs.map((d) => formatCouponActivityRow(d));
+    if (kind === 'redeemed') sortRedeemedActivityRows(rows);
+    else if (kind === 'open') sortOpenActivityRows(rows);
+    else sortExpiredUnusedActivityRows(rows);
+    return rows;
 }
 
 module.exports = {
     formatCouponActivityRow,
     extractRedeemGpsForApi,
     partitionDiscountQrDocsToActivity,
+    mapDocsToSortedActivityRows,
 };

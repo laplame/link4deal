@@ -1,6 +1,33 @@
 # Endpoint: verificar cupón (QR) – contrato para la app
 
-La app (p. ej. LUXAE o POS) llama a **verify** para validar el código escaneado o el código de referencia y obtener el JSON del cupón. Este documento refleja lo que **pide y devuelve** el backend en este repo (`server/routes/discountQr.js`).
+La app (p. ej. LUXAE o POS) llama a **verify** para validar el código escaneado o el código de referencia y obtener el JSON del cupón. Este documento refleja lo que **pide y devuelve** el backend en este repo (`server/routes/discountQr.js`). La **sección 3** describe cómo **reconstruir el body de `POST /api/discount-qr/redeem`** a partir de lo enviado y recibido en verify.
+
+**Documento relacionado:** códigos cortos del buscador (lookup + emisión sin escanear QR de referencia) → [APP_SHORT_PROMO_CODES.md](./APP_SHORT_PROMO_CODES.md).
+
+---
+
+## Guía rápida de implementación en la app
+
+1. **Base URL:** `{API_ORIGIN}/api/discount-qr` (en desarrollo con Vite suele bastar ruta relativa `/api/...` si el proxy apunta al backend).
+2. **Orden recomendado:** primero **verify** (lectura); solo si `redemption.redeemable === true` y no es `legacyToken`, entonces **redeem** (consumo único).
+3. **Persistencia local:** guarda siempre el **mismo string** que envías como `qrValue` (o `referralCode` si fue por código); **no** uses solo `couponId` para redeem (el servidor no lo acepta como sustituto del cupón).
+4. **Contexto tienda:** si la promoción filtra por `allowedShopIds` / `allowedProductIds`, envía los **mismos** `shopId` / `productId` en verify y en redeem.
+5. **Idempotencia en POS:** envía `idempotencyKey` estable por ticket de caja + `shopId`/`productId` coherentes para permitir replay seguro (200) si el cliente reintenta.
+6. **Errores:** muestra `message`; usa `errorCode` para i18n o ramas (ver sección 4). Trata **409** en redeem (`QR_ALREADY_REDEEMED`, `IDEMPOTENCY_KEY_MISMATCH`).
+7. **Cupón ya usado:** verify devuelve **200** con `redeemable: false` — la UI no debe ofrecer canjear de nuevo salvo flujo de consulta de estado.
+8. **Webhook tokens (opcional):** si el servidor tiene `LUXAE_SETTLEMENT_WEBHOOK_URL`, tras un redeem exitoso la respuesta puede incluir `luxaeSettlementWebhookQueued: true` (el POST externo es **asíncrono**; el resultado no viene en el mismo JSON). Operaciones/auditoría: panel «redenciones en vivo» o campo `luxaeTokenSettlement` en listados de redenciones.
+9. **Rate limit (servidor):** `GET/POST /verify`, `POST /redeem`, `POST /create` y `POST /codes/:code/issue` comparten un límite **por IP** de **20 peticiones / 15 min** (`discountQrWriteLimiter` en `discountQr.js`). Si se supera, la respuesta es **429** con cuerpo `{ "ok": false, "message": "Demasiadas solicitudes…" }`. La app debe mostrar reintento más tarde y evitar bucles de reintento automático sin backoff.
+
+```mermaid
+flowchart LR
+  Scan[Escanear o pegar código] --> Verify[POST /verify]
+  Verify -->|200 redeemable| Offer[Mostrar datos cupón]
+  Verify -->|200 no redeemable| Used[Informar ya canjeado]
+  Verify -->|400| Err[Mostrar error]
+  Offer -->|Usuario confirma| Redeem[POST /redeem]
+  Redeem -->|200| Done[Mostrar éxito + usedAt]
+  Redeem -->|409| Conflict[Ya canjeado o idempotencia]
+```
 
 ---
 
@@ -149,11 +176,129 @@ Si no hay documento en Mongo pero el body se puede decodificar como JWT legacy (
 
 ---
 
-## 3. Respuestas de error – HTTP 400
+## 3. Reconstruir `POST /api/discount-qr/redeem` después de verify
+
+El **mismo** identificador de cupón que enviaste a verify debe ir en el body de **redeem** (misma función `getCouponLookupInput`: orden **`qrValue` → `token` → `referralCode` → `couponCode`**). Lo habitual es **persistir el string escaneado** (`qrValue`) y reutilizarlo en redeem.
+
+**Importante:** `couponId` de la respuesta de verify es el `tokenId` interno; **redeem no acepta un campo `couponId`**. Si solo guardas `couponId` y pierdes el QR o el `L4D-…`, no podrás reconstruir el canje salvo que tengas otro registro del código completo.
+
+### 3.1 Reglas mínimas antes de llamar a redeem
+
+1. Respuesta verify **200** con documento en BD (`redemption.legacyToken` **no** es `true`).
+2. `redemption.redeemable === true` (si es `false`, el cupón ya tiene `usedAt`; redeem devolverá **`QR_ALREADY_REDEEMED`** salvo replay idempotente, ver abajo).
+3. Vuelve a enviar **`shopId` / `productId`** si los usaste en verify y la promoción restringe tiendas o productos; **redeem** vuelve a ejecutar `validateBusinessRules` con el mismo criterio.
+
+### 3.2 Mapa verify → body de redeem
+
+| Qué guardaste en verify | Qué enviar en `POST /redeem` |
+|-------------------------|------------------------------|
+| Body `{ "qrValue": "…" }` | `{ "qrValue": "…" }` (mismo valor) |
+| Body `{ "referralCode": "L4D-…" }` | `{ "referralCode": "L4D-…" }` o `qrValue` si prefieres un solo campo |
+| `shopId` / `productId` en verify | Los **mismos** campos en el body de redeem |
+| — | Opcional: auditoría POS / app (tabla siguiente) |
+| — | Opcional: `idempotencyKey` (+ misma huella `shopId`/`productId`) para replay seguro |
+
+No hace falta reenviar el objeto **`payload`** completo en redeem: el servidor ya lo tiene en MongoDB. Si lo envías como campo extra, **se ignora** para el canje (no sustituye al persistido).
+
+### 3.3 Campos opcionales de auditoría y geo (mismo body que `buildRedeemedByFromBody`)
+
+Todos son opcionales; sirven para trazabilidad en `redeemedBy` y panel «en vivo».
+
+| Campo en JSON | Alias / notas |
+|---------------|----------------|
+| `readerId` | Lector / terminal |
+| `readerDeviceId` | Dispositivo lector; si vacío se puede usar `posDeviceId` |
+| `note` | Texto libre (truncado en servidor) |
+| `redeemedByUserId` | Cajero; alias `cashierUserId` |
+| `redeemedByUserName` | Alias `cashierUserName` o `userName` |
+| `userId` | BizneAI quien confirma; si no hay `redeemedByUserId`, se copia a auditoría |
+| `customerUserId`, `customerUserName` | Cliente titular del cupón |
+| `customerDeviceId` | App cliente; si vacío puede usarse `deviceId` del body (**no** confundir con `deviceId` del payload del cupón) |
+| `termsAccepted`, `termsAcceptedAt`, `termsSummary` / `termsText` | Términos en canje |
+| `redemptionMetadata` o `metadata` | Objeto JSON (se clona de forma segura); si incluye coords, pueden leerse para geo |
+| `redeemedAtUnix` | Epoch **segundos** en el dispositivo; si está dentro de la ventana (`REDEEM_UNIX_MAX_DRIFT_*`), puede fijar `usedAt` en BD |
+| `redeemGpsFixUnix` | Epoch segundos del fix GPS |
+| `redeemLatitude`, `redeemLongitude`, `redeemGpsAccuracyMeters` | WGS84 al canje (prioridad sobre otros orígenes) |
+| `latitude` / `longitude` (o `lat` / `lng`), `locationAccuracyM` | Alternativa; se parsean vía `parseLatLngFromUnknown` como en verify |
+| `idempotencyKey` | Cadena alfanumérica `._-` (max 256). Si el cupón ya se canjó con la **misma** clave y misma huella `shopId`/`productId`, el servidor responde **200** de éxito (replay). Misma clave con otra tienda/producto → **409** `IDEMPOTENCY_KEY_MISMATCH` |
+
+Variables de entorno relacionadas con `redeemedAtUnix`: `REDEEM_UNIX_MAX_DRIFT_PAST_SEC`, `REDEEM_UNIX_MAX_DRIFT_FUTURE_SEC` (por defecto 300 / 120 s).
+
+### 3.4 Ejemplos de cuerpo JSON
+
+**Mínimo** (mismo input que verify, sin auditoría):
+
+```json
+{
+  "qrValue": "LINK4DEAL-DISCOUNT.v1.<base64url>.<sig>",
+  "shopId": "bizne-shop-123"
+}
+```
+
+**Típico POS** (lector + tienda + idempotencia por ticket):
+
+```json
+{
+  "qrValue": "LINK4DEAL-DISCOUNT.v1.<base64url>.<sig>",
+  "shopId": "bizne-shop-123",
+  "productId": "sku-opcional",
+  "readerId": "register-01",
+  "readerDeviceId": "dev_334f53…",
+  "redeemedByUserId": "cajero-uuid",
+  "redeemedByUserName": "María",
+  "userId": "mismo-o-bizne-user-id",
+  "redeemedAtUnix": 1746728848,
+  "latitude": 19.4326,
+  "longitude": -99.1332,
+  "locationAccuracyM": 12,
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Solo código alfanumérico** (equivalente si ese cupón es el último emitido con ese código):
+
+```json
+{
+  "referralCode": "L4D-XXXXXXXX",
+  "shopId": "mi-tienda"
+}
+```
+
+### 3.5 Respuesta exitosa de redeem (referencia)
+
+```json
+{
+  "ok": true,
+  "message": "QR redimido exitosamente",
+  "couponId": "<tokenId>",
+  "payload": { },
+  "usedAt": "2026-05-12T…",
+  "redeemedBy": { },
+  "luxaeSettlementWebhookQueued": false
+}
+```
+
+- El `payload` devuelto es el persistido en el token (igual en esencia al de verify antes del canje).
+- **`luxaeSettlementWebhookQueued`** (boolean): `true` si en el servidor está definida **`LUXAE_SETTLEMENT_WEBHOOK_URL`**. En ese caso el backend encola un **POST asíncrono** hacia esa URL (notificación de canje / tokens LUXAE u otro ledger); **no esperes** el resultado del webhook en esta respuesta. Si la variable no existe, será `false` y el canje solo actualiza MongoDB (`DiscountQrToken`).
+
+Variables opcionales del webhook (servidor): `LUXAE_SETTLEMENT_WEBHOOK_SECRET` (Bearer), `LUXAE_SETTLEMENT_WEBHOOK_TIMEOUT_MS` (por defecto 8000). El resultado del intento se guarda en `redeemedBy.metadata.luxaeSettlement` para paneles de auditoría.
+
+### 3.6 Errores habituales tras verify OK
+
+| Situación | HTTP / `errorCode` |
+|-----------|-------------------|
+| Cupón ya usado (sin `idempotencyKey` coincidente) | 409 `QR_ALREADY_REDEEMED` |
+| Misma `idempotencyKey` pero distinto `shopId`/`productId` que al primer canje | 409 `IDEMPOTENCY_KEY_MISMATCH` |
+| Cupón expirado (`expiresAt`) | 400 `PROMO_EXPIRED` |
+| Reglas de negocio (misma familia que verify) | 400 con `errorCode` / `errors` |
+
+---
+
+## 4. Respuestas de error – HTTP 400
 
 La app debe mostrar **`message`** al usuario y puede usar **`errorCode`** para lógica o i18n.
 
-### 3.1 Errores genéricos (sin `errors[]`)
+### 4.1 Errores genéricos (sin `errors[]`)
 
 Ejemplos: cupón no encontrado / expirado (a nivel documento), token ilegible.
 
@@ -175,7 +320,7 @@ Ejemplos: cupón no encontrado / expirado (a nivel documento), token ilegible.
 
 (En verify, **PROMO_EXPIRED** puede aplicar por **expiración del documento del cupón** `expiresAt` o por **vigencia de la promoción** en reglas de negocio, según la rama que falle.)
 
-### 3.2 Errores de reglas de negocio (con `errors` y a veces `payload`)
+### 4.2 Errores de reglas de negocio (con `errors` y a veces `payload`)
 
 ```json
 {
@@ -207,7 +352,7 @@ Ejemplos: cupón no encontrado / expirado (a nivel documento), token ilegible.
 
 ---
 
-## 4. Resumen para integradores
+## 5. Resumen para integradores
 
 | Necesidad | Uso |
 |-----------|-----|
@@ -216,15 +361,50 @@ Ejemplos: cupón no encontrado / expirado (a nivel documento), token ilegible.
 | Atribución influencer | `payload.influencerId` (y datos de promoción vía `GET /api/promotions/:promotionId`). |
 | Validar en una tienda POS concreta | Enviar `shopId` (y si aplica `productId`) en body o query. |
 | Cupón ya usado | Verify sigue siendo 200; `redeemable: false`. |
+| Armar el POST de canje tras verify | Ver **sección 3** (mismo identificador + `shopId`/`productId` si aplica). |
+| Código corto del buscador (sin QR de referencia) | Ver [APP_SHORT_PROMO_CODES.md](./APP_SHORT_PROMO_CODES.md): `GET /codes/:code` + `POST /codes/:code/issue`; el cupón emitido se valida y canjea con **las mismas** rutas verify/redeem usando el `qrValue` devuelto. |
+
+### 5.1 Contrato mínimo que la app puede tipar (TypeScript)
+
+```ts
+// Verify 200 (documento en BD)
+type VerifyOk = {
+  ok: true;
+  message: string;
+  couponId: string;
+  payload: Record<string, unknown>;
+  redemption: {
+    redeemable: boolean;
+    usedAt: string | null;
+    legacyToken?: true;
+  };
+};
+
+// Redeem 200
+type RedeemOk = {
+  ok: true;
+  message: string;
+  couponId: string;
+  payload: Record<string, unknown>;
+  usedAt: string;
+  redeemedBy: Record<string, unknown> | null;
+  luxaeSettlementWebhookQueued?: boolean;
+};
+
+// Errores 400/409 frecuentes
+type QrError = { ok: false; errorCode: string; message: string; errors?: Array<{ code: string; message: string }> };
+```
 
 ---
 
-## 5. Implementación y entorno
+## 6. Implementación y entorno
 
-- **Rutas:** `server/routes/discountQr.js` → `GET /verify`, `POST /verify`.
+- **Rutas:** `server/routes/discountQr.js` → `GET /verify`, `POST /verify`, `POST /redeem`.
 - **Crypto / formato QR:** `server/utils/qrCrypto.js` (`verifyReferenceQrToken`, `verifyAndDecodeQrToken`).
 - **Modelo:** `server/models/DiscountQrToken.js`.
 - **Montaje:** `server/index.js` → `app.use('/api/discount-qr', …)`.
+- **Montaje del body de redeem:** `buildRedeemedByFromBody` en `discountQr.js` (auditoría, GPS, `redeemedAtUnix`, idempotencia).
+- **Límites de frecuencia:** `discountQrWriteLimiter` → verify/redeem/create/issue (20 / 15 min / IP). El buscador **`GET /codes/:code`** usa otro contador (`SHORT_CODES_LOOKUP_RATE_MAX`, ver [APP_SHORT_PROMO_CODES.md](./APP_SHORT_PROMO_CODES.md)).
 
 Variables de entorno típicas (QR de referencia):
 
@@ -235,9 +415,30 @@ QR_SIGN_KEY=<base64 de 32 bytes>
 QR_TTL_SECONDS=300
 ```
 
+Opcionales alineados con **redeem** / hora cliente (`redeemedAtUnix`):
+
+```env
+REDEEM_UNIX_MAX_DRIFT_PAST_SEC=300
+REDEEM_UNIX_MAX_DRIFT_FUTURE_SEC=120
+```
+
+Opcionales **post-canje** (notificación externa; no bloquean la respuesta HTTP de redeem):
+
+```env
+LUXAE_SETTLEMENT_WEBHOOK_URL=
+LUXAE_SETTLEMENT_WEBHOOK_SECRET=
+LUXAE_SETTLEMENT_WEBHOOK_TIMEOUT_MS=8000
+```
+
+Retención de historial en Mongo (TTL del cupón tras canje):
+
+```env
+QR_REDEEM_RETENTION_DAYS=90
+```
+
 ---
 
-## 6. Puertos y ejemplos curl
+## 7. Puertos y ejemplos curl
 
 - **Backend:** según `PORT` (p. ej. 3000 local, 5001 en PM2).
 - **Vite:** `5173` con proxy `/api` al backend.
@@ -253,10 +454,15 @@ curl -s "http://localhost:3000/api/discount-qr/verify?referralCode=L4D-ABC123&sh
 curl -s -X POST "http://localhost:3000/api/discount-qr/verify" \
   -H "Content-Type: application/json" \
   -d '{"qrValue":"LINK4DEAL-DISCOUNT.v1.XXX.sig","shopId":"mi-tienda"}'
+
+# POST – canje tras verify OK (mismo qrValue y mismo shopId si aplica)
+curl -s -X POST "http://localhost:3000/api/discount-qr/redeem" \
+  -H "Content-Type: application/json" \
+  -d '{"qrValue":"LINK4DEAL-DISCOUNT.v1.XXX.sig","shopId":"mi-tienda","readerDeviceId":"dev_demo"}'
 ```
 
 ---
 
-## 7. Despliegue compartido (p. ej. bizneai.com)
+## 8. Despliegue compartido (p. ej. bizneai.com)
 
-Para otro dominio, el contrato debe mantenerse: mismos campos de entrada (`qrValue` | `token` | `referralCode` | `couponCode`, opcionales `shopId`, `productId`) y misma forma de respuesta 200/400 descrita arriba.
+Para otro dominio, el contrato debe mantenerse: mismos campos de entrada en verify (`qrValue` | `token` | `referralCode` | `couponCode`, opcionales `shopId`, `productId`), misma forma de respuesta 200/400, y en **redeem** el mismo identificador de cupón + contexto opcional y cuerpos de auditoría descritos en la **sección 3**.

@@ -7,7 +7,7 @@ import InfluencerDashboard from './dashboards/InfluencerDashboard';
  * Panel tipo hub (InfluencerHubLayout): accesible para creadores y para moderación.
  */
 export default function InfluencerHubPage() {
-  const { isAuthenticated, isLoading, primaryRole } = useAuth();
+  const { isAuthenticated, isLoading, primaryRole, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -24,7 +24,8 @@ export default function InfluencerHubPage() {
   const allowed =
     primaryRole === 'influencer' ||
     primaryRole === 'admin' ||
-    primaryRole === 'moderator';
+    primaryRole === 'moderator' ||
+    user?.isPlatformSuperuser === true;
 
   if (!allowed) {
     return <Navigate to="/dashboard" replace />;

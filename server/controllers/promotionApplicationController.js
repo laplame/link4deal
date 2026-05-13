@@ -177,7 +177,8 @@ class PromotionApplicationController {
                 return res.status(400).json({ success: false, message: 'ID inválido.' });
             }
 
-            const nextStatus = req.body && req.body.status;
+            const body = req.body && typeof req.body === 'object' ? req.body : {};
+            const nextStatus = body.status;
             if (!['pending', 'approved', 'rejected', 'withdrawn'].includes(nextStatus)) {
                 return res.status(400).json({
                     success: false,
@@ -185,9 +186,19 @@ class PromotionApplicationController {
                 });
             }
 
+            const updateFields = { status: nextStatus };
+            if (nextStatus === 'approved') {
+                const rawAssign =
+                    body.influencerProfileId != null ? String(body.influencerProfileId).trim() : '';
+                if (rawAssign && mongoose.Types.ObjectId.isValid(rawAssign)) {
+                    const inf = await Influencer.findById(rawAssign).select('_id').lean();
+                    if (inf) updateFields.influencerApplicant = inf._id;
+                }
+            }
+
             const updated = await PromotionApplication.findByIdAndUpdate(
                 id,
-                { status: nextStatus },
+                updateFields,
                 { new: true }
             ).select('_id status influencerApplicant promotion').lean();
 

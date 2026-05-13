@@ -41,6 +41,7 @@ import AdminPage from './pages/AdminPage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 import DashboardPage from './pages/DashboardPage';
+import PlatformSuperuserSuitePage from './pages/PlatformSuperuserSuitePage';
 import CartPage from './pages/CartPage';
 import BusinessLanding from './pages/BusinessLanding';
 import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
@@ -168,6 +169,7 @@ function App() {
                   <Route path="/login" element={<SignInPage />} />
                   <Route path="/signup" element={<SignUpPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/dashboard/suite" element={<PlatformSuperuserSuitePage />} />
                   <Route path="/dashboard/panel" element={<ProfileDashboardByRole />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="*" element={<NotFoundPage />} />

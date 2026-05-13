@@ -85,6 +85,7 @@ app.use(cors({
         'Origin',
         'X-Redemptions-Api-Key',
         'X-Short-Codes-Registry-Key',
+        'X-Luxae-Compliance-Key',
     ],
     exposedHeaders: ['X-Total-Count', 'X-Page-Count']
 }));
@@ -310,6 +311,9 @@ app.use('/api/bizne-shops', bizneShopsRoutes);
 // Geocodificación masiva (parse de pegado + Nominatim): límite estricto por IP
 app.use('/api/geo', strictLimiter, geoToolsRoutes);
 
+const luxaeComplianceRoutes = require('./routes/luxaeCompliance');
+app.use('/api/compliance/luxae-installations', strictLimiter, luxaeComplianceRoutes);
+
 // ===== MANEJO DE ERRORES =====
 
 // 404 handler
@@ -340,6 +344,7 @@ app.use('*', (req, res) => {
             'GET /api/discount-qr/stats/redemptions-by-influencer',
             'GET /api/discount-qr/stats/verify-vs-redeem',
             'POST /api/discount-qr/codes/registry',
+            'GET /api/discount-qr/codes/:code/promotions',
             'GET /api/discount-qr/codes/:code',
             'POST /api/discount-qr/codes/:code/issue',
             'POST /api/kyc/whatsapp/request-code',
@@ -347,7 +352,9 @@ app.use('*', (req, res) => {
             'GET /api/loyalty/coffee',
             'POST /api/loyalty/coffee/transactions',
             'GET /api/bizne-shops',
-            'GET /api/bizne-shops/:id'
+            'GET /api/bizne-shops/:id',
+            'GET /api/compliance/luxae-installations (API key)',
+            'POST /api/compliance/luxae-installations (API key)'
         ],
         timestamp: new Date().toISOString()
     });

@@ -8,6 +8,8 @@ const influencerSchema = new mongoose.Schema({
     // Identificación (formulario: displayName -> name; OCR: username, handle)
     name: { type: String, trim: true },
     username: { type: String, trim: true },
+    /** Código alfanumérico corto único (misma familia que códigos promo); se asigna al alta y en lecturas de perfil si faltaba. */
+    profileShortCode: { type: String, trim: true, uppercase: true, maxlength: 16, default: undefined },
     avatar: { type: String, trim: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
@@ -121,7 +123,18 @@ const influencerSchema = new mongoose.Schema({
 }, { timestamps: true, collection: 'influencers' });
 
 influencerSchema.index({ username: 1 });
+influencerSchema.index({ profileShortCode: 1 }, { unique: true, sparse: true });
 influencerSchema.index({ status: 1 });
 influencerSchema.index({ totalFollowers: -1 });
+
+influencerSchema.pre('save', function normalizeProfileShortCode(next) {
+    if (this.profileShortCode) {
+        this.profileShortCode = String(this.profileShortCode)
+            .trim()
+            .toUpperCase()
+            .replace(/[^0-9A-Z]/g, '');
+    }
+    next();
+});
 
 module.exports = mongoose.model('Influencer', influencerSchema);

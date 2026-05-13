@@ -273,15 +273,22 @@ export default function ProductCard({
                                 {shortenAddress(product.smartContract.address)}
                             </code>
                             {product.smartContract.blockchainExplorer && (
-                                <a
-                                    href={product.smartContract.blockchainExplorer}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-purple-600 hover:text-purple-800 inline-flex"
-                                    onClick={(e) => e.stopPropagation()}
+                                <button
+                                    type="button"
+                                    className="text-purple-600 hover:text-purple-800 inline-flex p-0 m-0 border-0 bg-transparent cursor-pointer"
+                                    aria-label="Abrir explorador blockchain"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                            product.smartContract.blockchainExplorer,
+                                            '_blank',
+                                            'noopener,noreferrer'
+                                        );
+                                    }}
                                 >
                                     <ExternalLink className="h-3 w-3" />
-                                </a>
+                                </button>
                             )}
                         </div>
                     )}

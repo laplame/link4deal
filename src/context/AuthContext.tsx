@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as authApi from '../services/authApi';
-import type { AuthUser, LoginCredentials, PrimaryRole, RegisterData } from '../types/auth';
+import type { AuthUser, AuthResponse, LoginCredentials, PrimaryRole, RegisterData } from '../types/auth';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 const AUTH_REFRESH_KEY = 'auth_refresh_token';
@@ -13,10 +13,12 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<AuthResponse>;
-  register: (data: RegisterData) => Promise<void>;
+  register: (data: RegisterData) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   clearError: () => void;
   primaryRole: PrimaryRole | null;
+  /** Email en lista PLATFORM_SUPERUSER_EMAILS del servidor (o valor por defecto). */
+  isPlatformSuperuser: boolean;
   hasRole: (role: PrimaryRole) => boolean;
   hasAnyRole: (roles: PrimaryRole[]) => boolean;
 }
@@ -91,10 +93,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (data: RegisterData) => {
+    async (data: RegisterData): Promise<AuthResponse> => {
       setError(null);
       const res = await authApi.register(data);
       persistAuth(res.token, res.refreshToken, res.user);
+      return res;
     },
     [persistAuth]
   );
@@ -110,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   const primaryRole: PrimaryRole | null = user?.primaryRole ?? null;
+  const isPlatformSuperuser = Boolean(user?.isPlatformSuperuser);
 
   const hasRole = useCallback(
     (role: PrimaryRole) => Boolean(user?.primaryRole === role),
@@ -132,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     clearError,
     primaryRole,
+    isPlatformSuperuser,
     hasRole,
     hasAnyRole,
   };

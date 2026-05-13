@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Role = require('../models/Role');
+const { authUserDashboardFields } = require('../utils/platformSuperuser');
 const router = express.Router();
 const SESSION_EXPIRES_IN = '24h';
 
@@ -196,7 +197,8 @@ router.post('/register', registerValidation, async (req, res) => {
                 isSuperAdmin: user.isSuperAdmin,
                 profileTypes: user.profileTypes,
                 isVerified: user.isVerified,
-                createdAt: user.createdAt
+                createdAt: user.createdAt,
+                ...authUserDashboardFields(user),
             },
             token,
             refreshToken
@@ -328,7 +330,8 @@ router.post('/login', loginValidation, async (req, res) => {
                     level: role.level
                 })),
                 isVerified: user.isVerified,
-                lastLogin: user.lastLogin
+                lastLogin: user.lastLogin,
+                ...authUserDashboardFields(user),
             },
             token,
             refreshToken
@@ -457,7 +460,8 @@ router.get('/me', authenticateToken, async (req, res) => {
                 settings: user.settings,
                 stats: user.stats,
                 createdAt: user.createdAt,
-                lastLogin: user.lastLogin
+                lastLogin: user.lastLogin,
+                ...authUserDashboardFields(user),
             }
         });
 

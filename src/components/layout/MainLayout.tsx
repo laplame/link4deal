@@ -26,6 +26,7 @@ const pathTitles: Record<string, string> = {
   '/admin': 'Admin',
   '/dashboard/panel': 'Mi panel',
   '/admin/influencers': 'Panel creador',
+  '/dashboard/suite': 'Multi-panel (superusuario)',
   '/demo/influencer-dashboard': 'Demo panel influencer'
 };
 
@@ -50,12 +51,15 @@ const DEMO_INFLUENCER_HUB_PATH = '/demo/influencer-dashboard';
 
 export function MainLayout() {
   const location = useLocation();
-  const { primaryRole } = useAuth();
+  const { primaryRole, user } = useAuth();
   const pathname = location.pathname;
+  const isPlatformSuper = Boolean(user?.isPlatformSuperuser);
   const hideGlobalNav =
     ROUTES_WITH_OWN_NAV.includes(pathname) ||
     pathname === DEMO_INFLUENCER_HUB_PATH ||
-    (INFLUENCER_HUB_PATHS_HIDE_NAV.includes(pathname) && primaryRole === 'influencer');
+    pathname === '/dashboard/suite' ||
+    (INFLUENCER_HUB_PATHS_HIDE_NAV.includes(pathname) &&
+      (primaryRole === 'influencer' || isPlatformSuper));
   const title = getTitle(pathname);
 
   return (

@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const InfluencerPromoShortCode = require('../models/InfluencerPromoShortCode');
 const Influencer = require('../models/Influencer');
 const Promotion = require('../models/Promotion');
@@ -48,8 +49,11 @@ function randomCode(length = 8) {
 async function generateUniqueRandomCode(length = 8, maxRetries = 12) {
     for (let r = 0; r < maxRetries; r++) {
         const c = randomCode(length);
-        const clash = await InfluencerPromoShortCode.findOne({ code: c }).select('_id').lean();
-        if (!clash) return c;
+        const [clashPromo, clashProfile] = await Promise.all([
+            InfluencerPromoShortCode.findOne({ code: c }).select('_id').lean(),
+            Influencer.findOne({ profileShortCode: c }).select('_id').lean(),
+        ]);
+        if (!clashPromo && !clashProfile) return c;
     }
     /** largo temporal si hay colisión alta */
     return generateUniqueRandomCode(length + 1, Math.max(1, maxRetries - 2));
@@ -74,6 +78,53 @@ async function mongoReady() {
 }
 
 /**
+ * Asigna profileShortCode si el influencer no lo tiene (alta o influencers antiguos).
+ * @param {string} influencerIdStr
+ * @returns {Promise<string|null>} código en mayúsculas o null
+ */
+async function ensureInfluencerHasProfileShortCode(influencerIdStr) {
+    if (!(await mongoReady())) return null;
+    const id = String(influencerIdStr || '').trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    const inf = await Influencer.findById(id).select('username profileShortCode').lean();
+    if (!inf || inf.username === INFLUENCER_GENERAL_USERNAME) return null;
+
+    const existing = inf.profileShortCode && String(inf.profileShortCode).trim();
+    if (existing) {
+        return String(existing)
+            .toUpperCase()
+            .replace(/[^0-9A-Z]/g, '');
+    }
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const code = await generateUniqueRandomCode(8);
+        const updated = await Influencer.findOneAndUpdate(
+            {
+                _id: id,
+                $or: [{ profileShortCode: { $exists: false } }, { profileShortCode: null }, { profileShortCode: '' }],
+            },
+            { $set: { profileShortCode: code } },
+            { new: true },
+        )
+            .select('profileShortCode')
+            .lean();
+        if (updated?.profileShortCode) {
+            return String(updated.profileShortCode)
+                .toUpperCase()
+                .replace(/[^0-9A-Z]/g, '');
+        }
+        const again = await Influencer.findById(id).select('profileShortCode').lean();
+        if (again?.profileShortCode) {
+            return String(again.profileShortCode)
+                .toUpperCase()
+                .replace(/[^0-9A-Z]/g, '');
+        }
+    }
+    return null;
+}
+
+/**
  * Lookup activo por código ya normalizado.
  * @returns {Promise<null | { doc: object, influencer: object, promotion: object }>}
  */
@@ -87,22 +138,51 @@ async function resolveActiveNormalizedCode(normalizedCode) {
     })
         .lean()
         .exec();
-    if (!doc) return null;
+    if (doc) {
+        const [inf, promo] = await Promise.all([
+            Influencer.findById(doc.influencer).select('name username avatar categories status').lean(),
+            Promotion.findById(doc.promotion)
+                .select(
+                    'title brand description currentPrice originalPrice currency discountPercentage status validFrom validUntil image redirectInsteadOfQr'
+                )
+                .lean(),
+        ]);
+        return { doc, influencer: inf, promotion: promo };
+    }
 
-    const [inf, promo] = await Promise.all([
-        Influencer.findById(doc.influencer).select('name username avatar categories status').lean(),
-        Promotion.findById(doc.promotion)
-            .select(
-                'title brand description currentPrice originalPrice currency discountPercentage status validFrom validUntil image redirectInsteadOfQr'
-            )
-            .lean(),
-    ]);
-    return { doc, influencer: inf, promotion: promo };
+    /** Código de perfil del influencer + promoción por defecto (mismo buscador app que códigos promo). */
+    const defPid = String(process.env.INFLUENCER_PROFILE_SHORT_CODE_DEFAULT_PROMOTION_ID || '').trim();
+    if (mongoose.Types.ObjectId.isValid(defPid)) {
+        const infProfile = await Influencer.findOne({ profileShortCode: normalizedCode })
+            .select('name username avatar categories status _id')
+            .lean();
+        if (infProfile && infProfile.username !== INFLUENCER_GENERAL_USERNAME) {
+            const promo = await Promotion.findById(defPid)
+                .select(
+                    'title brand description currentPrice originalPrice currency discountPercentage status validFrom validUntil image redirectInsteadOfQr'
+                )
+                .lean();
+            if (promo) {
+                const syntheticDoc = {
+                    code: normalizedCode,
+                    influencer: infProfile._id,
+                    promotion: promo._id,
+                    label: 'Código de perfil',
+                    referralPrefix: 'L4D',
+                    active: true,
+                    expiresAt: null,
+                };
+                return { doc: syntheticDoc, influencer: infProfile, promotion: promo };
+            }
+        }
+    }
+
+    return null;
 }
 
 function serializeResolvePayload(normCode, resolved) {
     const { doc, influencer, promotion } = resolved;
-    const pid = promo ? String(promo._id) : String(doc.promotion);
+    const pid = promotion && promotion._id ? String(promotion._id) : String(doc.promotion);
     const infId = influencer && influencer._id ? String(influencer._id) : String(doc.influencer);
 
     const discountSuggested = computeDiscountPctFromPromotion(promotion);
@@ -133,28 +213,176 @@ function serializeResolvePayload(normCode, resolved) {
               }
             : null,
         promotion: promotion
-            ? {
-                  id: pid,
-                  title: promotion.title || null,
-                  brand: promotion.brand || null,
-                  description: promotion.description || null,
-                  currentPrice: promotion.currentPrice,
-                  originalPrice: promotion.originalPrice,
-                  currency: promotion.currency || 'MXN',
-                  discountPercentage: promotion.discountPercentage,
-                  discountPercentageSuggested: discountSuggested,
-                  status: promotion.status || null,
-                  validFrom: promotion.validFrom ? new Date(promotion.validFrom).toISOString() : null,
-                  validUntil: promotion.validUntil ? new Date(promotion.validUntil).toISOString() : null,
-                  image: promotion.image || null,
-                  redirectInsteadOfQr: Boolean(promotion.redirectInsteadOfQr),
-              }
+            ? serializePromotionCatalogFields(promotion, discountSuggested)
             : null,
         flags: {
             influencerMissingInDb: !influencer,
             promotionMissingInDb: !promotion,
             blockedSystemInfluencer: Boolean(blocked),
         },
+    };
+}
+
+const PROMOTION_CATALOG_SELECT =
+    'title brand description currentPrice originalPrice currency discountPercentage status validFrom validUntil image redirectInsteadOfQr';
+
+/**
+ * Objeto `promotion` alineado con GET /codes/:code (lista / catálogo).
+ * @param {object|null} promotion
+ * @param {number|null} [discountSuggested] — si ya calculaste `computeDiscountPctFromPromotion`
+ */
+function serializePromotionCatalogFields(promotion, discountSuggested = null) {
+    if (!promotion || !promotion._id) return null;
+    const pid = String(promotion._id);
+    const suggested =
+        discountSuggested !== null && discountSuggested !== undefined
+            ? discountSuggested
+            : computeDiscountPctFromPromotion(promotion);
+    return {
+        id: pid,
+        title: promotion.title || null,
+        brand: promotion.brand || null,
+        description: promotion.description || null,
+        currentPrice: promotion.currentPrice,
+        originalPrice: promotion.originalPrice,
+        currency: promotion.currency || 'MXN',
+        discountPercentage: promotion.discountPercentage,
+        discountPercentageSuggested: suggested,
+        status: promotion.status || null,
+        validFrom: promotion.validFrom ? new Date(promotion.validFrom).toISOString() : null,
+        validUntil: promotion.validUntil ? new Date(promotion.validUntil).toISOString() : null,
+        image: promotion.image || null,
+        redirectInsteadOfQr: Boolean(promotion.redirectInsteadOfQr),
+    };
+}
+
+/**
+ * Convierte una fila `InfluencerPromoShortCode` (o doc sintético con `code` + `promotion`) en entrada de catálogo.
+ * @param {object} d — lean con `code`, `label`, `referralPrefix`, `expiresAt`, `promotion` poblado o embebido
+ * @param {object} influencer — lean con `username`
+ */
+function mapRowToCatalogEntry(d, influencer) {
+    const p = d.promotion;
+    const discountSuggested = computeDiscountPctFromPromotion(p);
+    const redirectInsteadOfQr = Boolean(p?.redirectInsteadOfQr);
+    const blocked = influencer.username === INFLUENCER_GENERAL_USERNAME;
+    /** @type {'qr'|'redirect'|'blocked'} */
+    let issueMode = 'qr';
+    if (blocked) issueMode = 'blocked';
+    else if (redirectInsteadOfQr) issueMode = 'redirect';
+    const pid = p && p._id ? String(p._id) : null;
+    return {
+        shortCode: d.code,
+        label: (d.label && String(d.label).trim()) || null,
+        referralPrefix: d.referralPrefix || 'L4D',
+        expiresAt: d.expiresAt ? new Date(d.expiresAt).toISOString() : null,
+        canIssueCoupon: issueMode !== 'blocked' && Boolean(pid),
+        issueMode,
+        promotion: serializePromotionCatalogFields(p, discountSuggested),
+        flags: {
+            promotionMissingInDb: !p || !p._id,
+            blockedSystemInfluencer: Boolean(blocked),
+        },
+    };
+}
+
+/**
+ * Añade fila sintética «código de perfil + promoción por defecto» si aplica env y no está ya cubierta.
+ * @param {object} influencer — lean
+ * @param {Array<object>} entries — mutado in-place (unshift)
+ * @param {'promo_short_code'|'profile_short_code'} resolvedVia
+ * @param {string} lookupCode — código normalizado que escribió el usuario
+ */
+async function maybePrependDefaultProfilePromotionEntry(influencer, entries, resolvedVia, lookupCode) {
+    const defPid = String(process.env.INFLUENCER_PROFILE_SHORT_CODE_DEFAULT_PROMOTION_ID || '').trim();
+    if (!mongoose.Types.ObjectId.isValid(defPid)) return;
+    if (entries.some((e) => e.promotion && e.promotion.id === defPid)) return;
+
+    const promo = await Promotion.findById(defPid).select(PROMOTION_CATALOG_SELECT).lean();
+    if (!promo) return;
+
+    let catalogCode = null;
+    if (resolvedVia === 'profile_short_code') {
+        catalogCode = lookupCode;
+    } else {
+        catalogCode = normalizeIncomingCode(influencer.profileShortCode);
+    }
+    if (!catalogCode) return;
+    if (entries.some((e) => e.shortCode === catalogCode)) return;
+
+    const syntheticDoc = {
+        code: catalogCode,
+        label: 'Código de perfil',
+        referralPrefix: 'L4D',
+        expiresAt: null,
+        promotion: promo,
+    };
+    entries.unshift(mapRowToCatalogEntry(syntheticDoc, influencer));
+}
+
+/**
+ * Catálogo de promociones con código corto por influencer: acepta un código de campaña activo
+ * o el código corto de perfil (`profileShortCode`).
+ *
+ * @param {string} normalizedCode — resultado de `normalizeIncomingCode`
+ * @returns {Promise<null | object>}
+ */
+async function getInfluencerPromotionsCatalogByShortCode(normalizedCode) {
+    if (!normalizedCode || !(await mongoReady())) return null;
+
+    const now = new Date();
+    const promoRow = await InfluencerPromoShortCode.findOne({
+        code: normalizedCode,
+        active: true,
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    }).lean();
+
+    let influencer;
+    /** @type {'promo_short_code'|'profile_short_code'} */
+    let resolvedVia;
+
+    if (promoRow) {
+        influencer = await Influencer.findById(promoRow.influencer)
+            .select('name username avatar categories status profileShortCode')
+            .lean();
+        if (!influencer || influencer.username === INFLUENCER_GENERAL_USERNAME) return null;
+        resolvedVia = 'promo_short_code';
+    } else {
+        influencer = await Influencer.findOne({ profileShortCode: normalizedCode })
+            .select('name username avatar categories status profileShortCode')
+            .lean();
+        if (!influencer || influencer.username === INFLUENCER_GENERAL_USERNAME) return null;
+        resolvedVia = 'profile_short_code';
+    }
+
+    const infId = influencer._id;
+    const rows = await InfluencerPromoShortCode.find({
+        influencer: infId,
+        active: true,
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    })
+        .populate('promotion', PROMOTION_CATALOG_SELECT)
+        .sort({ code: 1 })
+        .lean();
+
+    const entries = rows.map((d) => mapRowToCatalogEntry(d, influencer));
+    await maybePrependDefaultProfilePromotionEntry(influencer, entries, resolvedVia, normalizedCode);
+
+    return {
+        ok: true,
+        lookupCode: normalizedCode,
+        resolvedVia,
+        influencer: {
+            id: String(infId),
+            name: influencer.name || null,
+            username: influencer.username || null,
+            avatar: influencer.avatar || null,
+        },
+        influencerProfileShortCode: influencer.profileShortCode
+            ? String(influencer.profileShortCode).trim().toUpperCase() || null
+            : null,
+        entries,
+        total: entries.length,
     };
 }
 
@@ -175,7 +403,6 @@ async function createRegistryEntry(params) {
     }
     const influencerId = String(params.influencerId || '').trim();
     const promotionId = String(params.promotionId || '').trim();
-    const mongoose = require('mongoose');
     if (!mongoose.Types.ObjectId.isValid(influencerId) || !mongoose.Types.ObjectId.isValid(promotionId)) {
         const e = new Error('influencerId o promotionId no son ObjectId válidos');
         e.status = 400;
@@ -210,8 +437,11 @@ async function createRegistryEntry(params) {
     }
     if (!code) code = await generateUniqueRandomCode(8);
 
-    const clash = await InfluencerPromoShortCode.findOne({ code }).select('_id').lean();
-    if (clash) {
+    const [clash, clashProfile] = await Promise.all([
+        InfluencerPromoShortCode.findOne({ code }).select('_id').lean(),
+        Influencer.findOne({ profileShortCode: code }).select('_id').lean(),
+    ]);
+    if (clash || clashProfile) {
         const e = new Error('Ese código ya está en uso');
         e.status = 409;
         throw e;
@@ -240,9 +470,11 @@ module.exports = {
     normalizeIncomingCode,
     randomCode,
     generateUniqueRandomCode,
+    ensureInfluencerHasProfileShortCode,
     computeDiscountPctFromPromotion,
     resolveActiveNormalizedCode,
     serializeResolvePayload,
     createRegistryEntry,
     isValidAlphabetPiece,
+    getInfluencerPromotionsCatalogByShortCode,
 };

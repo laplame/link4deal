@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle, LogOut } from 'lucide-react';
+import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle, LogOut, Search } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import AdminAccessModal from '../components/AdminAccessModal';
 import CartIcon from '../components/CartIcon';
@@ -422,6 +422,118 @@ interface Product {
     chainLocations?: ReturnType<typeof normalizeChainBranchesFromApi>;
 }
 
+function mapPromoDocsToLandingProducts(docs: unknown[]): Product[] {
+    return (Array.isArray(docs) ? docs : []).map((promo: Record<string, any>) => {
+        const originalPrice = promo.originalPrice || 0;
+        const currentPrice = promo.currentPrice || 0;
+        const discountPercentage =
+            promo.discountPercentage ||
+            (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+
+        const validUntil = new Date(promo.validUntil || Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const now = new Date();
+        const diffTime = validUntil.getTime() - now.getTime();
+        const expiresIn = Math.ceil(diffTime / (1000 * 60 * 60));
+
+        const categoryMap: { [key: string]: string } = {
+            electronics: 'electronicos',
+            fashion: 'moda',
+            sports: 'deportes',
+            beauty: 'belleza',
+            home: 'hogar',
+            books: 'libros',
+            food: 'comida',
+            other: 'otros',
+        };
+
+        return {
+            id: String(promo._id ?? promo.id ?? ''),
+            name: promo.title || promo.productName || 'Sin título',
+            price: currentPrice,
+            originalPrice: originalPrice > 0 ? originalPrice : undefined,
+            currency: promo.currency || 'USD',
+            image: getPromotionImageUrl(promo.images),
+            offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
+            category: categoryMap[promo.category] || promo.category || 'otros',
+            brand: promo.brand || 'Sin marca',
+            rating: 4.5,
+            reviewCount: promo.views || 0,
+            stock:
+                promo.totalQuantity != null
+                    ? Math.max(0, (promo.totalQuantity || 0) - (promo.conversions || 0))
+                    : 999,
+            location: promo.storeLocation?.city || promo.storeLocation?.address || 'CDMX',
+            shipping: 'Envío disponible',
+            warranty: 'Garantía incluida',
+            tags: promo.tags?.slice(0, 4) || ['Oferta', 'Promoción'],
+            description: promo.description || 'Promoción especial disponible',
+            features: promo.tags?.slice(0, 5) || [],
+            seller: {
+                name: promo.storeName || promo.brand || 'Tienda',
+                rating: 4.5,
+                verified: true,
+            },
+            specifications: {
+                Categoría: promo.category,
+                Marca: promo.brand,
+                Descuento: `${discountPercentage}%`,
+            },
+            smartContract: {
+                address: '0x0000000000000000000000000000000000000000',
+                network: 'Ethereum',
+                tokenStandard: 'ERC-777',
+                blockchainExplorer: 'https://etherscan.io',
+            },
+            isHotOffer: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot',
+            hotness: promo.hotness || (promo.isHotOffer ? 'hot' : undefined),
+            expiresIn: expiresIn > 0 ? expiresIn : undefined,
+            storeLocation: promo.storeLocation?.coordinates
+                ? {
+                      latitude: promo.storeLocation.coordinates.latitude,
+                      longitude: promo.storeLocation.coordinates.longitude,
+                      address: promo.storeLocation.address || '',
+                      storeName: promo.storeName || '',
+                  }
+                : undefined,
+            distance: undefined,
+            activateByGps: !!(promo.activateByGps || promo.gpsActivationEnabled),
+            gpsRadiusMeters:
+                typeof promo.gpsRadiusMeters === 'number'
+                    ? promo.gpsRadiusMeters
+                    : typeof promo.locationRadiusMeters === 'number'
+                      ? promo.locationRadiusMeters
+                      : 500,
+            isChainStore: !!promo.isChainStore,
+            chainLocations: normalizeChainBranchesFromApi(promo.chainLocations),
+        };
+    });
+}
+
+function normalizeShortCodeInput(raw: string): string {
+    const s = String(raw || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[\s_-]+/g, '')
+        .replace(/[^0-9A-Z]/g, '');
+    return s.length >= 6 && s.length <= 16 ? s : '';
+}
+
+function productMatchesTextQuery(p: Product, q: string): boolean {
+    if (!q) return true;
+    const hay = [
+        p.name,
+        p.brand,
+        p.category,
+        p.description,
+        ...(p.tags || []),
+        ...(p.features || []),
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+    return hay.includes(q);
+}
+
 export default function LandingPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -431,16 +543,24 @@ export default function LandingPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoadingProducts, setIsLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
+    const [promoSearchQuery, setPromoSearchQuery] = useState('');
+    /** Normalizado del último código con el que se cargó la lista desde GET /promotions/active?shortCode= */
+    const [creatorCodeFilterNorm, setCreatorCodeFilterNorm] = useState<string | null>(null);
+    const [shortCodeFilterLabel, setShortCodeFilterLabel] = useState<string | null>(null);
+    const [catalogSearchLoading, setCatalogSearchLoading] = useState(false);
+    const [catalogSearchMessage, setCatalogSearchMessage] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { addItem } = useCart();
     const { user, isAuthenticated, logout } = useAuth();
 
-    // Cargar promociones desde la API
+    const reloadFeaturedRef = useRef<() => Promise<void>>(async () => {});
+
+    // Cargar promociones desde la API (portada sin filtro)
     useEffect(() => {
         const fetchPromotions = async () => {
             setIsLoadingProducts(true);
             setProductsError(null);
-            
+
             try {
                 const response = await fetch('/api/promotions/active?limit=50&page=1');
                 const contentType = response.headers.get('content-type') || '';
@@ -467,96 +587,9 @@ export default function LandingPage() {
                 }
 
                 const docs = Array.isArray(data?.data?.docs) ? data.data.docs : Array.isArray(data?.docs) ? data.docs : [];
-                if (data.success && docs.length > 0) {
-                    // Transformar promociones de la API al formato de ProductCard
-                    const transformedProducts: Product[] = docs.map((promo: any) => {
-                        // Calcular descuento
-                        const originalPrice = promo.originalPrice || 0;
-                        const currentPrice = promo.currentPrice || 0;
-                        const discountPercentage = promo.discountPercentage || 
-                            (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
-                        
-                        // Calcular días/horas restantes
-                        const validUntil = new Date(promo.validUntil || Date.now() + 7 * 24 * 60 * 60 * 1000);
-                        const now = new Date();
-                        const diffTime = validUntil.getTime() - now.getTime();
-                        const expiresIn = Math.ceil(diffTime / (1000 * 60 * 60)); // en horas
-                        
-                        // Mapeo de categorías
-                        const categoryMap: { [key: string]: string } = {
-                            'electronics': 'electronicos',
-                            'fashion': 'moda',
-                            'sports': 'deportes',
-                            'beauty': 'belleza',
-                            'home': 'hogar',
-                            'books': 'libros',
-                            'food': 'comida',
-                            'other': 'otros'
-                        };
-
-                        return {
-                            // id = promotionId para CouponRequestForm y redirect (mismo valor que en promotion-details)
-                            id: promo._id || promo.id,
-                            name: promo.title || promo.productName || 'Sin título',
-                            price: currentPrice,
-                            originalPrice: originalPrice > 0 ? originalPrice : undefined,
-                            currency: promo.currency || 'USD',
-                            image: getPromotionImageUrl(promo.images),
-                            offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
-                            category: categoryMap[promo.category] || promo.category || 'otros',
-                            brand: promo.brand || 'Sin marca',
-                            rating: 4.5, // Valor por defecto
-                            reviewCount: promo.views || 0,
-                            stock: promo.totalQuantity != null
-                                ? Math.max(0, (promo.totalQuantity || 0) - (promo.conversions || 0))
-                                : 999,
-                            location: promo.storeLocation?.city || promo.storeLocation?.address || 'CDMX',
-                            shipping: 'Envío disponible',
-                            warranty: 'Garantía incluida',
-                            tags: promo.tags?.slice(0, 4) || ['Oferta', 'Promoción'],
-                            description: promo.description || 'Promoción especial disponible',
-                            features: promo.tags?.slice(0, 5) || [],
-                            seller: {
-                                name: promo.storeName || promo.brand || 'Tienda',
-                                rating: 4.5,
-                                verified: true
-                            },
-                            specifications: {
-                                'Categoría': promo.category,
-                                'Marca': promo.brand,
-                                'Descuento': `${discountPercentage}%`
-                            },
-                            smartContract: {
-                                address: '0x0000000000000000000000000000000000000000',
-                                network: 'Ethereum',
-                                tokenStandard: 'ERC-777',
-                                blockchainExplorer: 'https://etherscan.io'
-                            },
-                            isHotOffer: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot',
-                            hotness: promo.hotness || (promo.isHotOffer ? 'hot' : undefined),
-                            expiresIn: expiresIn > 0 ? expiresIn : undefined,
-                            storeLocation: promo.storeLocation?.coordinates ? {
-                                latitude: promo.storeLocation.coordinates.latitude,
-                                longitude: promo.storeLocation.coordinates.longitude,
-                                address: promo.storeLocation.address || '',
-                                storeName: promo.storeName || ''
-                            } : undefined,
-                            distance: undefined,
-                            activateByGps: !!(promo.activateByGps || promo.gpsActivationEnabled),
-                            gpsRadiusMeters:
-                                typeof promo.gpsRadiusMeters === 'number'
-                                    ? promo.gpsRadiusMeters
-                                    : typeof promo.locationRadiusMeters === 'number'
-                                      ? promo.locationRadiusMeters
-                                      : 500,
-                            isChainStore: !!promo.isChainStore,
-                            chainLocations: normalizeChainBranchesFromApi(promo.chainLocations)
-                        };
-                    });
-                    
-                    setProducts(transformedProducts);
+                if (data.success) {
+                    setProducts(mapPromoDocsToLandingProducts(docs));
                 } else {
-                    // Solo mostramos datos de la API; si no hay promociones, lista vacía
                     setProducts([]);
                 }
             } catch (error: any) {
@@ -574,8 +607,126 @@ export default function LandingPage() {
             }
         };
 
-        fetchPromotions();
+        reloadFeaturedRef.current = fetchPromotions;
+        void fetchPromotions();
     }, []);
+
+    const filteredProducts = useMemo(() => {
+        const qRaw = promoSearchQuery.trim().toLowerCase();
+        const codeNorm = normalizeShortCodeInput(promoSearchQuery);
+        const qForText =
+            creatorCodeFilterNorm &&
+            codeNorm &&
+            codeNorm === creatorCodeFilterNorm &&
+            qRaw === codeNorm.toLowerCase()
+                ? ''
+                : qRaw;
+
+        const list = products;
+        if (!qForText) return list;
+        return list.filter((p) => productMatchesTextQuery(p, qForText));
+    }, [products, promoSearchQuery, creatorCodeFilterNorm]);
+
+    const resetShortCodeIdsOnly = () => {
+        setShortCodeFilterLabel(null);
+        setCreatorCodeFilterNorm(null);
+    };
+
+    const clearShortCodeFilter = () => {
+        resetShortCodeIdsOnly();
+        setCatalogSearchMessage(null);
+        setPromoSearchQuery('');
+        void reloadFeaturedRef.current();
+    };
+
+    const runShortCodeCatalogSearch = async () => {
+        const norm = normalizeShortCodeInput(promoSearchQuery);
+        if (!norm) {
+            resetShortCodeIdsOnly();
+            setCatalogSearchMessage(
+                'Para buscar por código de creador o campaña usa 6–16 caracteres (letras y números), luego pulsa el botón o Enter.'
+            );
+            return;
+        }
+        setCatalogSearchLoading(true);
+        setCatalogSearchMessage(null);
+        try {
+            const res = await fetch(
+                `/api/promotions/active?shortCode=${encodeURIComponent(norm)}&limit=50&page=1`
+            );
+            const contentType = res.headers.get('content-type') || '';
+            const text = await res.text();
+            let data: {
+                success?: boolean;
+                data?: {
+                    docs?: unknown[];
+                    shortCodeMeta?: {
+                        lookupCode?: string;
+                        resolvedVia?: string;
+                        influencer?: { username?: string | null; name?: string | null };
+                        catalogPromotionCount?: number;
+                        activeMatchingCount?: number;
+                    };
+                };
+                message?: string;
+            };
+            try {
+                if (!contentType.includes('application/json')) {
+                    throw new Error('API_NO_JSON');
+                }
+                data = JSON.parse(text);
+            } catch {
+                setCatalogSearchMessage('Respuesta inválida del servidor.');
+                resetShortCodeIdsOnly();
+                return;
+            }
+
+            if (res.status === 429) {
+                setCatalogSearchMessage('Demasiadas búsquedas. Espera un momento e inténtalo de nuevo.');
+                resetShortCodeIdsOnly();
+                return;
+            }
+            if (res.status === 400) {
+                setCatalogSearchMessage(data?.message || 'Código no válido.');
+                resetShortCodeIdsOnly();
+                return;
+            }
+            if (res.status === 404) {
+                setCatalogSearchMessage(data?.message || 'No encontramos un creador con ese código.');
+                resetShortCodeIdsOnly();
+                return;
+            }
+            if (!res.ok) {
+                setCatalogSearchMessage(data?.message || 'No se pudieron cargar las promociones.');
+                resetShortCodeIdsOnly();
+                return;
+            }
+
+            const docs = Array.isArray(data?.data?.docs) ? data.data.docs : [];
+            const meta = data.data?.shortCodeMeta;
+            setProducts(mapPromoDocsToLandingProducts(data.success ? docs : []));
+            setCreatorCodeFilterNorm(norm);
+            setShortCodeFilterLabel(
+                meta?.influencer?.username
+                    ? `@${meta.influencer.username}`
+                    : meta?.influencer?.name || norm
+            );
+            const nActive = docs.length;
+            const nCat = meta?.catalogPromotionCount ?? 0;
+            setCatalogSearchMessage(
+                nActive === 0
+                    ? nCat === 0
+                        ? 'Código resuelto: no hay campañas en el catálogo de códigos cortos para este literal.'
+                        : `Hay ${nCat} campaña(s) en catálogo, pero ninguna está activa y vigente ahora mismo.`
+                    : `${nActive} promoción(es) activa(s) del creador. Puedes acotar con texto (título, marca…).`
+            );
+        } catch {
+            setCatalogSearchMessage('Error de red al buscar el código.');
+            resetShortCodeIdsOnly();
+        } finally {
+            setCatalogSearchLoading(false);
+        }
+    };
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -1059,24 +1210,155 @@ export default function LandingPage() {
                                     </Link>
                                 </div>
                             </div>
-                            <span className="text-sm text-gray-500 shrink-0">
-                                {products.length} ofertas desde la API
+                            <span className="text-sm text-gray-500 shrink-0 text-right">
+                                {filteredProducts.length === products.length
+                                    ? `${products.length} ofertas desde la API`
+                                    : `${filteredProducts.length} mostradas · ${products.length} en portada`}
                             </span>
                         </div>
                         {products.length > 0 ? (
-                            <div className="columns-1 md:columns-2 xl:columns-3 gap-8 [column-fill:_balance]">
-                                {products.map((product, index) => (
-                                    <div key={product.id} className="break-inside-avoid mb-8">
-                                        <ProductCard
-                                            product={product}
-                                            onAddToCart={handleAddToCart}
-                                            onAddToWishlist={handleAddToWishlist}
-                                            onViewDetails={handleViewDetails}
-                                            masonryTier={masonryTierFromId(product.id, index)}
-                                        />
+                            <>
+                                <div className="mb-8 rounded-xl border border-gray-200 bg-white/90 p-4 shadow-sm">
+                                    <label htmlFor="landing-promo-search" className="sr-only">
+                                        Buscar en promociones activas
+                                    </label>
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                                        <div className="relative min-w-0 flex-1">
+                                            <Search
+                                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                                                aria-hidden
+                                            />
+                                            <input
+                                                id="landing-promo-search"
+                                                type="search"
+                                                autoComplete="off"
+                                                value={promoSearchQuery}
+                                                onChange={(e) => setPromoSearchQuery(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        void runShortCodeCatalogSearch();
+                                                    }
+                                                }}
+                                                placeholder="Buscar por título, marca… o código corto del creador (6–16 caracteres + Enter)"
+                                                className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 shadow-inner outline-none ring-purple-500/30 placeholder:text-gray-400 focus:border-purple-400 focus:ring-2"
+                                            />
+                                            {promoSearchQuery ? (
+                                                <button
+                                                    type="button"
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                                    aria-label="Limpiar búsqueda"
+                                                    onClick={() => {
+                                                        setPromoSearchQuery('');
+                                                        clearShortCodeFilter();
+                                                    }}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={catalogSearchLoading}
+                                            onClick={() => void runShortCodeCatalogSearch()}
+                                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {catalogSearchLoading ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                            ) : (
+                                                <Search className="h-4 w-4" aria-hidden />
+                                            )}
+                                            Por código creador
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        El texto filtra al instante sobre la lista actual. Con código alfanumérico
+                                        (6–16), Enter o «Por código creador» llama a{' '}
+                                        <code className="rounded bg-gray-100 px-1 text-xs">
+                                            GET /api/promotions/active?shortCode=…
+                                        </code>{' '}
+                                        y sustituye la lista por las promociones activas y vigentes de ese creador.
+                                    </p>
+                                    {shortCodeFilterLabel ? (
+                                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-900">
+                                                Creador: {shortCodeFilterLabel}
+                                                <button
+                                                    type="button"
+                                                    onClick={clearShortCodeFilter}
+                                                    className="ml-1 rounded-full p-0.5 hover:bg-purple-200/80"
+                                                    aria-label="Quitar filtro por creador"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            </span>
+                                            <Link
+                                                to="/marketplace"
+                                                className="text-xs font-medium text-purple-600 hover:text-purple-800"
+                                            >
+                                                Ver marketplace completo
+                                            </Link>
+                                        </div>
+                                    ) : null}
+                                    {catalogSearchMessage ? (
+                                        <p
+                                            className={`mt-2 text-sm ${
+                                                catalogSearchMessage.includes('Filtrando')
+                                                    ? 'text-emerald-800'
+                                                    : 'text-amber-800'
+                                            }`}
+                                        >
+                                            {catalogSearchMessage}
+                                        </p>
+                                    ) : null}
+                                </div>
+                                {filteredProducts.length > 0 ? (
+                                    <div className="columns-1 md:columns-2 xl:columns-3 gap-8 [column-fill:_balance]">
+                                        {filteredProducts.map((product, index) => (
+                                            <div key={product.id} className="break-inside-avoid mb-8">
+                                                <ProductCard
+                                                    product={product}
+                                                    onAddToCart={handleAddToCart}
+                                                    onAddToWishlist={handleAddToWishlist}
+                                                    onViewDetails={handleViewDetails}
+                                                    masonryTier={masonryTierFromId(product.id, index)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 py-12 text-center">
+                                        <p className="mb-2 text-gray-700">
+                                            {creatorCodeFilterNorm && products.length === 0
+                                                ? 'No hay promociones activas y vigentes para las campañas de este código en este momento.'
+                                                : products.length > 0 && filteredProducts.length === 0
+                                                  ? 'Ninguna oferta coincide con el texto de búsqueda. Borra el texto o quita el filtro de creador.'
+                                                  : 'No hay ofertas que coincidan con tu búsqueda o el filtro por creador.'}
+                                        </p>
+                                        <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+                                            <button
+                                                type="button"
+                                                className="font-medium text-purple-600 hover:text-purple-800"
+                                                onClick={() => {
+                                                    setPromoSearchQuery('');
+                                                    clearShortCodeFilter();
+                                                }}
+                                            >
+                                                Limpiar filtros
+                                            </button>
+                                            <span className="text-gray-300" aria-hidden>
+                                                ·
+                                            </span>
+                                            <Link
+                                                to="/marketplace"
+                                                className="font-medium text-purple-600 hover:text-purple-800"
+                                            >
+                                                Ir al marketplace
+                                            </Link>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="text-center py-12">
                                 <p className="text-gray-600 mb-4">No hay promociones disponibles en este momento.</p>

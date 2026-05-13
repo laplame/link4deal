@@ -16,6 +16,7 @@ const {
     buildPublicProfileFieldOverrides,
 } = require('../utils/influencerProfileEnrichment');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
+const { ensureInfluencerHasProfileShortCode } = require('../utils/influencerPromoShortCodes');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -109,6 +110,8 @@ class InfluencerController {
             hot: !!d.hot,
             featured: !!d.featured,
             ugcProfile: toFrontendUgc(d.ugcProfile),
+            /** Código corto propio del influencer (app / buscador si hay INFLUENCER_PROFILE_SHORT_CODE_DEFAULT_PROMOTION_ID). */
+            profileShortCode: d.profileShortCode ? String(d.profileShortCode).trim() : '',
         };
     }
 
@@ -206,7 +209,9 @@ class InfluencerController {
                 userId: userId || null
             });
             await influencer.save();
-            const doc = influencer.toObject();
+            await ensureInfluencerHasProfileShortCode(String(influencer._id));
+            const docFresh = await Influencer.findById(influencer._id).lean();
+            const doc = docFresh || influencer.toObject();
             queueEnsurePromoShortCodesForInfluencer(String(doc._id || influencer._id), {
                 includeEnvDefaults: true,
             });
@@ -315,7 +320,11 @@ class InfluencerController {
                 });
             }
 
-            let data = this.toFrontendFormat({ toObject: () => doc });
+            await ensureInfluencerHasProfileShortCode(String(doc._id));
+            const docWithCode =
+                (await Influencer.findById(doc._id).populate('userId', 'firstName lastName email').lean()) || doc;
+
+            let data = this.toFrontendFormat({ toObject: () => docWithCode });
             if (this.isMongoConnected()) {
                 try {
                     const enriched = await buildPublicProfileFieldOverrides(String(doc._id), data);
@@ -368,7 +377,11 @@ class InfluencerController {
                 });
             }
 
-            let data = this.toFrontendFormat({ toObject: () => doc });
+            await ensureInfluencerHasProfileShortCode(id);
+            const docWithCode =
+                (await Influencer.findById(id).populate('userId', 'firstName lastName email').lean()) || doc;
+
+            let data = this.toFrontendFormat({ toObject: () => docWithCode });
             if (this.isMongoConnected()) {
                 try {
                     const enriched = await buildPublicProfileFieldOverrides(id, data);
@@ -460,7 +473,13 @@ class InfluencerController {
                     message: 'No tienes perfil de influencer vinculado'
                 });
             }
-            let data = this.toFrontendFormat({ toObject: () => doc });
+            await ensureInfluencerHasProfileShortCode(doc._id.toString());
+            const docWithCode =
+                (await Influencer.findOne({ userId: user._id })
+                    .populate('userId', 'firstName lastName email')
+                    .lean()) || doc;
+
+            let data = this.toFrontendFormat({ toObject: () => docWithCode });
             if (this.isMongoConnected()) {
                 try {
                     const enriched = await buildPublicProfileFieldOverrides(doc._id.toString(), data);
@@ -738,9 +757,12 @@ class InfluencerController {
                 };
             });
 
+            const influencerProfileShortCode = await ensureInfluencerHasProfileShortCode(influencerId);
+
             return res.json({
                 success: true,
                 data,
+                influencerProfileShortCode: influencerProfileShortCode || null,
                 message: 'Códigos cortos de campaña',
             });
         } catch (error) {

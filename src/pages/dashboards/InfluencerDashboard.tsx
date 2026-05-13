@@ -65,6 +65,7 @@ interface Influencer {
         youtube?: string;
         twitter?: string;
     };
+    profileShortCode?: string;
 }
 
 interface Campaign {
@@ -168,6 +169,7 @@ export default function InfluencerDashboard() {
                             rating: inf.rating ?? 0,
                             location: inf.location || '',
                             socialMedia: inf.socialMedia || {},
+                            profileShortCode: inf.profileShortCode || '',
                         };
                         setInfluencers([asDashboardInfluencer]);
                         setMeUgc(inf.ugcProfile ?? { enabled: false, headline: '', intro: '', quotes: [], videos: [] });
@@ -231,6 +233,7 @@ export default function InfluencerDashboard() {
                             rating: inf.rating ?? 0,
                             location: inf.location || '',
                             socialMedia: inf.socialMedia || {},
+                            profileShortCode: inf.profileShortCode || '',
                         })) as Influencer[];
                         setInfluencers(list);
                     } else {
@@ -825,6 +828,11 @@ export default function InfluencerDashboard() {
                             <Eye className="w-8 h-8 text-cyan-400 mb-3" />
                             <p className="font-semibold text-white">Ver mi perfil público</p>
                             <p className="text-sm text-gray-400 mt-1">Cómo te ven las marcas</p>
+                            {influencers[0]?.profileShortCode ? (
+                                <p className="text-xs font-mono text-cyan-200/90 mt-2">
+                                    Código corto: {influencers[0].profileShortCode}
+                                </p>
+                            ) : null}
                         </Link>
                     )}
                 </div>

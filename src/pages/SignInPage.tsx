@@ -34,9 +34,11 @@ export default function SignInPage() {
             const u = data?.user;
             const dest = u?.isSuperAdmin
                 ? '/admin'
-                : u?.primaryRole === 'influencer'
-                  ? '/admin/influencers'
-                  : '/dashboard';
+                : u?.isPlatformSuperuser
+                  ? '/dashboard/suite'
+                  : u?.primaryRole === 'influencer'
+                    ? '/admin/influencers'
+                    : '/dashboard';
             navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión');

@@ -65,7 +65,7 @@ export default function SignUpPage() {
             : 'user';
         setIsLoading(true);
         try {
-            await register({
+            const res = await register({
                 ...(email ? { email } : {}),
                 ...(phone ? { phone: formData.phone.trim() } : {}),
                 password: formData.password,
@@ -73,7 +73,15 @@ export default function SignUpPage() {
                 lastName: formData.lastName.trim(),
                 primaryRole
             });
-            navigate(primaryRole === 'influencer' ? '/admin/influencers' : '/dashboard', { replace: true });
+            const u = res.user;
+            const dest = u.isSuperAdmin
+                ? '/admin'
+                : u.isPlatformSuperuser
+                  ? '/dashboard/suite'
+                  : primaryRole === 'influencer'
+                    ? '/admin/influencers'
+                    : '/dashboard';
+            navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al crear la cuenta');
         } finally {

@@ -11,7 +11,7 @@ const {
     getQrMetaConfig
 } = require('../utils/qrCrypto');
 const { parseLatLngFromUnknown } = require('../utils/geoParseCoupon');
-const { partitionDiscountQrDocsToActivity } = require('../utils/couponActivityRow');
+const { mapDocsToSortedActivityRows } = require('../utils/couponActivityRow');
 const { parseQrRedeemRetentionDays, qrRedemptionsRetentionHintEs } = require('../utils/qrRedemptionsEnv');
 const { computeLuxaeUsdStatsFromRedemptions } = require('../utils/redemptionLuxaeStats');
 const { buildRedeemedTokenFilter, buildDashboardTokenFilter } = require('../utils/discountQrPayloadMatch');
@@ -23,7 +23,10 @@ const {
     serializeResolvePayload,
     createRegistryEntry,
     computeDiscountPctFromPromotion,
+    getInfluencerPromotionsCatalogByShortCode,
 } = require('../utils/influencerPromoShortCodes');
+const { runLuxaeSettlementForRedemption, isLuxaeSettlementWebhookConfigured } = require('../utils/luxaeSettlementWebhook');
+const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
@@ -265,7 +268,27 @@ function formatRedemptionRow(doc) {
         redeemGpsAccuracyMeters: typeof r.redeemGpsAccuracyMeters === 'number' ? r.redeemGpsAccuracyMeters : null,
         idempotencyKey: r.idempotencyKey != null && String(r.idempotencyKey).trim() !== '' ? String(r.idempotencyKey) : null,
         idempotencyShopId: r.idempotencyShopId != null ? String(r.idempotencyShopId) : null,
-        idempotencyProductId: r.idempotencyProductId != null ? String(r.idempotencyProductId) : null
+        idempotencyProductId: r.idempotencyProductId != null ? String(r.idempotencyProductId) : null,
+        /** POST webhook tokens LUXAE (ver `LUXAE_SETTLEMENT_WEBHOOK_URL`). */
+        luxaeTokenSettlement: extractLuxaeTokenSettlement(r),
+    };
+}
+
+/**
+ * @param {object} redeemedBy
+ * @returns {{ attemptedAt: string; ok: boolean; httpStatus: number | null; error: string } | null}
+ */
+function extractLuxaeTokenSettlement(redeemedBy) {
+    if (!redeemedBy || typeof redeemedBy !== 'object') return null;
+    const meta = redeemedBy.metadata;
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+    const s = meta.luxaeSettlement;
+    if (!s || typeof s !== 'object') return null;
+    return {
+        attemptedAt: typeof s.attemptedAt === 'string' ? s.attemptedAt : '',
+        ok: s.ok === true,
+        httpStatus: typeof s.httpStatus === 'number' && Number.isFinite(s.httpStatus) ? s.httpStatus : null,
+        error: typeof s.error === 'string' ? s.error : '',
     };
 }
 
@@ -697,6 +720,22 @@ async function createCouponToken(payloadInput) {
         usedAt: null
     });
 
+    const infIdForCodes =
+        enrichedPayload.influencerId != null ? String(enrichedPayload.influencerId).trim() : '';
+    const promoIdForCodes =
+        enrichedPayload.promotionId != null ? String(enrichedPayload.promotionId).trim() : '';
+    if (
+        infIdForCodes &&
+        promoIdForCodes &&
+        mongoose.Types.ObjectId.isValid(infIdForCodes) &&
+        mongoose.Types.ObjectId.isValid(promoIdForCodes)
+    ) {
+        queueEnsurePromoShortCodesForInfluencer(infIdForCodes, {
+            extraPromotionIds: [promoIdForCodes],
+            includeEnvDefaults: false,
+        });
+    }
+
     const qrValue = createReferenceQrToken(tokenId, discountPct);
     return {
         qrValue,
@@ -871,6 +910,29 @@ router.post('/codes/registry', shortCodesRegistryLimiter, async (req, res) => {
     } catch (e) {
         const st = typeof e.status === 'number' ? e.status : 500;
         return res.status(st).json({ ok: false, message: e.message || 'Error al registrar código' });
+    }
+});
+
+// GET /api/discount-qr/codes/:code/promotions — catálogo: todas las campañas con código corto del influencer (entrada: cualquier código promo activo o profileShortCode).
+router.get('/codes/:code/promotions', shortCodesLookupLimiter, async (req, res) => {
+    try {
+        const norm = normalizeIncomingCode(req.params.code);
+        if (!norm) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Código inválido (usa 6–16 caracteres alfanuméricos).',
+            });
+        }
+        const catalog = await getInfluencerPromotionsCatalogByShortCode(norm);
+        if (!catalog) {
+            return res.status(404).json({
+                ok: false,
+                message: 'Código no encontrado o no está asociado a un influencer',
+            });
+        }
+        return res.json(catalog);
+    } catch (e) {
+        return res.status(500).json({ ok: false, message: e.message || 'Error al cargar promociones' });
     }
 });
 
@@ -1282,7 +1344,20 @@ router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
             await DiscountQrToken.updateOne({ tokenId: redeemed.tokenId }, { $set: { expiresAt: newExp } });
         }
 
-        return res.json(buildRedeemSuccessPayload(redeemed));
+        const settlementQueued = isLuxaeSettlementWebhookConfigured();
+        if (settlementQueued) {
+            const plain = redeemed.toObject ? redeemed.toObject() : redeemed;
+            setImmediate(() => {
+                void runLuxaeSettlementForRedemption(plain).catch((e) => {
+                    console.warn('[luxaeSettlement] async:', e.message);
+                });
+            });
+        }
+
+        return res.json({
+            ...buildRedeemSuccessPayload(redeemed),
+            luxaeSettlementWebhookQueued: settlementQueued,
+        });
     } catch (error) {
         return res.status(400).json({
             ok: false,
@@ -1369,6 +1444,7 @@ router.get('/redemptions/recent', redemptionsRecentListLimiter, async (req, res)
 });
 
 // GET /api/discount-qr/coupons/dashboard — abiertos / redimidos / caducados (panel global, mismos filtros que redemptions/recent).
+// Por estado se pide hasta `limit` filas cada uno (p. ej. los N canjes más recientes no se pierden aunque haya muchos cupones nuevos).
 // Query: limit (default 80, max 200), promotionId, shopId. Auth opcional: REDEMPTIONS_LIST_API_KEY + x-redemptions-api-key.
 router.get('/coupons/dashboard', redemptionsRecentListLimiter, async (req, res) => {
     try {
@@ -1381,17 +1457,54 @@ router.get('/coupons/dashboard', redemptionsRecentListLimiter, async (req, res) 
         }
 
         const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '80'), 10) || 80));
-        const filter = buildDashboardTokenFilter(req.query || {});
+        const baseFilter = buildDashboardTokenFilter(req.query || {});
+        const selectFields =
+            'tokenId payload expiresAt createdAt lastVerifiedAt usedAt redeemedBy verifyShopId verifyLatitude verifyLongitude verifyLocationAccuracyM';
+        const now = new Date();
 
-        const docs = await DiscountQrToken.find(filter)
-            .sort({ createdAt: -1 })
-            .limit(limit)
-            .select(
-                'tokenId payload expiresAt createdAt lastVerifiedAt usedAt redeemedBy verifyShopId verifyLatitude verifyLongitude verifyLocationAccuracyM'
-            )
-            .lean();
+        const redeemedStatus = {
+            usedAt: { $exists: true, $ne: null, $type: 'date' },
+        };
+        const openStatus = {
+            $or: [{ usedAt: null }, { usedAt: { $exists: false } }],
+            expiresAt: { $gt: now },
+        };
+        const expiredStatus = {
+            $or: [{ usedAt: null }, { usedAt: { $exists: false } }],
+            expiresAt: { $lte: now },
+        };
 
-        const pack = partitionDiscountQrDocsToActivity(docs);
+        const redeemedFind =
+            Object.keys(baseFilter).length === 0
+                ? redeemedStatus
+                : { $and: [baseFilter, redeemedStatus] };
+        const openFind = Object.keys(baseFilter).length === 0 ? openStatus : { $and: [baseFilter, openStatus] };
+        const expiredFind =
+            Object.keys(baseFilter).length === 0 ? expiredStatus : { $and: [baseFilter, expiredStatus] };
+
+        const [redeemedDocs, openDocs, expiredDocs] = await Promise.all([
+            DiscountQrToken.find(redeemedFind)
+                .sort({ usedAt: -1 })
+                .limit(limit)
+                .select(selectFields)
+                .lean(),
+            DiscountQrToken.find(openFind)
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .select(selectFields)
+                .lean(),
+            DiscountQrToken.find(expiredFind)
+                .sort({ expiresAt: -1 })
+                .limit(limit)
+                .select(selectFields)
+                .lean(),
+        ]);
+
+        const pack = {
+            redeemed: mapDocsToSortedActivityRows(redeemedDocs, 'redeemed'),
+            open: mapDocsToSortedActivityRows(openDocs, 'open'),
+            expiredUnused: mapDocsToSortedActivityRows(expiredDocs, 'expiredUnused'),
+        };
         return res.json({
             ok: true,
             success: true,
@@ -1439,6 +1552,7 @@ router.get('/stats/luxae-usd', redemptionsRecentListLimiter, async (req, res) =>
                 retention.kind === 'ok'
                     ? { configured: true, daysAfterRedeem: retention.days }
                     : { configured: false },
+            settlementWebhook: { configured: isLuxaeSettlementWebhookConfigured() },
         });
     } catch (error) {
         return res.status(500).json({

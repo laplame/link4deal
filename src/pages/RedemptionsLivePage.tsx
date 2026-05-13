@@ -26,6 +26,7 @@ import {
   TrendingUp,
   UserCircle,
   Eye,
+  Send,
 } from 'lucide-react';
 import { CouponQrActivitySection, type CouponActivityPack } from '../components/CouponQrActivitySection';
 
@@ -54,6 +55,7 @@ interface LuxaeStatsPayload {
   };
   noteEs?: string;
   qrRedeemRetention?: { configured: boolean; daysAfterRedeem?: number };
+  settlementWebhook?: { configured: boolean };
 }
 
 interface AttributionBreakdownRow {
@@ -144,6 +146,12 @@ export interface RedemptionRow {
   idempotencyKey: string | null;
   idempotencyShopId: string | null;
   idempotencyProductId: string | null;
+  luxaeTokenSettlement?: {
+    attemptedAt: string;
+    ok: boolean;
+    httpStatus: number | null;
+    error: string;
+  } | null;
   /** Del payload del cupón (asignación al crear el QR). */
   influencerId?: string | null;
   influencerName?: string | null;
@@ -176,7 +184,15 @@ function fmtPctLabel(v: number | null | undefined): string {
   return `${Number(v).toFixed(1)}%`;
 }
 
-export function RedemptionCard({ row, initiallyOpen }: { row: RedemptionRow; initiallyOpen: boolean }) {
+export function RedemptionCard({
+  row,
+  initiallyOpen,
+  settlementWebhookConfigured = false,
+}: {
+  row: RedemptionRow;
+  initiallyOpen: boolean;
+  settlementWebhookConfigured?: boolean;
+}) {
   const [open, setOpen] = useState(initiallyOpen);
   const mapsUrl =
     row.location != null
@@ -253,6 +269,31 @@ export function RedemptionCard({ row, initiallyOpen }: { row: RedemptionRow; ini
                 title={row.idempotencyKey}
               >
                 idem {shortenId(row.idempotencyKey, 8, 6)}
+              </span>
+            )}
+            {row.luxaeTokenSettlement != null && (
+              <span
+                className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${
+                  row.luxaeTokenSettlement.ok
+                    ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/35'
+                    : 'bg-rose-500/15 text-rose-200 border-rose-500/35'
+                }`}
+                title={
+                  row.luxaeTokenSettlement.error
+                    ? row.luxaeTokenSettlement.error
+                    : row.luxaeTokenSettlement.attemptedAt || ''
+                }
+              >
+                POST tokens: {row.luxaeTokenSettlement.ok ? 'OK' : 'fallo'}
+                {row.luxaeTokenSettlement.httpStatus != null ? ` · HTTP ${row.luxaeTokenSettlement.httpStatus}` : ''}
+              </span>
+            )}
+            {row.luxaeTokenSettlement == null && settlementWebhookConfigured && (
+              <span
+                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-gray-600/25 text-gray-400 border border-white/10"
+                title="Canje anterior al webhook, notificación en curso o persistencia pendiente; espera el auto-refresh"
+              >
+                POST tokens: sin registro
               </span>
             )}
             {row.promotionId && (
@@ -645,6 +686,10 @@ export default function RedemptionsLivePage() {
                       : undefined,
                 }
               : undefined,
+          settlementWebhook:
+            data.settlementWebhook && typeof data.settlementWebhook === 'object'
+              ? { configured: Boolean(data.settlementWebhook.configured) }
+              : { configured: false },
         });
       } else {
         setLuxaeStats(null);
@@ -1110,6 +1155,19 @@ export default function RedemptionsLivePage() {
                   <span className="text-lg font-semibold text-violet-200/90">{luxaeStats.currency}</span>
                 </p>
                 <p className="text-[10px] text-gray-600 mt-1">Etiqueta USDLXE = suma en USD de unidades LUXAE contabilizadas.</p>
+                {luxaeStats.settlementWebhook?.configured ? (
+                  <p className="text-[10px] text-emerald-200/90 mt-2 max-w-xl leading-relaxed">
+                    <Send className="inline h-3 w-3 mr-1 align-text-bottom opacity-90" aria-hidden />
+                    <strong>POST tokens (webhook):</strong> activo (<code className="bg-black/35 px-1 rounded">LUXAE_SETTLEMENT_WEBHOOK_URL</code>). Tras cada{' '}
+                    <code className="bg-black/35 px-1 rounded">POST /api/discount-qr/redeem</code> el servidor envía un POST asíncrono; en cada cupón abajo verás{' '}
+                    <strong>OK / error HTTP</strong> al refrescar (10s).
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-500 mt-2 max-w-xl leading-relaxed">
+                    <strong>POST tokens (webhook):</strong> no configurado. El canje solo persiste en MongoDB; la creación de tokens LUXAE on-chain u otro ledger debe hacerse con un servicio externo o configurando{' '}
+                    <code className="bg-black/35 px-1 rounded text-gray-400">LUXAE_SETTLEMENT_WEBHOOK_URL</code>.
+                  </p>
+                )}
               </div>
               <div className="text-sm text-gray-400 space-y-1">
                 <p>
@@ -1250,6 +1308,7 @@ export default function RedemptionsLivePage() {
                   key={`${row.couponId}-${row.usedAt}`}
                   row={row}
                   initiallyOpen={idx === 0 && rows.length === 1}
+                  settlementWebhookConfigured={Boolean(luxaeStats?.settlementWebhook?.configured)}
                 />
               ))}
             </div>

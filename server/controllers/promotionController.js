@@ -9,6 +9,7 @@ const { getPromotionUploadDir } = require('../middleware/upload');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
 const { parseChainLocations } = require('../utils/chainStore');
+const { normalizeIncomingCode, getInfluencerPromotionsCatalogByShortCode } = require('../utils/influencerPromoShortCodes');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -900,8 +901,11 @@ class PromotionController {
      * GET /api/promotions/active
      * Lista solo promociones activas y vigentes (validUntil >= ahora en el servidor).
      * El cálculo de vigencia se hace en el servidor para evitar desfases por zona horaria en el cliente.
-     * Respuesta: { success, data: { docs, totalDocs, ... }, message } con cada doc incluyendo:
-     * - isActive, validUntilISO, daysLeft, timeLeftLabel, displayStatus ('active'|'ending'|'closed').
+     * Query opcional:
+     * - `shortCode` o `creatorShortCode`: código corto (6–16) de campaña o de perfil; limita a promociones
+     *   del catálogo de ese influencer que además cumplan activas + vigentes (misma semántica que
+     *   GET /api/discount-qr/codes/:code/promotions + filtro de negocio).
+     * Respuesta: { success, data: { docs, totalDocs, ..., shortCodeMeta? }, message }
      */
     async getActivePromotions(req, res) {
         try {
@@ -910,19 +914,13 @@ class PromotionController {
                 return res.json(empty);
             }
             const now = new Date();
-            const query = {
+            const baseQuery = {
                 status: 'active',
                 validUntil: { $gte: now }
             };
-            const page = Math.max(1, parseInt(req.query.page) || 1);
-            const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-            const options = {
-                page,
-                limit,
-                sort: { createdAt: -1 },
-                populate: 'seller'
-            };
-            const result = await Promotion.paginate(query, options);
+            const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+            const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
+
             const uLa = parseFloat(req.query.userLat);
             const uLo = parseFloat(req.query.userLng);
             const geoEnrichOpts = {};
@@ -930,8 +928,8 @@ class PromotionController {
                 geoEnrichOpts.userLatitude = uLa;
                 geoEnrichOpts.userLongitude = uLo;
             }
-            const docs = (result.docs || []).map((doc) => {
-                const promo = doc.toObject ? doc.toObject() : doc;
+
+            const mapPromoToActiveClient = (promo) => {
                 const validUntil = promo.validUntil ? new Date(promo.validUntil) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
                 const diffMs = validUntil.getTime() - now.getTime();
                 const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -940,18 +938,108 @@ class PromotionController {
                 let displayStatus = 'active';
                 if (diffDays <= 0) displayStatus = 'closed';
                 else if (diffDays <= 3) displayStatus = 'ending';
-                const timeLeftLabel = diffDays > 0
-                    ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
-                    : diffHours > 0 ? `${diffHours}h ${diffMinutes}m` : `${diffMinutes}m`;
-                return enrichPromotionClientFields({
-                    ...promo,
-                    id: promo._id ? promo._id.toString() : promo.id,
-                    isActive: true,
-                    validUntilISO: validUntil.toISOString(),
-                    daysLeft: Math.max(0, diffDays),
-                    timeLeftLabel,
-                    displayStatus
-                }, geoEnrichOpts);
+                const timeLeftLabel =
+                    diffDays > 0
+                        ? `${diffDays}d ${diffHours}h ${diffMinutes}m`
+                        : diffHours > 0
+                          ? `${diffHours}h ${diffMinutes}m`
+                          : `${diffMinutes}m`;
+                return enrichPromotionClientFields(
+                    {
+                        ...promo,
+                        id: promo._id ? promo._id.toString() : promo.id,
+                        isActive: true,
+                        validUntilISO: validUntil.toISOString(),
+                        daysLeft: Math.max(0, diffDays),
+                        timeLeftLabel,
+                        displayStatus,
+                    },
+                    geoEnrichOpts
+                );
+            };
+
+            const shortParam = req.query.shortCode ?? req.query.creatorShortCode;
+            const hasShort = shortParam != null && String(shortParam).trim() !== '';
+
+            if (hasShort) {
+                const codeNorm = normalizeIncomingCode(String(shortParam));
+                if (!codeNorm) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'shortCode inválido (usa 6–16 caracteres alfanuméricos).',
+                    });
+                }
+                const catalog = await getInfluencerPromotionsCatalogByShortCode(codeNorm);
+                if (!catalog) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Código no encontrado o sin influencer asociado.',
+                    });
+                }
+                const idStrings = [];
+                for (const e of catalog.entries || []) {
+                    const pr = e.promotion;
+                    if (!pr || typeof pr !== 'object') continue;
+                    let id = typeof pr.id === 'string' && pr.id ? pr.id : null;
+                    if (!id && pr._id != null) id = String(pr._id);
+                    if (id && mongoose.Types.ObjectId.isValid(id)) idStrings.push(String(id));
+                }
+                const uniqueStrings = [...new Set(idStrings)];
+                const objectIds = uniqueStrings.map((s) => new mongoose.Types.ObjectId(s));
+
+                const queryByCode =
+                    objectIds.length > 0
+                        ? { ...baseQuery, _id: { $in: objectIds } }
+                        : { ...baseQuery, _id: { $in: [] } };
+
+                const skip = (page - 1) * limit;
+                const [totalDocs, rawDocs] = await Promise.all([
+                    Promotion.countDocuments(queryByCode),
+                    Promotion.find(queryByCode)
+                        .sort({ createdAt: -1 })
+                        .skip(skip)
+                        .limit(limit)
+                        .populate('seller')
+                        .lean(),
+                ]);
+                const docs = rawDocs.map((d) => mapPromoToActiveClient(d));
+                const totalPages = Math.max(1, Math.ceil(totalDocs / limit) || 1);
+
+                return res.json({
+                    success: true,
+                    data: {
+                        docs,
+                        totalDocs,
+                        limit,
+                        page,
+                        totalPages,
+                        hasNextPage: page < totalPages,
+                        hasPrevPage: page > 1,
+                        shortCodeMeta: {
+                            lookupCode: codeNorm,
+                            resolvedVia: catalog.resolvedVia,
+                            influencer: catalog.influencer,
+                            catalogPromotionCount: uniqueStrings.length,
+                            activeMatchingCount: totalDocs,
+                        },
+                    },
+                    message:
+                        uniqueStrings.length === 0
+                            ? 'Código resuelto; el creador no tiene IDs de promoción en catálogo o ninguna cumple filtros activos.'
+                            : 'Promociones activas y vigentes filtradas por código de creador/campaña.',
+                });
+            }
+
+            const options = {
+                page,
+                limit,
+                sort: { createdAt: -1 },
+                populate: 'seller',
+            };
+            const result = await Promotion.paginate(baseQuery, options);
+            const docs = (result.docs || []).map((doc) => {
+                const promo = doc.toObject ? doc.toObject() : doc;
+                return mapPromoToActiveClient(promo);
             });
             return res.json({
                 success: true,
@@ -962,16 +1050,16 @@ class PromotionController {
                     page: result.page ?? page,
                     totalPages: result.totalPages ?? 1,
                     hasNextPage: result.hasNextPage ?? false,
-                    hasPrevPage: result.hasPrevPage ?? false
+                    hasPrevPage: result.hasPrevPage ?? false,
                 },
-                message: 'Promociones activas y vigentes (cálculo de fecha en servidor).'
+                message: 'Promociones activas y vigentes (cálculo de fecha en servidor).',
             });
         } catch (error) {
             console.error('❌ Error getActivePromotions:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al listar promociones activas',
-                error: error.message
+                error: error.message,
             });
         }
     }

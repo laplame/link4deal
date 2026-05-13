@@ -82,6 +82,8 @@ interface Influencer {
   hot: boolean;
   featured: boolean;
   ugcProfile?: UgcProfilePublic;
+  /** Código corto único del influencer (asignado al alta; visible en perfil y buscador si hay promo por defecto). */
+  profileShortCode?: string;
 }
 
 interface PromotionHistory {
@@ -384,6 +386,11 @@ export default function InfluencerProfilePage() {
         if (cancelled) return;
         if (data.success && Array.isArray(data.data)) {
           setPromoShortCodes(data.data as InfluencerPromoShortCodeRow[]);
+          if (typeof data.influencerProfileShortCode === 'string' && data.influencerProfileShortCode.trim()) {
+            setInfluencer((prev) =>
+              prev ? { ...prev, profileShortCode: data.influencerProfileShortCode.trim() } : prev,
+            );
+          }
         } else {
           setPromoShortCodes([]);
         }
@@ -625,6 +632,42 @@ export default function InfluencerProfilePage() {
 
             <div className="flex-1">
               <h1 className="text-4xl font-bold mb-3">{influencer.name}</h1>
+              {influencer.profileShortCode ? (
+                <div className="mb-4 max-w-2xl rounded-xl border border-emerald-400/35 bg-emerald-950/40 px-3 py-2.5 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-emerald-200/95 text-xs font-semibold uppercase tracking-wide mb-1">
+                    <FileCode2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Código corto de perfil
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <code className="text-lg md:text-xl font-mono font-bold tracking-wider text-white shrink-0">
+                      {influencer.profileShortCode}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copyPromoShortCode(influencer.profileShortCode!)}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                      title="Copiar código"
+                    >
+                      {copiedPromoCode === influencer.profileShortCode ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden />
+                          Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 shrink-0" aria-hidden />
+                          Copiar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-emerald-100/85 mt-1.5 leading-relaxed">
+                    Se asigna al registrarte. En la app, el buscador puede resolverlo si el servidor tiene configurada una
+                    promoción por defecto (<code className="rounded bg-black/25 px-1 font-mono text-[11px]">INFLUENCER_PROFILE_SHORT_CODE_DEFAULT_PROMOTION_ID</code>).
+                    Los códigos de campaña (debajo) enlazan una promoción concreta.
+                  </p>
+                </div>
+              ) : null}
               <div className="mb-4 max-w-2xl">
                 <div className="flex items-center gap-2 text-pink-200/95 text-xs font-semibold uppercase tracking-wide mb-1.5">
                   <Megaphone className="w-3.5 h-3.5 shrink-0" aria-hidden />

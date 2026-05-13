@@ -32,6 +32,15 @@ export function MobileMenu({ isOpen, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated, logout, primaryRole } = useAuth();
 
+  const accountHref =
+    user?.isSuperAdmin === true
+      ? '/admin'
+      : user?.isPlatformSuperuser === true
+        ? '/dashboard/suite'
+        : primaryRole === 'influencer'
+          ? '/admin/influencers'
+          : '/dashboard';
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -84,7 +93,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             {isAuthenticated && user ? (
               <>
                 <div className="text-gray-300 text-sm mb-3 px-1">Hola, {user.firstName}</div>
-                <MobileMenuButton to={primaryRole === 'influencer' ? '/admin/influencers' : '/dashboard'} onClick={onClose}>
+                <MobileMenuButton to={accountHref} onClick={onClose}>
                   <span className="flex items-center gap-2">
                     <User className="h-4 w-4" /> Mi cuenta
                   </span>
