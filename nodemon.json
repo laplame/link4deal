@@ -1,0 +1,18 @@
+{
+  "watch": ["server"],
+  "ext": "js,json,cjs",
+  "ignore": [
+    "server/uploads/**",
+    "server/public/**",
+    "server/node_modules/**",
+    "server/**/*.test.js",
+    "logs/**",
+    "data/**"
+  ],
+  "exec": "node server/index.js",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": true,
+  "delay": "500"
+}

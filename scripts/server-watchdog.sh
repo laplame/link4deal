@@ -7,12 +7,12 @@
 #   PORT=8080 ./scripts/server-watchdog.sh
 #   HEALTH_URL=https://damecodigo.com/health ./scripts/server-watchdog.sh
 #
-# Cron (cada 2 minutos):
-#   */2 * * * * cd /ruta/al/link4deal && HEALTH_URL=http://127.0.0.1:3000/health ./scripts/server-watchdog.sh >> logs/watchdog-cron.log 2>&1
+# Cron (cada 2 minutos; puerto = ecosystem.config.cjs, p. ej. 5001):
+#   */2 * * * * cd /home/cto/project/link4deal && ./scripts/server-watchdog.sh >> logs/watchdog-cron.log 2>&1
 #
 # Variables:
 #   HEALTH_URL     URL completa del health (por defecto http://127.0.0.1:$PORT/health)
-#   PORT           Solo si no defines HEALTH_URL (default 3000)
+#   PORT           Solo si no defines HEALTH_URL (default: leído de ecosystem.config.cjs)
 #   PM2_APP_NAME   Nombre en PM2 (default link4deal-backend)
 #   RESTART_CMD    Si está definido, se ejecuta en lugar de pm2 restart (ej: systemctl restart link4deal)
 #   WATCHDOG_TIMEOUT  Segundos para curl (default 8)
@@ -23,7 +23,8 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
-PORT="${PORT:-3000}"
+DEFAULT_BACKEND_PORT="$(node "$ROOT/scripts/read-pm2-backend-port.cjs" 2>/dev/null || echo 5001)"
+PORT="${PORT:-$DEFAULT_BACKEND_PORT}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT}/health}"
 PM2_APP="${PM2_APP_NAME:-link4deal-backend}"
 TIMEOUT="${WATCHDOG_TIMEOUT:-8}"
