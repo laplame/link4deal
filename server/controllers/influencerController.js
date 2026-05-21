@@ -596,7 +596,7 @@ class InfluencerController {
             e.status = 404;
             throw e;
         }
-        const limit = Math.min(120, Math.max(1, parseInt(String(req.query.limit || '60'), 10) || 60));
+        const limit = Math.min(500, Math.max(1, parseInt(String(req.query.limit || '60'), 10) || 60));
         const oid = new mongoose.Types.ObjectId(influencerId);
         const docs = await DiscountQrToken.find({
             $or: [{ 'payload.influencerId': influencerId }, { 'payload.influencerId': oid }],

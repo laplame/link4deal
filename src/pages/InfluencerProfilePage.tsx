@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { SalesAndBidsRealtimeChart, buildSalesAndBidsChartData, hasCouponRedemptionEvidence, chartShowsActivity, type PublicCouponRedemption } from '../components/SalesAndBidsRealtimeChart';
+import {
+  SalesAndBidsRealtimeChart,
+  buildSalesAndBidsChartData,
+  hasCouponRedemptionEvidence,
+  chartShowsActivity,
+  CHART_RANGE_OPTIONS,
+  type ChartAnalyticsRange,
+  type PublicCouponRedemption,
+} from '../components/SalesAndBidsRealtimeChart';
 import { CouponQrActivitySection } from '../components/CouponQrActivitySection';
 import { 
   ArrowLeft,
@@ -41,10 +49,12 @@ import {
   Ticket,
   Megaphone,
   LayoutGrid,
+  ImagePlus,
+  Loader2,
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
-import { apiUrl } from '../utils/apiUrl';
+import { apiUrl, mediaUrl } from '../utils/apiUrl';
 import { InfluencerUgcShowcase, type UgcProfilePublic } from '../components/influencer/InfluencerUgcShowcase';
 
 interface Influencer {
@@ -161,6 +171,7 @@ export default function InfluencerProfilePage() {
   const { influencerSlug } = useParams();
   const { hasRole, isAuthenticated } = useAuth();
   const isInfluencer = hasRole('influencer');
+  const isSuperAdmin = hasRole('super_admin') || hasRole('admin');
   const [influencer, setInfluencer] = useState<Influencer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +189,7 @@ export default function InfluencerProfilePage() {
     expiredUnused: PublicCouponRedemption[];
   } | null>(null);
   const [couponsActivityLoading, setCouponsActivityLoading] = useState(false);
+  const [chartRange, setChartRange] = useState<ChartAnalyticsRange>('7d');
   const [qrPromoSummary, setQrPromoSummary] = useState<{
     rows: QrPromotionSummaryRow[];
     tokensWithoutPromotionId: number;
@@ -187,6 +199,80 @@ export default function InfluencerProfilePage() {
   const [promoShortCodes, setPromoShortCodes] = useState<InfluencerPromoShortCodeRow[]>([]);
   const [promoShortCodesLoading, setPromoShortCodesLoading] = useState(false);
   const [copiedPromoCode, setCopiedPromoCode] = useState<string | null>(null);
+  const [storyGeneratingKey, setStoryGeneratingKey] = useState<string | null>(null);
+  const [storyPreview, setStoryPreview] = useState<{
+    url: string;
+    shortCode: string;
+    discountPercentage: number;
+    title?: string | null;
+  } | null>(null);
+  const [storyError, setStoryError] = useState<string | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSenderName, setContactSenderName] = useState('');
+  const [contactSenderEmail, setContactSenderEmail] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+
+  const isOwnProfile =
+    Boolean(viewerInfluencerId && influencer?.id && viewerInfluencerId === influencer.id);
+
+  const canCreateStory = (isOwnProfile || isSuperAdmin) && isAuthenticated;
+
+  const displayHandle = useMemo(() => {
+    if (!influencer) return '';
+    const u = (influencer.username || '').trim().replace(/^@/, '');
+    if (u) return u;
+    const sm = influencer.socialMedia || {};
+    const pick =
+      (sm.tiktok || '').trim() ||
+      (sm.instagram || '').trim() ||
+      (sm.youtube || '').trim() ||
+      (sm.twitter || '').trim();
+    return pick.replace(/^@/, '');
+  }, [influencer]);
+
+  /** Códigos cortos de campaña; si no hay filas en BD, mostrar promos activas del resumen del perfil. */
+  const { campaignRowsForDisplay, primaryPromotionIdForStory } = useMemo(() => {
+    let rows: InfluencerPromoShortCodeRow[] = promoShortCodes;
+    if (rows.length === 0) {
+      rows = (influencer?.recentPromotions ?? [])
+        .filter((p) => p.id && (p.status === 'active' || p.status === 'completed'))
+        .map((p) => ({
+          code: '',
+          label: p.status === 'active' ? 'Promoción activa' : 'Promoción',
+          referralPrefix: 'L4D',
+          expiresAt: null,
+          promotion: {
+            id: p.id,
+            title: p.title || '',
+            brand: p.brand || '',
+            status: p.status || null,
+          },
+        }));
+    }
+    const fromCampaign = rows.find((r) => r.promotion?.id)?.promotion?.id ?? null;
+    const fromRecent =
+      (influencer?.recentPromotions ?? []).find((p) => p.id && p.status === 'active')?.id ?? null;
+    return {
+      campaignRowsForDisplay: rows,
+      primaryPromotionIdForStory: fromCampaign || fromRecent,
+    };
+  }, [promoShortCodes, influencer?.recentPromotions]);
+
+  const followerPlatforms = useMemo(() => {
+    if (!influencer?.followers) return [];
+    const f = influencer.followers;
+    return (
+      [
+        { key: 'instagram', label: 'Instagram', count: f.instagram, handle: influencer.socialMedia?.instagram },
+        { key: 'tiktok', label: 'TikTok', count: f.tiktok, handle: influencer.socialMedia?.tiktok },
+        { key: 'youtube', label: 'YouTube', count: f.youtube, handle: influencer.socialMedia?.youtube },
+        { key: 'twitter', label: 'X', count: f.twitter, handle: influencer.socialMedia?.twitter },
+      ] as const
+    ).filter((row) => row.count > 0 || (row.handle && String(row.handle).trim()));
+  }, [influencer]);
 
   const isSaved = influencer ? savedIds.includes(influencer.id) : false;
 
@@ -200,14 +286,6 @@ export default function InfluencerProfilePage() {
       console.warn('localStorage setItem failed', e);
     }
   };
-
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [contactMessage, setContactMessage] = useState('');
-  const [contactSenderName, setContactSenderName] = useState('');
-  const [contactSenderEmail, setContactSenderEmail] = useState('');
-  const [contactSending, setContactSending] = useState(false);
-  const [contactSuccess, setContactSuccess] = useState(false);
-  const [contactError, setContactError] = useState<string | null>(null);
 
   const handleOpenContact = () => {
     setShowContactModal(true);
@@ -274,24 +352,51 @@ export default function InfluencerProfilePage() {
       ? `/api/influencers/${slug}`
       : `/api/influencers/by-slug/${encodeURIComponent(slug)}`;
     const url = apiUrl(path);
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setInfluencer(null);
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.data) {
-          setInfluencer(data.data as Influencer);
-        } else {
-          setError(data.message || 'Influencer no encontrado');
+
+    (async () => {
+      try {
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        let data: { success?: boolean; data?: Influencer; message?: string } | null = null;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
         }
-      })
-      .catch(() => setError('Influencer no encontrado'))
-      .finally(() => setLoading(false));
+        if (cancelled) return;
+        if (!res.ok || !data?.success || !data?.data) {
+          const msg =
+            typeof data?.message === 'string'
+              ? data.message
+              : res.status === 0 || res.status >= 500
+                ? 'No se pudo conectar con el API. ¿Está corriendo npm run server:dev?'
+                : `Influencer no encontrado (${res.status})`;
+          setError(msg);
+          setInfluencer(null);
+          return;
+        }
+        setInfluencer(data.data as Influencer);
+        setError(null);
+      } catch {
+        if (!cancelled) {
+          setError('No se pudo conectar con el API. En local ejecuta: npm run server:dev');
+          setInfluencer(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [influencerSlug]);
 
   useEffect(() => {
-    if (!isAuthenticated || !isInfluencer) {
+    if (!isAuthenticated) {
       setViewerInfluencerId(null);
       return;
     }
@@ -307,7 +412,7 @@ export default function InfluencerProfilePage() {
         else setViewerInfluencerId(null);
       })
       .catch(() => setViewerInfluencerId(null));
-  }, [isAuthenticated, isInfluencer]);
+  }, [isAuthenticated]);
 
   // Pujas y colaboraciones: GET /api/influencers/:id/bids (bids reales + aplicaciones aprobadas + cupones QR)
   useEffect(() => {
@@ -333,7 +438,7 @@ export default function InfluencerProfilePage() {
       return;
     }
     setCouponsActivityLoading(true);
-    fetch(apiUrl(`/api/influencers/${influencer.id}/coupons-activity?limit=80`))
+    fetch(apiUrl(`/api/influencers/${influencer.id}/coupons-activity?limit=500`))
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.open && data.redeemed && data.expiredUnused) {
@@ -408,9 +513,14 @@ export default function InfluencerProfilePage() {
 
   const redeemedForChart = couponsActivity?.redeemed ?? [];
 
+  const chartRangeMeta = useMemo(
+    () => CHART_RANGE_OPTIONS.find((o) => o.key === chartRange) ?? CHART_RANGE_OPTIONS[0],
+    [chartRange],
+  );
+
   const chartBuilt = useMemo(
-    () => buildSalesAndBidsChartData(influencer, bids, redeemedForChart),
-    [influencer, bids, redeemedForChart],
+    () => buildSalesAndBidsChartData(influencer, bids, redeemedForChart, chartRange),
+    [influencer, bids, redeemedForChart, chartRange],
   );
 
   /** Hay canjes reales o uso por promoción: base para el gráfico y aviso de estimaciones. */
@@ -419,9 +529,9 @@ export default function InfluencerProfilePage() {
     [redeemedForChart, influencer],
   );
 
-  const chartWeekHasActivity = useMemo(() => chartShowsActivity(chartBuilt), [chartBuilt]);
+  const chartPeriodHasActivity = useMemo(() => chartShowsActivity(chartBuilt), [chartBuilt]);
 
-  const chartForView = hasRedeemDataForCharts || chartWeekHasActivity ? chartBuilt : [];
+  const chartForView = hasRedeemDataForCharts || chartPeriodHasActivity ? chartBuilt : [];
 
   // Funciones del módulo de pujas
   const handlePlaceBid = (bid: any) => {
@@ -510,6 +620,90 @@ export default function InfluencerProfilePage() {
     } catch {
       window.prompt('Copiar código de campaña:', code);
     }
+  };
+
+  const generateStoryCard = async (opts: {
+    shortCode?: string;
+    promotionId?: string;
+    promotionTitle?: string | null;
+  }) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setStoryError('Inicia sesión con tu cuenta de influencer para generar la story.');
+      return;
+    }
+    const busyKey = opts.shortCode || opts.promotionId || 'story';
+    setStoryGeneratingKey(busyKey);
+    setStoryError(null);
+    const body: { shortCode?: string; promotionId?: string } = {};
+    if (opts.shortCode?.trim()) body.shortCode = opts.shortCode.trim();
+    if (opts.promotionId?.trim()) body.promotionId = opts.promotionId.trim();
+    try {
+      const res = await fetch(apiUrl('/api/influencers/app/story-cards'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(
+          typeof data.message === 'string' ? data.message : `No se pudo generar la imagen (${res.status})`,
+        );
+      }
+      const codeShown = String(data.shortCode || opts.shortCode || '');
+      if (data.image?.url) {
+        setStoryPreview({
+          url: apiUrl(String(data.image.url)),
+          shortCode: codeShown,
+          discountPercentage: Number(data.discountPercentage) || 0,
+          title: opts.promotionTitle ?? data.promotion?.title ?? null,
+        });
+        return;
+      }
+      const hint =
+        data.nanoBanana?.message ||
+        (data.promptForClient
+          ? 'El servidor no generó archivo; revisa gemini-api-key en .env del API.'
+          : null);
+      throw new Error(hint || 'La API no devolvió imagen. Intenta de nuevo en unos segundos.');
+    } catch (e) {
+      setStoryError(e instanceof Error ? e.message : 'Error al generar story');
+    } finally {
+      setStoryGeneratingKey(null);
+    }
+  };
+
+  const renderStoryButton = (
+    key: string,
+    opts: { shortCode?: string; promotionId?: string; promotionTitle?: string | null },
+  ) => {
+    if (!canCreateStory) return null;
+    const busy = storyGeneratingKey === key;
+    return (
+      <button
+        type="button"
+        disabled={storyGeneratingKey !== null}
+        onClick={() => generateStoryCard({ ...opts, promotionTitle: opts.promotionTitle })}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600/90 hover:bg-violet-500 disabled:opacity-60 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+        title="Generar story vertical 9:16 con código y descuento (Gemini Nano Banana)"
+      >
+        {busy ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+            Generando…
+          </>
+        ) : (
+          <>
+            <ImagePlus className="w-4 h-4 shrink-0" aria-hidden />
+            Story 9:16
+          </>
+        )}
+      </button>
+    );
   };
 
   if (loading) {
@@ -610,9 +804,14 @@ export default function InfluencerProfilePage() {
           <div className="flex flex-col lg:flex-row items-start gap-8">
             <div className="relative">
               <img 
-                src={influencer.avatar} 
+                src={mediaUrl(influencer.avatar, influencer.name)} 
                 alt={influencer.name}
                 className="w-32 h-32 rounded-full object-cover border-4 border-white/20"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  img.onerror = null;
+                  img.src = mediaUrl('', influencer.name);
+                }}
               />
               <div className="absolute -bottom-2 -right-2 flex flex-col gap-2">
                 {influencer.hot && (
@@ -660,6 +859,12 @@ export default function InfluencerProfilePage() {
                         </>
                       )}
                     </button>
+                    {primaryPromotionIdForStory
+                      ? renderStoryButton(`profile-${influencer.profileShortCode}`, {
+                          shortCode: influencer.profileShortCode,
+                          promotionId: primaryPromotionIdForStory,
+                        })
+                      : null}
                   </div>
                   <p className="text-xs text-emerald-100/85 mt-1.5 leading-relaxed">
                     Se asigna al registrarte. En la app, el buscador puede resolverlo si el servidor tiene configurada una
@@ -669,28 +874,67 @@ export default function InfluencerProfilePage() {
                 </div>
               ) : null}
               <div className="mb-4 max-w-2xl">
-                <div className="flex items-center gap-2 text-pink-200/95 text-xs font-semibold uppercase tracking-wide mb-1.5">
-                  <Megaphone className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                  Códigos cortos para rastrear promociones (app)
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 text-pink-200/95 text-xs font-semibold uppercase tracking-wide">
+                    <Megaphone className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Códigos cortos para rastrear promociones (app)
+                  </div>
+                  {canCreateStory && primaryPromotionIdForStory ? (
+                    <span className="text-[11px] text-violet-200/90 font-normal normal-case tracking-normal">
+                      Story 9:16 (Nano Banana)
+                    </span>
+                  ) : null}
                 </div>
+                {!isAuthenticated ? (
+                  <p className="text-xs text-amber-200/95 mb-2 rounded-lg border border-amber-400/30 bg-amber-950/30 px-2.5 py-2">
+                    <Link to="/login" className="underline font-medium text-amber-50">
+                      Inicia sesión
+                    </Link>{' '}
+                    con la cuenta vinculada a este influencer para ver el botón «Story 9:16».
+                  </p>
+                ) : isAuthenticated && !isOwnProfile && !isSuperAdmin ? (
+                  <p className="text-xs text-amber-100/95 mb-2 rounded-lg border border-amber-300/20 bg-black/20 px-2.5 py-2">
+                    Estás logueado, pero este perfil no es el tuyo. Solo el influencer dueño (o admin) puede generar
+                    la story.
+                  </p>
+                ) : isAuthenticated && isOwnProfile === false && viewerInfluencerId === null ? (
+                  <p className="text-xs text-amber-100/95 mb-2 rounded-lg border border-amber-300/20 bg-black/20 px-2.5 py-2">
+                    Tu usuario no tiene perfil influencer vinculado en{' '}
+                    <code className="font-mono text-[11px]">/api/influencers/me</code>.
+                  </p>
+                ) : null}
+                {storyError ? (
+                  <p className="text-xs text-red-200 mb-2 rounded-lg border border-red-400/35 bg-red-950/40 px-2.5 py-2">
+                    {storyError}
+                  </p>
+                ) : null}
                 {promoShortCodesLoading ? (
                   <p className="text-sm text-pink-100/95">Cargando códigos de campaña…</p>
-                ) : promoShortCodes.length === 0 ? (
+                ) : campaignRowsForDisplay.length === 0 ? (
                   <p className="text-sm text-pink-100/90 leading-relaxed">
-                    Aún no hay códigos alfanuméricos activos enlazados a este perfil. Cuando existan, podrás
-                    copiarlos aquí e introducirlos en el buscador de la app para ver la promoción y generar el
-                    cupón QR.
+                    Aún no hay códigos alfanuméricos activos ni promociones recientes en este perfil. Cuando existan,
+                    podrás copiarlos aquí e usarlos en el buscador de la app.
                   </p>
                 ) : (
                   <ul className="space-y-2.5">
-                    {promoShortCodes.map((row) => (
+                    {promoShortCodes.length === 0 && campaignRowsForDisplay.length > 0 ? (
+                      <li className="text-xs text-amber-100/95 rounded-lg border border-amber-300/25 bg-amber-950/25 px-3 py-2">
+                        Promociones del perfil (aún sin código corto en BD). Ejecuta el backfill en servidor para
+                        generar códigos por campaña.
+                      </li>
+                    ) : null}
+                    {campaignRowsForDisplay.map((row) => (
                       <li
-                        key={row.code}
+                        key={row.code || row.promotion?.id || row.label}
                         className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-black/25 border border-white/20 px-3 py-2.5 backdrop-blur-sm"
                       >
-                        <code className="text-lg md:text-xl font-mono font-bold tracking-wider text-white shrink-0">
-                          {row.code}
-                        </code>
+                        {row.code ? (
+                          <code className="text-lg md:text-xl font-mono font-bold tracking-wider text-white shrink-0">
+                            {row.code}
+                          </code>
+                        ) : (
+                          <span className="text-sm font-semibold text-amber-100 shrink-0">Sin código corto</span>
+                        )}
                         <div className="flex-1 min-w-[10rem] text-sm text-pink-50/95">
                           {row.promotion ? (
                             <>
@@ -711,24 +955,43 @@ export default function InfluencerProfilePage() {
                             <span className="text-pink-100/85">Promoción asociada no disponible</span>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => copyPromoShortCode(row.code)}
-                          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
-                          title={`Copiar ${row.code}`}
-                        >
-                          {copiedPromoCode === row.code ? (
-                            <>
-                              <Check className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden />
-                              Copiado
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-4 h-4 shrink-0" aria-hidden />
-                              Copiar
-                            </>
-                          )}
-                        </button>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {row.promotion?.id ? (
+                            <Link
+                              to={`/promotion-details/${row.promotion.id}`}
+                              className="inline-flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 px-2.5 py-1.5 text-xs font-medium text-white"
+                            >
+                              Ver promo
+                            </Link>
+                          ) : null}
+                          {row.promotion?.id
+                            ? renderStoryButton(row.code || row.promotion.id, {
+                                shortCode: row.code || influencer.profileShortCode || undefined,
+                                promotionId: row.promotion.id,
+                                promotionTitle: row.promotion?.title ?? row.label,
+                              })
+                            : null}
+                          {row.code ? (
+                          <button
+                            type="button"
+                            onClick={() => copyPromoShortCode(row.code)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1.5 text-xs font-medium text-white transition-colors"
+                            title={`Copiar ${row.code}`}
+                          >
+                            {copiedPromoCode === row.code ? (
+                              <>
+                                <Check className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden />
+                                Copiado
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4 shrink-0" aria-hidden />
+                                Copiar
+                              </>
+                            )}
+                          </button>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -757,12 +1020,49 @@ export default function InfluencerProfilePage() {
                   </button>
                 </div>
               </details>
-              {(influencer.username || '').trim() ? (
-                <p className="text-2xl text-pink-100 mb-4">
-                  @{String(influencer.username).trim().replace(/^@/, '')}
-                </p>
+              {displayHandle ? (
+                <p className="text-2xl text-pink-100 mb-2">@{displayHandle}</p>
               ) : null}
-              <p className="text-lg text-pink-100 leading-relaxed max-w-3xl">{influencer.bio}</p>
+              <p className="text-sm text-pink-100/90 mb-3 flex items-center gap-2 flex-wrap">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    influencer.status === 'active' || influencer.status === 'verified'
+                      ? 'bg-emerald-500/30 text-emerald-100'
+                      : 'bg-white/15 text-pink-100'
+                  }`}
+                >
+                  {influencer.status}
+                </span>
+                {influencer.joinDate ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" aria-hidden />
+                    Desde {formatDate(influencer.joinDate)}
+                  </span>
+                ) : null}
+              </p>
+              {followerPlatforms.length > 0 ? (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {followerPlatforms.map((row) => (
+                    <span
+                      key={row.key}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-2.5 py-1 text-xs text-pink-50"
+                    >
+                      {row.label}
+                      {row.count > 0 ? (
+                        <span className="font-semibold text-white tabular-nums">
+                          {row.count >= 1000 ? `${(row.count / 1000).toFixed(1)}K` : row.count}
+                        </span>
+                      ) : null}
+                      {row.handle ? (
+                        <span className="text-pink-100/90">@{String(row.handle).replace(/^@/, '')}</span>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-lg text-pink-100 leading-relaxed max-w-3xl">
+                {influencer.bio?.trim() || 'Sin biografía publicada.'}
+              </p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {influencer.categories.map((category, index) => (
                   <span key={index} className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium">
@@ -1303,21 +1603,45 @@ export default function InfluencerProfilePage() {
           </div>
 
           <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Últimos 7 días</h3>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900">Evolución en el tiempo</h3>
+              <div
+                className="flex flex-wrap gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-1"
+                role="group"
+                aria-label="Rango del gráfico"
+              >
+                {CHART_RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setChartRange(opt.key)}
+                    aria-pressed={chartRange === opt.key}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      chartRange === opt.key
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="text-sm text-gray-500 mb-4">
-              Ventas por <strong>día de cupón redimido</strong> y comisión de pujas (USD). Sin redenciones reales no hay barras
-              estimadas.
+              {chartRangeMeta.description}: ventas por{' '}
+              <strong>{chartBuilt[0]?.label.startsWith('Sem ') ? 'semana' : 'día'}</strong> de cupón redimido y comisión
+              de pujas (USD). Sin redenciones reales no hay barras estimadas.
             </p>
             {couponsActivityLoading && (
               <p className="text-sm text-gray-500 mb-3">Cargando actividad de cupones…</p>
             )}
             {!couponsActivityLoading &&
               hasRedeemDataForCharts &&
-              !chartWeekHasActivity &&
+              !chartPeriodHasActivity &&
               redeemedForChart.length > 0 && (
               <p className="text-sm text-gray-600 mb-3 rounded-md bg-slate-50 border border-slate-100 px-3 py-2">
-                No hubo cupones redimidos en la última semana; revisa los listados de abajo (puede haber canjes en fechas
-                anteriores).
+                No hubo cupones redimidos en {chartRangeMeta.description.toLowerCase()}; revisa los listados de abajo (puede
+                haber canjes en otras fechas).
               </p>
             )}
             <SalesAndBidsRealtimeChart data={chartForView} />
@@ -1428,6 +1752,67 @@ export default function InfluencerProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Story card preview (Nano Banana / Gemini) */}
+      {storyPreview ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="story-preview-title"
+        >
+          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-2xl border border-violet-400/30 bg-gray-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div>
+                <h3 id="story-preview-title" className="text-lg font-semibold text-white">
+                  Story para redes
+                </h3>
+                <p className="text-xs text-violet-200/90 mt-0.5">
+                  {storyPreview.shortCode} · −{storyPreview.discountPercentage}%
+                  {storyPreview.title ? ` · ${storyPreview.title}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoryPreview(null)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"
+                aria-label="Cerrar"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col items-center gap-4">
+              <img
+                src={storyPreview.url}
+                alt={`Story promocional ${storyPreview.shortCode}`}
+                className="w-full max-w-[280px] rounded-xl border border-white/15 shadow-lg object-contain"
+              />
+              <div className="flex w-full flex-col gap-2 sm:flex-row">
+                <a
+                  href={storyPreview.url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
+                >
+                  <Download className="w-4 h-4 shrink-0" aria-hidden />
+                  Descargar
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setStoryPreview(null)}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg border border-white/20 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
+                >
+                  Cerrar
+                </button>
+              </div>
+              <p className="text-center text-[11px] text-gray-400 leading-relaxed">
+                Formato 9:16 para Instagram, TikTok o WhatsApp Status. Generado con Gemini (Nano Banana).
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Bid Modal */}
       {showBidModal && selectedBid && (

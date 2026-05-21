@@ -34,3 +34,13 @@ export function apiUrl(path: string): string {
   const proto = typeof window !== 'undefined' ? window.location.protocol : 'https:';
   return `${proto}//${base}${p}`;
 }
+
+/** Rutas `/uploads/...` en el mismo API; URLs absolutas se dejan igual. */
+export function mediaUrl(src?: string | null, fallbackName = 'Influencer'): string {
+  const trimmed = (src ?? '').trim();
+  if (!trimmed) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=7c3aed&color=fff&size=256`;
+  }
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return apiUrl(trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+}

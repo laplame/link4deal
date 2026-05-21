@@ -147,10 +147,89 @@ export function chartShowsActivity(chartData: ChartDataPoint[]): boolean {
   return chartData.some((d) => d.ventas > 0 || d.pujas > 0);
 }
 
+export type ChartAnalyticsRange = '7d' | '30d' | '90d' | 'all';
+
+export const CHART_RANGE_OPTIONS: { key: ChartAnalyticsRange; label: string; description: string }[] = [
+  { key: '7d', label: '7 días', description: 'Últimos 7 días' },
+  { key: '30d', label: '30 días', description: 'Últimos 30 días' },
+  { key: '90d', label: '3 meses', description: 'Últimos 3 meses' },
+  { key: 'all', label: 'Histórico', description: 'Todo el historial disponible' },
+];
+
+const RANGE_DAY_COUNT: Record<Exclude<ChartAnalyticsRange, 'all'>, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+};
+
+/** Más de este rango en días → buckets semanales (histórico largo). */
+const WEEKLY_BUCKET_MIN_SPAN_DAYS = 120;
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function addDays(d: Date, days: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+
+function toDateKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Lunes de la semana que contiene la fecha YYYY-MM-DD. */
+function weekStartKeyFromDateStr(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00`);
+  const dow = d.getDay();
+  const diff = dow === 0 ? 6 : dow - 1;
+  d.setDate(d.getDate() - diff);
+  return toDateKey(startOfDay(d));
+}
+
+function startOfWeekMonday(d: Date): Date {
+  const x = startOfDay(d);
+  const dow = x.getDay();
+  const diff = dow === 0 ? 6 : dow - 1;
+  x.setDate(x.getDate() - diff);
+  return x;
+}
+
+function earliestActivityDate(
+  influencer: {
+    recentPromotions?: Array<{ date?: string }>;
+  } | null,
+  bids: Array<{
+    bidHistory?: Array<{ timestamp?: string }>;
+    startDate?: string;
+  }>,
+  redemptions: PublicCouponRedemption[],
+): Date | null {
+  let min: Date | null = null;
+  const consider = (raw: string | null | undefined) => {
+    const s = (raw || '').toString().trim();
+    if (!s) return;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return;
+    const day = startOfDay(d);
+    if (!min || day < min) min = day;
+  };
+  redemptions.forEach((r) => consider(r.redeemedAt || r.usedAt));
+  bids.forEach((bid) => {
+    bid.bidHistory?.forEach((h) => consider(h.timestamp));
+    consider(bid.startDate);
+  });
+  influencer?.recentPromotions?.forEach((p) => consider(p.date));
+  return min;
+}
+
 /**
- * Serie diaria últimos 7 días solo con datos reales:
- * - Cupones redimidos (Mongo) agrupados por día, o si no hay listado API, uso `couponUsage` en recentPromotions.
- * - Pujas: historial por fecha / currentBid solo en día de inicio (sin curvas sintéticas).
+ * Serie temporal solo con datos reales:
+ * - Cupones redimidos (Mongo) por día/semana, o `couponUsage` en recentPromotions si no hay listado.
+ * - Pujas: historial por fecha / currentBid en día de inicio (sin curvas sintéticas).
  */
 export function buildSalesAndBidsChartData(
   influencer: {
@@ -164,17 +243,42 @@ export function buildSalesAndBidsChartData(
     endDate?: string;
   }>,
   redemptions: PublicCouponRedemption[] = [],
+  range: ChartAnalyticsRange = '7d',
 ): ChartDataPoint[] {
-  const now = new Date();
-  const points: ChartDataPoint[] = [];
-  const dayMap = new Map<string, { ventas: number; pujas: number }>();
+  const now = startOfDay(new Date());
+  let rangeStart: Date;
+  let useWeeklyBuckets = false;
 
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    dayMap.set(key, { ventas: 0, pujas: 0 });
+  if (range === 'all') {
+    const earliest = earliestActivityDate(influencer, bids, redemptions);
+    rangeStart = earliest ?? addDays(now, -6);
+    const spanDays = Math.floor((now.getTime() - rangeStart.getTime()) / 86400000) + 1;
+    if (spanDays > WEEKLY_BUCKET_MIN_SPAN_DAYS) {
+      useWeeklyBuckets = true;
+      rangeStart = startOfWeekMonday(rangeStart);
+    }
+  } else {
+    const days = RANGE_DAY_COUNT[range];
+    rangeStart = addDays(now, -(days - 1));
   }
+
+  const bucketMap = new Map<string, { ventas: number; pujas: number }>();
+
+  if (!useWeeklyBuckets) {
+    for (let cursor = new Date(rangeStart); cursor <= now; cursor = addDays(cursor, 1)) {
+      bucketMap.set(toDateKey(cursor), { ventas: 0, pujas: 0 });
+    }
+  } else {
+    for (let cursor = startOfWeekMonday(rangeStart); cursor <= now; cursor = addDays(cursor, 7)) {
+      bucketMap.set(toDateKey(cursor), { ventas: 0, pujas: 0 });
+    }
+  }
+
+  const bucketForDateStr = (dateStr: string): string | null => {
+    if (!dateStr || dateStr.length < 10) return null;
+    const key = useWeeklyBuckets ? weekStartKeyFromDateStr(dateStr) : dateStr.slice(0, 10);
+    return bucketMap.has(key) ? key : null;
+  };
 
   const usePromotionFallback = redemptions.length === 0;
 
@@ -183,17 +287,15 @@ export function buildSalesAndBidsChartData(
       const when = r.redeemedAt || r.usedAt;
       if (!when) return;
       const dateStr = new Date(when).toISOString().slice(0, 10);
-      if (!dayMap.has(dateStr)) return;
-      const cur = dayMap.get(dateStr)!;
-      cur.ventas += 1;
+      const key = bucketForDateStr(dateStr);
+      if (!key) return;
+      bucketMap.get(key)!.ventas += 1;
     });
   } else if (influencer?.recentPromotions?.length) {
     influencer.recentPromotions.forEach((p) => {
       const dateStr = (p.date || '').toString().slice(0, 10);
-      if (dateStr && dayMap.has(dateStr)) {
-        const cur = dayMap.get(dateStr)!;
-        cur.ventas += Number(p.couponUsage) || 0;
-      }
+      const key = dateStr ? bucketForDateStr(dateStr) : null;
+      if (key) bucketMap.get(key)!.ventas += Number(p.couponUsage) || 0;
     });
   }
 
@@ -201,23 +303,29 @@ export function buildSalesAndBidsChartData(
     bid.bidHistory?.forEach((h) => {
       const ts = (h.timestamp || '').toString();
       const dateStr = ts.slice(0, 10);
-      if (dateStr && dayMap.has(dateStr)) {
-        const cur = dayMap.get(dateStr)!;
+      const key = dateStr ? bucketForDateStr(dateStr) : null;
+      if (key) {
+        const cur = bucketMap.get(key)!;
         cur.pujas = Math.max(cur.pujas, h.amount ?? 0);
       }
     });
     const start = bid.startDate ? bid.startDate.toString().slice(0, 10) : '';
-    if (start && dayMap.has(start)) {
-      const cur = dayMap.get(start)!;
+    const key = start ? bucketForDateStr(start) : null;
+    if (key) {
+      const cur = bucketMap.get(key)!;
       if ((bid.currentBid ?? 0) > cur.pujas) cur.pujas = bid.currentBid ?? 0;
     }
   });
 
-  dayMap.forEach((val, key) => {
-    const d = new Date(key);
+  const points: ChartDataPoint[] = [];
+  bucketMap.forEach((val, key) => {
+    const d = new Date(`${key}T12:00:00`);
+    const label = useWeeklyBuckets
+      ? `Sem ${d.toLocaleDateString('es', { day: '2-digit', month: 'short' })}`
+      : d.toLocaleDateString('es', { day: '2-digit', month: 'short' });
     points.push({
       fecha: key,
-      label: d.toLocaleDateString('es', { day: '2-digit', month: 'short' }),
+      label,
       ventas: val.ventas,
       pujas: Number(val.pujas.toFixed(2)),
     });

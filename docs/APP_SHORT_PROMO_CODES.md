@@ -10,6 +10,8 @@ Los códigos vinculan un **literal corto** (6–16 caracteres alfanuméricos en 
 
 Base URL típica: `{API_ORIGIN}/api/discount-qr`
 
+**App influencer (login, wallet, campañas, story cards Nano Banana):** [APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md](./APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md).
+
 ---
 
 ## Implementación en la app (checklist)

@@ -1,8 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const influencerController = require('../controllers/influencerController');
+const influencerAppController = require('../controllers/influencerAppController');
 const { authenticateToken, optionalAuth } = require('../middleware/jwtAuth');
 const { memoryUpload, handleUploadError } = require('../middleware/upload');
+
+const influencerAppLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    message: { ok: false, success: false, message: 'Demasiadas peticiones. Intenta en 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // GET /api/influencers - Listar influencers (paginado)
 router.get('/', (req, res) => influencerController.getAllInfluencers(req, res));
@@ -29,6 +39,20 @@ router.get('/by-slug/:slug', (req, res) => influencerController.getInfluencerByS
 // Bandeja de mensajes del influencer (debe ir antes de /:id)
 router.get('/messages/inbox', authenticateToken, (req, res) => influencerController.getInbox(req, res));
 router.patch('/messages/:messageId/read', authenticateToken, (req, res) => influencerController.markMessageRead(req, res));
+
+// App móvil: identidad, wallet y campañas (antes de /:id)
+router.post('/app/verify-session', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerAppController.verifySession(req, res),
+);
+router.patch('/app/wallet', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerAppController.linkWallet(req, res),
+);
+router.get('/app/campaigns', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerAppController.listCampaigns(req, res),
+);
+router.post('/app/story-cards', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerAppController.generateStoryCard(req, res),
+);
 
 // Perfil del influencer logueado (debe ir antes de /:id)
 router.get('/me', authenticateToken, (req, res) => influencerController.getMe(req, res));
