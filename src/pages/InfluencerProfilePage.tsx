@@ -51,11 +51,14 @@ import {
   LayoutGrid,
   ImagePlus,
   Loader2,
+  FileDown,
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 import { apiUrl, mediaUrl } from '../utils/apiUrl';
 import { InfluencerUgcShowcase, type UgcProfilePublic } from '../components/influencer/InfluencerUgcShowcase';
+import { generateInfluencerProfilePdf } from '../utils/generateInfluencerProfilePdf';
+import { fetchInfluencerByPublicSlug } from '../utils/fetchInfluencerByPublicSlug';
 
 interface Influencer {
   id: string;
@@ -94,6 +97,7 @@ interface Influencer {
   ugcProfile?: UgcProfilePublic;
   /** Código corto único del influencer (asignado al alta; visible en perfil y buscador si hay promo por defecto). */
   profileShortCode?: string;
+  publicSlug?: string;
 }
 
 interface PromotionHistory {
@@ -200,6 +204,7 @@ export default function InfluencerProfilePage() {
   const [promoShortCodesLoading, setPromoShortCodesLoading] = useState(false);
   const [copiedPromoCode, setCopiedPromoCode] = useState<string | null>(null);
   const [storyGeneratingKey, setStoryGeneratingKey] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [storyPreview, setStoryPreview] = useState<{
     url: string;
     shortCode: string;
@@ -347,11 +352,6 @@ export default function InfluencerProfilePage() {
       return;
     }
     const slug = influencerSlug.trim();
-    const isMongoId = /^[a-f0-9]{24}$/i.test(slug);
-    const path = isMongoId
-      ? `/api/influencers/${slug}`
-      : `/api/influencers/by-slug/${encodeURIComponent(slug)}`;
-    const url = apiUrl(path);
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -359,26 +359,14 @@ export default function InfluencerProfilePage() {
 
     (async () => {
       try {
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
-        let data: { success?: boolean; data?: Influencer; message?: string } | null = null;
-        try {
-          data = await res.json();
-        } catch {
-          data = null;
-        }
+        const result = await fetchInfluencerByPublicSlug(slug);
         if (cancelled) return;
-        if (!res.ok || !data?.success || !data?.data) {
-          const msg =
-            typeof data?.message === 'string'
-              ? data.message
-              : res.status === 0 || res.status >= 500
-                ? 'No se pudo conectar con el API. ¿Está corriendo npm run server:dev?'
-                : `Influencer no encontrado (${res.status})`;
-          setError(msg);
+        if (!result.ok) {
+          setError(result.message);
           setInfluencer(null);
           return;
         }
-        setInfluencer(data.data as Influencer);
+        setInfluencer(result.data as Influencer);
         setError(null);
       } catch {
         if (!cancelled) {
@@ -622,6 +610,45 @@ export default function InfluencerProfilePage() {
     }
   };
 
+  const handleDownloadProfilePdf = async () => {
+    if (!influencer) return;
+    setPdfLoading(true);
+    try {
+      await generateInfluencerProfilePdf({
+        id: influencer.id,
+        name: influencer.name,
+        username: influencer.username,
+        publicSlug: influencer.publicSlug,
+        avatar: influencer.avatar,
+        status: influencer.status,
+        location: influencer.location,
+        bio: influencer.bio,
+        joinDate: influencer.joinDate,
+        totalFollowers: influencer.totalFollowers,
+        engagement: influencer.engagement,
+        followers: influencer.followers,
+        socialMedia: influencer.socialMedia,
+        categories: influencer.categories,
+        profileShortCode: influencer.profileShortCode,
+        couponStats: influencer.couponStats,
+        totalEarnings: influencer.totalEarnings,
+        completedPromotions: influencer.completedPromotions,
+        activePromotions: influencer.activePromotions,
+        rating: influencer.rating,
+        redeemedCoupons: couponsActivity?.redeemed?.length ?? influencer.couponStats?.totalSales,
+        promoShortCodes: promoShortCodes.map((row) => ({
+          code: row.code,
+          label: row.label,
+          promotionTitle: row.promotion?.title ?? null,
+        })),
+      });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'No se pudo generar el PDF');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const generateStoryCard = async (opts: {
     shortCode?: string;
     promotionId?: string;
@@ -785,6 +812,25 @@ export default function InfluencerProfilePage() {
                   <span className="text-left leading-snug">Mi perfil UGC</span>
                 </Link>
               ) : null}
+              <button
+                type="button"
+                onClick={handleDownloadProfilePdf}
+                disabled={pdfLoading}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0 disabled:opacity-60"
+                title="Descargar ficha PDF (carta): métricas, códigos y QR"
+              >
+                {pdfLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 shrink-0 animate-spin" aria-hidden />
+                    Generando PDF…
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-5 h-5 shrink-0" aria-hidden />
+                    <span className="text-left leading-snug">Descargar ficha PDF</span>
+                  </>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={toggleSaveProfile}

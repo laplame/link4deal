@@ -19,6 +19,42 @@ export function nameToCompactSlug(name: string): string {
   return nameToSlug(name).replace(/-/g, '');
 }
 
+function addSlugVariants(set: Set<string>, value: string) {
+  const v = normalizeSlugInput(value);
+  if (!v) return;
+  set.add(v);
+  set.add(v.replace(/-/g, ''));
+}
+
+/** Variantes de URL válidas (alineado con server/utils/influencerSlug.js). */
+export function collectPublicSlugVariants(inf: {
+  name?: string;
+  username?: string;
+  socialMedia?: { instagram?: string; tiktok?: string; youtube?: string; twitter?: string };
+}): Set<string> {
+  const variants = new Set<string>();
+  addSlugVariants(variants, inf.username || '');
+  addSlugVariants(variants, inf.name || '');
+  addSlugVariants(variants, nameToSlug(inf.name || ''));
+  addSlugVariants(variants, nameToCompactSlug(inf.name || ''));
+  const sm = inf.socialMedia || {};
+  for (const key of ['instagram', 'tiktok', 'youtube', 'twitter'] as const) {
+    addSlugVariants(variants, sm[key] || '');
+  }
+  return variants;
+}
+
+export function docMatchesPublicSlug(
+  inf: Parameters<typeof collectPublicSlugVariants>[0],
+  slugParam: string,
+): boolean {
+  const wanted = normalizeSlugInput(slugParam);
+  if (!wanted) return false;
+  const wantedCompact = wanted.replace(/-/g, '');
+  const variants = collectPublicSlugVariants(inf);
+  return variants.has(wanted) || variants.has(wantedCompact);
+}
+
 export function resolveCanonicalPublicSlug(inf: {
   id?: string;
   name?: string;
