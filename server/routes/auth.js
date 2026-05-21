@@ -65,6 +65,22 @@ function normalizePhone(value) {
     return value.replace(/\D/g, '').trim();
 }
 
+/** Variantes de email (Gmail ignora puntos en local-part). */
+function buildEmailCandidates(inputEmail) {
+    const email = (inputEmail || '').toLowerCase().trim();
+    if (!email.includes('@')) return [email];
+    const [localRaw, domainRaw] = email.split('@');
+    const domain = domainRaw.trim();
+    const local = localRaw.trim();
+    const localNoPlus = local.split('+')[0];
+    const candidates = new Set([`${local}@${domain}`, `${localNoPlus}@${domain}`]);
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+        candidates.add(`${local.replace(/\./g, '')}@${domain}`);
+        candidates.add(`${localNoPlus.replace(/\./g, '')}@${domain}`);
+    }
+    return Array.from(candidates);
+}
+
 // Validaciones para registro (email opcional si hay phone; phone opcional si hay email)
 const registerValidation = [
     body('email')
@@ -238,7 +254,10 @@ router.post('/login', loginValidation, async (req, res) => {
 
         let user;
         if (isEmail) {
-            user = await User.findOne({ email: loginTrim.toLowerCase() }).select('+password').populate('roles');
+            const emailCandidates = buildEmailCandidates(loginTrim);
+            user = await User.findOne({ email: { $in: emailCandidates } })
+                .select('+password')
+                .populate('roles');
         } else {
             const phoneNorm = normalizePhone(loginTrim);
             if (!phoneNorm || phoneNorm.length < 10) {

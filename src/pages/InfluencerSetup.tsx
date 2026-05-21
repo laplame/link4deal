@@ -286,8 +286,15 @@ const InfluencerSetup: React.FC = () => {
                 throw new Error(data?.message || 'Error al registrar el perfil de influencer');
             }
 
-            const newId = data?.data?.id;
-            if (typeof newId === 'string' && newId) {
+            const created = data?.data;
+            const newId = created?.id;
+            const publicSlug =
+                typeof created?.publicSlug === 'string' && created.publicSlug.trim()
+                    ? created.publicSlug.trim()
+                    : '';
+            if (publicSlug) {
+                navigate(`/influencer/${encodeURIComponent(publicSlug)}`);
+            } else if (typeof newId === 'string' && newId) {
                 navigate(`/influencer/${newId}`);
             } else {
                 navigate('/influencers');

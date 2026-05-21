@@ -2,8 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const AppDownloadStats = require('../models/AppDownloadStats');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { optionalAuth } = require('../middleware/jwtAuth');
+const { recordInfluencerCrmEvent, normalizeAppKey, APP_KEYS } = require('../utils/influencerCrm');
 
 const router = express.Router();
 const KEY = 'global';
@@ -50,13 +50,27 @@ router.get('/redirect', (req, res) => {
 });
 
 /** POST /api/app-downloads - Incrementa el contador (público, al hacer clic en descargar) */
-router.post('/', async (req, res) => {
+router.post('/', optionalAuth, async (req, res) => {
     try {
         const result = await AppDownloadStats.findOneAndUpdate(
             { key: KEY },
             { $inc: { count: 1 }, $set: { lastUpdated: new Date() } },
             { upsert: true, new: true }
         );
+
+        const appKey = normalizeAppKey(req.body?.appKey || req.body?.app) || APP_KEYS.BIZNEAI_MERCHANT;
+        const isInstall = req.body?.eventType !== 'open';
+        recordInfluencerCrmEvent({
+            userId: req.user?._id,
+            influencerId: req.body?.influencerId,
+            appKey,
+            eventType: isInstall ? 'install' : 'open',
+            platform: req.body?.platform,
+            appVersion: req.body?.appVersion,
+            deviceId: req.body?.deviceId,
+            req,
+        }).catch((e) => console.warn('CRM track app-download:', e.message));
+
         return res.json({
             success: true,
             count: result.count
@@ -70,31 +84,7 @@ router.post('/', async (req, res) => {
     }
 });
 
-/** Middleware: requiere super admin para GET */
-const requireSuperAdmin = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) {
-        return res.status(401).json({ message: 'Token de acceso requerido' });
-    }
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.userId).populate('roles');
-        if (!user) {
-            return res.status(401).json({ message: 'Usuario no encontrado' });
-        }
-        if (!user.isSuperAdmin) {
-            return res.status(403).json({ message: 'Acceso denegado. Solo super admin.' });
-        }
-        req.user = user;
-        next();
-    } catch (err) {
-        if (err.name === 'TokenExpiredError') {
-            return res.status(401).json({ message: 'Token expirado' });
-        }
-        return res.status(403).json({ message: 'Token inválido' });
-    }
-};
+const { requireSuperAdmin } = require('../middleware/requireSuperAdmin');
 
 /** GET /api/app-downloads - Obtiene el contador (solo super admin) */
 router.get('/', requireSuperAdmin, async (req, res) => {

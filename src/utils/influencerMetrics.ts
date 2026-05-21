@@ -51,6 +51,7 @@ export interface MarketplaceInfluencer {
   hot?: boolean;
   featured?: boolean;
   redeemedCoupons?: number;
+  publicSlug?: string;
 }
 
 const EMPTY_COUPON_STATS: CouponStats = {
@@ -124,6 +125,7 @@ export function normalizeMarketplaceInfluencer(raw: Record<string, unknown>): Ma
     hot: Boolean(raw.hot),
     featured: Boolean(raw.featured),
     redeemedCoupons: safeNum(raw.redeemedCoupons, couponStats.totalSales),
+    publicSlug: String(raw.publicSlug || ''),
   };
 }
 

@@ -305,6 +305,12 @@ app.use('/api/brands', brandRoutes);
 const appDownloadsRoutes = require('./routes/appDownloads');
 app.use('/api/app-downloads', appDownloadsRoutes);
 
+const adminCrmRoutes = require('./routes/adminCrm');
+app.use('/api/admin/crm', adminCrmRoutes);
+
+const crmTrackRoutes = require('./routes/crmTrack');
+app.use('/api/crm', crmTrackRoutes);
+
 const bizneShopsRoutes = require('./routes/bizneShops');
 app.use('/api/bizne-shops', bizneShopsRoutes);
 

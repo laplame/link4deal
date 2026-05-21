@@ -54,6 +54,7 @@ import {
   socialPlatformsWithFollowers,
   type MarketplaceInfluencer,
 } from '../utils/influencerMetrics';
+import { influencerProfilePath } from '../utils/influencerPublicSlug';
 
 type Influencer = MarketplaceInfluencer;
 
@@ -197,11 +198,14 @@ export default function InfluencersMarketplace() {
     0,
   );
 
-  const profilePath = (inf: Influencer) => {
-    const u = (inf.username || '').trim().replace(/^@/, '');
-    if (u) return `/influencer/${encodeURIComponent(u)}`;
-    return `/influencer/${inf.id}`;
-  };
+  const profilePath = (inf: Influencer) =>
+    influencerProfilePath({
+      id: inf.id,
+      name: inf.name,
+      username: inf.username,
+      socialMedia: inf.socialMedia,
+      publicSlug: (inf as Influencer & { publicSlug?: string }).publicSlug,
+    });
 
   const getStatusColor = (status: string) => {
     switch (status) {

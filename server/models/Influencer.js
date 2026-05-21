@@ -112,6 +112,55 @@ const influencerSchema = new mongoose.Schema({
         ],
     },
 
+    /** CRM super_admin: activación, términos, apps instaladas, notas. */
+    crm: {
+        activationStatus: {
+            type: String,
+            enum: [
+                'not_started',
+                'onboarding',
+                'pending_review',
+                'active',
+                'verified',
+                'suspended',
+                'inactive',
+            ],
+            default: 'not_started',
+        },
+        dataSubmissionStatus: {
+            type: String,
+            enum: ['not_started', 'incomplete', 'partial', 'complete'],
+            default: 'not_started',
+        },
+        profileCompleteness: { type: Number, default: 0, min: 0, max: 100 },
+        terms: {
+            accepted: { type: Boolean, default: false },
+            acceptedAt: { type: Date, default: null },
+            version: { type: String, trim: true, default: '' },
+            summary: { type: String, trim: true, maxlength: 2000, default: '' },
+        },
+        apps: {
+            damecodigoInfluencer: {
+                installCount: { type: Number, default: 0, min: 0 },
+                firstInstallAt: { type: Date, default: null },
+                lastOpenAt: { type: Date, default: null },
+                lastVersion: { type: String, trim: true, default: '' },
+                lastPlatform: { type: String, trim: true, default: '' },
+            },
+            bizneaiMerchant: {
+                installCount: { type: Number, default: 0, min: 0 },
+                firstInstallAt: { type: Date, default: null },
+                lastOpenAt: { type: Date, default: null },
+                lastVersion: { type: String, trim: true, default: '' },
+                lastPlatform: { type: String, trim: true, default: '' },
+            },
+        },
+        onboardingStep: { type: String, trim: true, default: '' },
+        adminNotes: { type: String, trim: true, maxlength: 8000, default: '' },
+        lastContactAt: { type: Date, default: null },
+        updatedByAdminAt: { type: Date, default: null },
+    },
+
     // OCR metadata (cuando se rellene por OCR)
     ocrData: {
         extractedAt: Date,

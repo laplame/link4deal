@@ -56,6 +56,7 @@ import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import AgencyDashboard from './pages/dashboards/AgencyDashboard';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
+import InfluencerCrmPage from './pages/admin/InfluencerCrmPage';
 import ApiDocsPage from './pages/ApiDocsPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import { useLocation, Link } from 'react-router-dom';
@@ -155,6 +156,7 @@ function App() {
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
+                  <Route path="/admin/crm" element={<InfluencerCrmPage />} />
                   <Route path="/admin/influencers" element={<InfluencerHubPage />} />
                   <Route path="/admin/brands" element={<BrandDashboard />} />
                   <Route path="/admin/agencies" element={<AgencyDashboard />} />

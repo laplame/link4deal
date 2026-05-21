@@ -1,0 +1,60 @@
+{
+  "influencerId": "69fcd776c1413fa5f0e41071",
+  "publicSlug": "moris.fitnesscoach",
+  "name": "moris.fitnesscoach",
+  "profileShortCode": "94RQJ4ET",
+  "profilePublicUrl": "https://damecodigo.com/influencer/moris.fitnesscoach",
+  "primaryChannel": "whatsapp",
+  "pipelineStage": "awaiting_contact_email",
+  "pipelineStageLabel": "Esperando correo Gmail",
+  "contactEmail": "",
+  "contactEmailStatus": "requested",
+  "contactEmailRequestedAt": "2026-05-07T19:41:00.000Z",
+  "profileConfirmedAt": "2026-05-06T16:46:00.000Z",
+  "profileInDbAt": "2026-05-07T05:00:00.000Z",
+  "nextAction": "Solicitar y registrar correo Gmail del influencer; enviar enlace de la app DameCodigo y términos y condiciones.",
+  "conversationSummary": "5 may: pitch + Spotify. 6 may: confirmó perfil. 7 may: perfil en BD; se pidió Gmail para app + T&C (pendiente).",
+  "deliveries": [
+    {
+      "deliveryKey": "spotify_episode_may2026",
+      "type": "spotify_episode",
+      "typeLabel": "Episodio Spotify",
+      "status": "sent",
+      "title": "Monetiza tu comunidad sin seguidores mínimos — DameCodigo",
+      "url": "https://open.spotify.com/episode/72xov3TYpannkBJMj14azc?si=VjH3J06FRGqkOxcPT9zu0w",
+      "sentAt": "2026-05-05T23:30:00.000Z",
+      "channel": "whatsapp"
+    },
+    {
+      "deliveryKey": "profile_confirmation_may2026",
+      "type": "profile_confirmation",
+      "status": "delivered",
+      "title": "Confirmación de perfil",
+      "notes": "Sí, ese es mi perfil.",
+      "sentAt": "2026-05-06T16:46:00.000Z",
+      "channel": "whatsapp"
+    },
+    {
+      "deliveryKey": "profile_link_public",
+      "type": "profile_link",
+      "status": "pending",
+      "title": "Perfil público DameCodigo",
+      "url": "https://damecodigo.com/influencer/moris.fitnesscoach",
+      "notes": "Reenviar enlace por WhatsApp (ya está en BD)."
+    },
+    {
+      "deliveryKey": "app_link_damecodigo",
+      "type": "app_link",
+      "status": "pending",
+      "title": "App DameCodigo",
+      "notes": "Bloqueado hasta recibir Gmail."
+    },
+    {
+      "deliveryKey": "terms_conditions",
+      "type": "terms_document",
+      "status": "pending",
+      "title": "Términos y condiciones",
+      "notes": "Bloqueado hasta recibir Gmail."
+    }
+  ]
+}

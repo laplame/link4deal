@@ -1,0 +1,478 @@
+'use strict';
+
+const mongoose = require('mongoose');
+const Influencer = require('../models/Influencer');
+const InfluencerCrmEvent = require('../models/InfluencerCrmEvent');
+const {
+    ACTIVATION_STATUSES,
+    DATA_SUBMISSION_STATUSES,
+    buildCrmInfluencerRow,
+    aggregateInstallCountsByInfluencer,
+    buildMarketplaceListEnrichmentMap,
+    computeProfileCompleteness,
+    deriveDataSubmissionStatus,
+    defaultCrm,
+} = require('../utils/influencerCrm');
+const InfluencerCrmOutreach = require('../models/InfluencerCrmOutreach');
+const {
+    serializeOutreach,
+    getOrCreateOutreach,
+    PIPELINE_LABELS,
+} = require('../utils/influencerCrmOutreach');
+
+const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
+
+class AdminCrmController {
+    isValidObjectId(id) {
+        return mongoose.Types.ObjectId.isValid(id);
+    }
+
+    /** GET /api/admin/crm/stats */
+    async getStats(req, res) {
+        try {
+            const baseQuery = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
+            const [total, byStatus, termsAccepted, withUser] = await Promise.all([
+                Influencer.countDocuments(baseQuery),
+                Influencer.aggregate([
+                    { $match: baseQuery },
+                    { $group: { _id: '$status', count: { $sum: 1 } } },
+                ]),
+                Influencer.countDocuments({ ...baseQuery, 'crm.terms.accepted': true }),
+                Influencer.countDocuments({ ...baseQuery, userId: { $ne: null } }),
+            ]);
+
+            const installAgg = await InfluencerCrmEvent.aggregate([
+                { $match: { eventType: 'install' } },
+                { $group: { _id: '$appKey', count: { $sum: 1 } } },
+            ]);
+
+            const installsByApp = {};
+            installAgg.forEach((r) => {
+                installsByApp[r._id || 'unknown'] = r.count;
+            });
+
+            const withDamecodigo = await Influencer.countDocuments({
+                ...baseQuery,
+                'crm.apps.damecodigoInfluencer.installCount': { $gt: 0 },
+            });
+            const withBizneai = await Influencer.countDocuments({
+                ...baseQuery,
+                'crm.apps.bizneaiMerchant.installCount': { $gt: 0 },
+            });
+            const withBoth = await Influencer.countDocuments({
+                ...baseQuery,
+                'crm.apps.damecodigoInfluencer.installCount': { $gt: 0 },
+                'crm.apps.bizneaiMerchant.installCount': { $gt: 0 },
+            });
+
+            return res.json({
+                success: true,
+                data: {
+                    totalInfluencers: total,
+                    linkedToUser: withUser,
+                    termsAccepted,
+                    byInfluencerStatus: byStatus.reduce((acc, r) => {
+                        acc[r._id || 'unknown'] = r.count;
+                        return acc;
+                    }, {}),
+                    installsByApp,
+                    withDamecodigoApp: withDamecodigo,
+                    withBizneaiApp: withBizneai,
+                    withBothApps: withBoth,
+                },
+            });
+        } catch (error) {
+            console.error('❌ CRM stats:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/influencers */
+    async listInfluencers(req, res) {
+        try {
+            const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+            const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+            const skip = (page - 1) * limit;
+
+            const query = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
+
+            if (req.query.status) query.status = String(req.query.status);
+            if (req.query.activationStatus) {
+                query['crm.activationStatus'] = String(req.query.activationStatus);
+            }
+            if (req.query.dataSubmissionStatus) {
+                query['crm.dataSubmissionStatus'] = String(req.query.dataSubmissionStatus);
+            }
+            if (req.query.termsAccepted === 'true') query['crm.terms.accepted'] = true;
+            if (req.query.termsAccepted === 'false') query['crm.terms.accepted'] = { $ne: true };
+
+            if (req.query.app === 'damecodigo') {
+                query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
+            }
+            if (req.query.app === 'bizneai') {
+                query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
+            }
+            if (req.query.app === 'both') {
+                query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
+                query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
+            }
+            if (req.query.app === 'none') {
+                query.$and = [
+                    {
+                        $or: [
+                            { 'crm.apps.damecodigoInfluencer.installCount': { $exists: false } },
+                            { 'crm.apps.damecodigoInfluencer.installCount': null },
+                            { 'crm.apps.damecodigoInfluencer.installCount': 0 },
+                        ],
+                    },
+                    {
+                        $or: [
+                            { 'crm.apps.bizneaiMerchant.installCount': { $exists: false } },
+                            { 'crm.apps.bizneaiMerchant.installCount': null },
+                            { 'crm.apps.bizneaiMerchant.installCount': 0 },
+                        ],
+                    },
+                ];
+            }
+
+            const search = (req.query.search || '').trim();
+            if (search) {
+                const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                query.$or = [{ name: re }, { username: re }, { profileShortCode: re }, { bio: re }];
+            }
+
+            const [docs, totalDocs] = await Promise.all([
+                Influencer.find(query)
+                    .sort({ updatedAt: -1, joinDate: -1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .populate(
+                        'userId',
+                        'firstName lastName email phone isVerified isActive blockchain.walletAddress',
+                    )
+                    .lean(),
+                Influencer.countDocuments(query),
+            ]);
+
+            const ids = docs.map((d) => String(d._id));
+            const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
+            const [enrichmentMap, installAgg, outreachDocs] = await Promise.all([
+                buildMarketplaceListEnrichmentMap(ids),
+                aggregateInstallCountsByInfluencer(ids),
+                InfluencerCrmOutreach.find({ influencerId: { $in: oids } }).lean(),
+            ]);
+            const outreachMap = new Map(
+                outreachDocs.map((o) => [String(o.influencerId), serializeOutreach(o)]),
+            );
+
+            const rows = await Promise.all(
+                docs.map((d) =>
+                    buildCrmInfluencerRow(
+                        d,
+                        enrichmentMap.get(String(d._id)),
+                        installAgg,
+                        outreachMap.get(String(d._id)) || null,
+                    ),
+                ),
+            );
+
+            const totalPages = Math.ceil(totalDocs / limit) || 1;
+
+            return res.json({
+                success: true,
+                data: {
+                    docs: rows,
+                    totalDocs,
+                    page,
+                    limit,
+                    totalPages,
+                    hasNextPage: page < totalPages,
+                    hasPrevPage: page > 1,
+                },
+                filters: {
+                    activationStatuses: ACTIVATION_STATUSES,
+                    dataSubmissionStatuses: DATA_SUBMISSION_STATUSES,
+                },
+            });
+        } catch (error) {
+            console.error('❌ CRM list influencers:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/influencers/:id */
+    async getInfluencerDetail(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const doc = await Influencer.findById(id)
+                .populate(
+                    'userId',
+                    'firstName lastName email phone isVerified isActive blockchain.walletAddress primaryRole createdAt lastLogin',
+                )
+                .lean();
+
+            if (!doc || doc.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const [enrichmentMap, installAgg, events] = await Promise.all([
+                buildMarketplaceListEnrichmentMap([id]),
+                aggregateInstallCountsByInfluencer([id]),
+                InfluencerCrmEvent.find({ influencerId: id })
+                    .sort({ createdAt: -1 })
+                    .limit(80)
+                    .lean(),
+            ]);
+
+            const row = await buildCrmInfluencerRow(doc, enrichmentMap.get(id), installAgg);
+            const slug =
+                (doc.socialMedia?.instagram || '').replace(/^@/, '') ||
+                (doc.username || '').replace(/^@/, '') ||
+                '';
+            const outreachDoc = await getOrCreateOutreach(id, slug);
+            const outreach = serializeOutreach(outreachDoc);
+
+            return res.json({
+                success: true,
+                data: {
+                    ...row,
+                    outreach,
+                    bio: doc.bio || '',
+                    categories: doc.categories || [],
+                    socialMedia: doc.socialMedia || {},
+                    followers: doc.followers || {},
+                    ugcEnabled: Boolean(doc.ugcProfile?.enabled),
+                    recentPromotions: doc.recentPromotions || [],
+                    events: events.map((e) => ({
+                        id: String(e._id),
+                        appKey: e.appKey,
+                        eventType: e.eventType,
+                        platform: e.platform,
+                        appVersion: e.appVersion,
+                        deviceId: e.deviceId,
+                        termsVersion: e.termsVersion,
+                        createdAt: e.createdAt ? new Date(e.createdAt).toISOString() : null,
+                    })),
+                },
+            });
+        } catch (error) {
+            console.error('❌ CRM detail:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** PATCH /api/admin/crm/influencers/:id */
+    async patchInfluencerCrm(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const doc = await Influencer.findById(id);
+            if (!doc || doc.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const body = req.body || {};
+            if (!doc.crm) doc.crm = defaultCrm();
+
+            if (body.status && ['active', 'pending', 'verified', 'suspended'].includes(body.status)) {
+                doc.status = body.status;
+            }
+
+            if (body.activationStatus && ACTIVATION_STATUSES.includes(body.activationStatus)) {
+                doc.crm.activationStatus = body.activationStatus;
+            }
+            if (
+                body.dataSubmissionStatus &&
+                DATA_SUBMISSION_STATUSES.includes(body.dataSubmissionStatus)
+            ) {
+                doc.crm.dataSubmissionStatus = body.dataSubmissionStatus;
+            }
+            if (body.onboardingStep != null) {
+                doc.crm.onboardingStep = String(body.onboardingStep).slice(0, 120);
+            }
+            if (body.adminNotes != null) {
+                doc.crm.adminNotes = String(body.adminNotes).slice(0, 8000);
+            }
+            if (body.lastContactAt) {
+                const d = new Date(body.lastContactAt);
+                if (!Number.isNaN(d.getTime())) doc.crm.lastContactAt = d;
+            }
+
+            if (body.terms && typeof body.terms === 'object') {
+                if (body.terms.accepted === true || body.terms.accepted === false) {
+                    doc.crm.terms.accepted = body.terms.accepted;
+                    if (body.terms.accepted) doc.crm.terms.acceptedAt = new Date();
+                }
+                if (body.terms.version != null) {
+                    doc.crm.terms.version = String(body.terms.version).slice(0, 64);
+                }
+                if (body.terms.summary != null) {
+                    doc.crm.terms.summary = String(body.terms.summary).slice(0, 2000);
+                }
+            }
+
+            doc.crm.profileCompleteness = computeProfileCompleteness(doc);
+            if (!body.dataSubmissionStatus) {
+                doc.crm.dataSubmissionStatus = deriveDataSubmissionStatus(
+                    doc,
+                    doc.crm.profileCompleteness,
+                );
+            }
+
+            doc.crm.updatedByAdminAt = new Date();
+            doc.markModified('crm');
+            await doc.save();
+
+            await InfluencerCrmEvent.create({
+                influencerId: doc._id,
+                userId: doc.userId || undefined,
+                appKey: 'web',
+                eventType: 'admin_update',
+                metadata: {
+                    adminUserId: String(req.user._id),
+                    patch: Object.keys(body),
+                },
+            });
+
+            const fresh = await Influencer.findById(doc._id)
+                .populate(
+                    'userId',
+                    'firstName lastName email phone isVerified isActive blockchain.walletAddress primaryRole',
+                )
+                .lean();
+            const [enrichmentMap, installAgg] = await Promise.all([
+                buildMarketplaceListEnrichmentMap([String(doc._id)]),
+                aggregateInstallCountsByInfluencer([String(doc._id)]),
+            ]);
+            const outreachFresh = await getOrCreateOutreach(
+                String(doc._id),
+                (fresh.socialMedia?.instagram || fresh.username || '').replace(/^@/, ''),
+            );
+            const row = await buildCrmInfluencerRow(
+                fresh,
+                enrichmentMap.get(String(doc._id)),
+                installAgg,
+                serializeOutreach(outreachFresh),
+            );
+
+            return res.json({ success: true, data: row, message: 'CRM actualizado' });
+        } catch (error) {
+            console.error('❌ CRM patch:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/influencers/:id/outreach */
+    async getOutreach(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const inf = await Influencer.findById(id).select('socialMedia username').lean();
+            if (!inf) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+            const slug =
+                (inf.socialMedia?.instagram || '').replace(/^@/, '') ||
+                (inf.username || '').replace(/^@/, '') ||
+                '';
+            const doc = await getOrCreateOutreach(id, slug);
+            return res.json({
+                success: true,
+                data: serializeOutreach(doc),
+                pipelineLabels: PIPELINE_LABELS,
+            });
+        } catch (error) {
+            console.error('❌ CRM get outreach:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** PATCH /api/admin/crm/influencers/:id/outreach */
+    async patchOutreach(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const body = req.body || {};
+            const inf = await Influencer.findById(id).select('socialMedia username').lean();
+            if (!inf) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+            const slug =
+                (inf.socialMedia?.instagram || '').replace(/^@/, '') ||
+                (inf.username || '').replace(/^@/, '') ||
+                '';
+            const doc = await getOrCreateOutreach(id, slug);
+
+            if (body.pipelineStage) doc.pipelineStage = String(body.pipelineStage);
+            if (body.primaryChannel) doc.primaryChannel = String(body.primaryChannel);
+            if (body.contactEmail != null) doc.contactEmail = String(body.contactEmail).trim().toLowerCase();
+            if (body.contactEmailStatus) doc.contactEmailStatus = String(body.contactEmailStatus);
+            if (body.nextAction != null) doc.nextAction = String(body.nextAction).slice(0, 500);
+            if (body.conversationSummary != null) {
+                doc.conversationSummary = String(body.conversationSummary).slice(0, 4000);
+            }
+            if (body.profilePublicUrl != null) {
+                doc.profilePublicUrl = String(body.profilePublicUrl).slice(0, 512);
+            }
+            if (body.contactEmailReceivedAt) {
+                const d = new Date(body.contactEmailReceivedAt);
+                if (!Number.isNaN(d.getTime())) {
+                    doc.contactEmailReceivedAt = d;
+                    doc.contactEmailStatus = 'received';
+                }
+            }
+
+            if (body.markDeliverySent && typeof body.markDeliverySent === 'object') {
+                const key = String(body.markDeliverySent.deliveryKey || '').trim();
+                const item = doc.deliveries.find((x) => x.deliveryKey === key);
+                if (item) {
+                    item.status = body.markDeliverySent.status || 'sent';
+                    item.sentAt = body.markDeliverySent.sentAt
+                        ? new Date(body.markDeliverySent.sentAt)
+                        : new Date();
+                    doc.lastOutboundAt = item.sentAt;
+                    doc.markModified('deliveries');
+                }
+            }
+
+            if (Array.isArray(body.deliveries)) {
+                doc.deliveries = body.deliveries.map((d) => ({
+                    deliveryKey: String(d.deliveryKey || `d_${Date.now()}`),
+                    type: d.type || 'other',
+                    status: d.status || 'pending',
+                    channel: d.channel || doc.primaryChannel,
+                    title: String(d.title || '').slice(0, 200),
+                    url: String(d.url || '').slice(0, 2048),
+                    sentAt: d.sentAt ? new Date(d.sentAt) : null,
+                    notes: String(d.notes || '').slice(0, 2000),
+                }));
+                doc.markModified('deliveries');
+            }
+
+            doc.updatedByAdminId = req.user._id;
+            await doc.save();
+
+            return res.json({
+                success: true,
+                data: serializeOutreach(doc),
+                message: 'Outreach actualizado',
+            });
+        } catch (error) {
+            console.error('❌ CRM patch outreach:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+}
+
+module.exports = new AdminCrmController();

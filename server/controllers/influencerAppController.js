@@ -16,6 +16,7 @@ const {
 } = require('../services/geminiStoryCardGenerator');
 const { computeDiscountPctFromPromotion } = require('../utils/influencerPromoShortCodes');
 const { resolveStoryCardContext } = require('../utils/resolveStoryCardContext');
+const { recordInfluencerCrmEvent, APP_KEYS } = require('../utils/influencerCrm');
 
 class InfluencerAppController {
     /**
@@ -44,6 +45,39 @@ class InfluencerAppController {
                 preferredNetwork: preferredNetwork ? String(preferredNetwork).trim() : undefined,
                 syncWalletFromApp: req.body?.syncWallet !== false,
             });
+
+            const isInstall =
+                req.body?.eventType === 'install' ||
+                req.body?.isFirstLaunch === true ||
+                req.body?.firstInstall === true;
+            recordInfluencerCrmEvent({
+                influencerId: session?.influencerId,
+                userId: user._id,
+                appKey: APP_KEYS.DAMECODIGO_INFLUENCER,
+                eventType: isInstall ? 'install' : 'open',
+                platform: req.body?.platform || req.body?.os,
+                appVersion: req.body?.appVersion || req.body?.version,
+                deviceId: req.body?.deviceId,
+                termsVersion: req.body?.termsVersion,
+                termsSummary: req.body?.termsSummary,
+                req,
+            }).catch((e) => console.warn('CRM track verify-session:', e.message));
+
+            if (
+                req.body?.termsAccepted === true ||
+                req.body?.termsAccepted === 'true' ||
+                req.body?.termsAccepted === 1
+            ) {
+                recordInfluencerCrmEvent({
+                    influencerId: session?.influencerId,
+                    userId: user._id,
+                    appKey: APP_KEYS.DAMECODIGO_INFLUENCER,
+                    eventType: 'terms_accepted',
+                    termsVersion: req.body?.termsVersion,
+                    termsSummary: req.body?.termsSummary || req.body?.termsText,
+                    req,
+                }).catch(() => {});
+            }
 
             return res.status(200).json({
                 success: true,

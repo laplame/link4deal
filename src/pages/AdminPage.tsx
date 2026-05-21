@@ -95,6 +95,12 @@ export default function AdminPage() {
                     path: "/admin/dashboard",
                     description: "Ver, editar y borrar cualquier promoción (requiere PIN)",
                     icon: <Lock className="w-5 h-5" />
+                },
+                {
+                    name: "CRM Influencers",
+                    path: "/admin/crm",
+                    description: "Activación, términos, apps DameCodigo/BizneAI e instalaciones",
+                    icon: <Users className="w-5 h-5" />
                 }
             ]
         },

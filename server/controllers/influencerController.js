@@ -19,6 +19,12 @@ const {
 } = require('../utils/influencerProfileEnrichment');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 const { ensureInfluencerHasProfileShortCode } = require('../utils/influencerPromoShortCodes');
+const {
+    nameToSlug,
+    resolveCanonicalPublicSlug,
+    docMatchesPublicSlug,
+    normalizeSlugInput,
+} = require('../utils/influencerSlug');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -121,6 +127,8 @@ class InfluencerController {
             ugcProfile: toFrontendUgc(d.ugcProfile),
             /** Código corto propio del influencer (app / buscador si hay INFLUENCER_PROFILE_SHORT_CODE_DEFAULT_PROMOTION_ID). */
             profileShortCode: d.profileShortCode ? String(d.profileShortCode).trim() : '',
+            /** Slug para /influencer/:slug (username, IG o nombre compacto). */
+            publicSlug: resolveCanonicalPublicSlug(d),
         };
     }
 
@@ -225,9 +233,15 @@ class InfluencerController {
             const userId = body.userId || (req.user && req.user._id ? req.user._id : null);
             const { followers, socialMedia, totalFollowers } = buildFollowersAndSocial(body.socialMedia);
             const categories = Array.isArray(body.categories) ? body.categories : (Array.isArray(body.collaborationPreferences) ? body.collaborationPreferences : []);
+            let username = body.username ? String(body.username).trim().replace(/^@/, '') : '';
+            if (!username && socialMedia?.instagram) {
+                username = String(socialMedia.instagram).trim().replace(/^@/, '');
+            } else if (!username && socialMedia?.tiktok) {
+                username = String(socialMedia.tiktok).trim().replace(/^@/, '');
+            }
             const influencer = new Influencer({
                 name,
-                username: body.username ? String(body.username).trim() : '',
+                username,
                 avatar: body.avatar || '',
                 languages: Array.isArray(body.languages) ? body.languages : [],
                 experience: body.experience != null ? Number(body.experience) : 0,
@@ -241,6 +255,12 @@ class InfluencerController {
                 socialMedia,
                 userId: userId || null
             });
+            if (!influencer.crm) {
+                influencer.crm = {
+                    activationStatus: 'onboarding',
+                    dataSubmissionStatus: 'incomplete',
+                };
+            }
             await influencer.save();
             await ensureInfluencerHasProfileShortCode(String(influencer._id));
             const docFresh = await Influencer.findById(influencer._id).lean();
@@ -319,22 +339,9 @@ class InfluencerController {
         }
     }
 
-    /** Normaliza nombre a slug (mismo criterio que el front: lowercase, sin acentos, espacios -> guiones) */
-    nameToSlug(name) {
-        if (!name || typeof name !== 'string') return '';
-        return name.toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '');
-    }
-
     async getInfluencerBySlug(req, res) {
         try {
-            const slug = (req.params.slug || '').trim().toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9-]/g, '');
+            const slug = normalizeSlugInput(req.params.slug);
             if (!slug) {
                 return res.status(400).json({ success: false, message: 'Slug requerido' });
             }
@@ -344,12 +351,31 @@ class InfluencerController {
                     message: 'Influencer no encontrado'
                 });
             }
-            const docs = await Influencer.find({ username: { $ne: INFLUENCER_GENERAL_USERNAME } }).populate('userId', 'firstName lastName email').lean();
-            const doc = docs.find(d => this.nameToSlug(d.name) === slug);
+
+            const slugCompact = slug.replace(/-/g, '');
+            let doc = await Influencer.findOne({
+                username: { $ne: INFLUENCER_GENERAL_USERNAME },
+                $or: [
+                    { username: { $in: [slug, slugCompact, `@${slug}`] } },
+                    { 'socialMedia.instagram': { $in: [slug, slugCompact, `@${slug}`] } },
+                    { 'socialMedia.tiktok': { $in: [slug, slugCompact, `@${slug}`] } },
+                ],
+            })
+                .populate('userId', 'firstName lastName email')
+                .lean();
+
+            if (!doc) {
+                const docs = await Influencer.find({ username: { $ne: INFLUENCER_GENERAL_USERNAME } })
+                    .populate('userId', 'firstName lastName email')
+                    .lean();
+                doc = docs.find((d) => docMatchesPublicSlug(d, slug));
+            }
+
             if (!doc) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Influencer no encontrado'
+                    message: 'Influencer no encontrado',
+                    hint: 'Prueba con el enlace que incluye el ID de Mongo o verifica username/redes en el perfil.',
                 });
             }
 
