@@ -7,6 +7,7 @@
 
 const mongoose = require('mongoose');
 const Bid = require('../models/Bid');
+const DiscountQrToken = require('../models/DiscountQrToken');
 const PromotionApplication = require('../models/PromotionApplication');
 const Promotion = require('../models/Promotion');
 const { buildInfluencerQrPromotionSummary } = require('./influencerQrPromotionSummary');
@@ -265,15 +266,14 @@ function buildRecentPromotionsFromSummary(summaryRows, promoIdToUsd) {
 }
 
 /**
- * Overrides para mergear en el JSON del influencer (GET por id/slug/me).
+ * Overrides para mergear en el JSON del influencer (perfil, listado marketplace).
+ * @param {object[]} rows — filas tipo buildInfluencerQrPromotionSummary
+ * @param {number} tokensOrphan — cupones sin promotionId
+ * @param {object} existingFrontend — salida de toFrontendFormat
+ * @param {object[]} [approvedApps] — PromotionApplication approved con promotion poblada
  */
-async function buildPublicProfileFieldOverrides(influencerId, existingFrontend) {
-    const idStr = String(influencerId || '').trim();
-    const summaryPack = await buildInfluencerQrPromotionSummary(idStr);
-    const rows = summaryPack.rows || [];
-    const tokensOrphan = safeNum(summaryPack.tokensWithoutPromotionId);
-
-    let totalTokensAll = tokensOrphan;
+function computePublicProfileFieldOverrides(rows, tokensOrphan, existingFrontend, approvedApps = []) {
+    let totalTokensAll = safeNum(tokensOrphan);
     let sumOpen = 0;
     let sumRedeemed = 0;
     /** @type {Map<string, number>} */
@@ -284,19 +284,14 @@ async function buildPublicProfileFieldOverrides(influencerId, existingFrontend) 
     let totalEarningsUsd = 0;
 
     const now = new Date();
-    const oid = mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : null;
-
-    const apps = oid
-        ? await PromotionApplication.find({ influencerApplicant: oid, status: 'approved' }).populate('promotion').lean()
-        : [];
+    const apps = Array.isArray(approvedApps) ? approvedApps : [];
     /** @type {Map<string, object>} */
     const approvedByPromo = new Map(
         apps
             .filter((a) => a.promotion && a.promotion._id)
-            .map((a) => [String(a.promotion._id), a])
+            .map((a) => [String(a.promotion._id), a]),
     );
 
-    /** PromoIds ya contadas como “activa” desde filas QR */
     const countedActivePromoIds = new Set();
 
     for (const row of rows) {
@@ -339,17 +334,16 @@ async function buildPublicProfileFieldOverrides(influencerId, existingFrontend) 
     }
 
     const avgConversion =
-        totalTokensAll > 0 ? Math.round((sumRedeemed / totalTokensAll) * 1000) / 10 : existingFrontend?.couponStats?.averageConversion ?? 0;
+        totalTokensAll > 0
+            ? Math.round((sumRedeemed / totalTokensAll) * 1000) / 10
+            : existingFrontend?.couponStats?.averageConversion ?? 0;
 
     const storedComplete = safeNum(existingFrontend?.completedPromotions);
     const storedActive = safeNum(existingFrontend?.activePromotions);
     const storedEarnings = safeNum(existingFrontend?.totalEarnings);
     const storedCouponStats = existingFrontend?.couponStats || {};
 
-    /** Completadas: campañas con canjes pero ventana ya cerrada; siempre sumar campo manual guardado si es mayor */
     completedPromotionsCount = Math.max(storedComplete, completedPromotionsCount);
-
-    /** Activas en catálogo con actividad o puja registrada — max con lo guardado en documento Influencer */
     activePromotionsCount = Math.max(storedActive, activePromotionsCount);
 
     totalEarningsUsd = Math.round(totalEarningsUsd * 100) / 100;
@@ -363,22 +357,250 @@ async function buildPublicProfileFieldOverrides(influencerId, existingFrontend) 
         averageConversion: avgConversion,
     };
 
+    const fromQr = buildRecentPromotionsFromSummary(rows, promoIdToUsd);
     const storedRecent =
         Array.isArray(existingFrontend?.recentPromotions) && existingFrontend.recentPromotions.length > 0
             ? existingFrontend.recentPromotions
-            : buildRecentPromotionsFromSummary(rows, promoIdToUsd);
+            : [];
+    const recentPromotions = fromQr.length > 0 ? fromQr : storedRecent;
 
     return {
         completedPromotions: completedPromotionsCount,
         activePromotions: activePromotionsCount,
         totalEarnings: mergedEarnings,
         couponStats: mergedCouponStats,
-        recentPromotions: storedRecent,
+        recentPromotions,
+        /** Canjes QR reales (para badges en listado). */
+        redeemedCoupons: sumRedeemed,
     };
+}
+
+/**
+ * Overrides para mergear en el JSON del influencer (GET por id/slug/me).
+ */
+async function buildPublicProfileFieldOverrides(influencerId, existingFrontend) {
+    const idStr = String(influencerId || '').trim();
+    const summaryPack = await buildInfluencerQrPromotionSummary(idStr);
+    const rows = summaryPack.rows || [];
+    const tokensOrphan = safeNum(summaryPack.tokensWithoutPromotionId);
+
+    const oid = mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : null;
+    const apps = oid
+        ? await PromotionApplication.find({ influencerApplicant: oid, status: 'approved' }).populate('promotion').lean()
+        : [];
+
+    return computePublicProfileFieldOverrides(rows, tokensOrphan, existingFrontend, apps);
+}
+
+/**
+ * Construye filas de resumen QR para un influencer a partir de grupos agregados + pujas.
+ */
+function buildSummaryRowsFromQrGroups(qrGroups, promoMap, bidDocs, now = new Date()) {
+    const cleanGroups = qrGroups.filter((g) => g.promoKey !== '__none__');
+    const noneRow = qrGroups.find((g) => g.promoKey === '__none__');
+    const tokenPromoIds = new Set(cleanGroups.map((g) => g.promoKey));
+    /** @type {object[]} */
+    const rows = [];
+
+    for (const g of cleanGroups) {
+        const pid = g.promoKey;
+        const pdoc = promoMap.get(pid);
+        const bid = (bidDocs || []).find((b) => b.promotion && String(b.promotion._id) === pid);
+        rows.push({
+            promotionId: pid,
+            title: pdoc?.title ?? null,
+            brand: pdoc?.brand ?? null,
+            validFrom: pdoc?.validFrom ? new Date(pdoc.validFrom).toISOString() : null,
+            validUntil: pdoc?.validUntil ? new Date(pdoc.validUntil).toISOString() : null,
+            catalogActiveWindow: promotionCatalogLive(pdoc, now),
+            promotionStatus: pdoc?.status ?? null,
+            bidStatus: bid?.status ?? null,
+            bidAmountUsd: bid?.amountUsd != null ? Number(bid.amountUsd) : null,
+            open: g.open,
+            redeemed: g.redeemed,
+            expiredUnused: g.expiredUnused,
+            totalTokens: g.open + g.redeemed + g.expiredUnused,
+            lastRedeemedAt: g.lastRedeemedAt ? new Date(g.lastRedeemedAt).toISOString() : null,
+        });
+    }
+
+    for (const b of bidDocs || []) {
+        const pr = b.promotion;
+        if (!pr || !pr._id) continue;
+        const promoIdStr = String(pr._id);
+        if (tokenPromoIds.has(promoIdStr)) continue;
+        if (!bidPromotionVisibleOnProfile(pr, now)) continue;
+        rows.push({
+            promotionId: promoIdStr,
+            title: pr.title ?? null,
+            brand: pr.brand ?? null,
+            validFrom: pr.validFrom ? new Date(pr.validFrom).toISOString() : null,
+            validUntil: pr.validUntil ? new Date(pr.validUntil).toISOString() : null,
+            catalogActiveWindow: promotionCatalogLive(pr, now),
+            promotionStatus: pr.status ?? null,
+            bidStatus: b.status ?? null,
+            bidAmountUsd: b.amountUsd != null ? Number(b.amountUsd) : null,
+            open: 0,
+            redeemed: 0,
+            expiredUnused: 0,
+            totalTokens: 0,
+            lastRedeemedAt: null,
+            noQrActivityYet: true,
+        });
+    }
+
+    return {
+        rows,
+        tokensWithoutPromotionId: noneRow ? noneRow.open + noneRow.redeemed + noneRow.expiredUnused : 0,
+    };
+}
+
+function bidPromotionVisibleOnProfile(bidPromotion, now) {
+    if (!bidPromotion || bidPromotion.validUntil == null) return false;
+    if (new Date(bidPromotion.validUntil).getTime() < now.getTime()) return false;
+    const vf = bidPromotion.validFrom ? new Date(bidPromotion.validFrom).getTime() : now.getTime();
+    return vf <= now.getTime();
+}
+
+/**
+ * Enriquecimiento en lote para GET /api/influencers (marketplace).
+ * @param {string[]} influencerIds
+ * @returns {Promise<Map<string, object>>}
+ */
+async function buildMarketplaceListEnrichmentMap(influencerIds) {
+    const map = new Map();
+    const ids = [...new Set((influencerIds || []).map((id) => String(id).trim()).filter((id) => mongoose.Types.ObjectId.isValid(id)))];
+    if (!ids.length) return map;
+
+    const now = new Date();
+    const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
+
+    const agg = await DiscountQrToken.aggregate([
+        {
+            $match: {
+                $or: [{ 'payload.influencerId': { $in: ids } }, { 'payload.influencerId': { $in: oids } }],
+            },
+        },
+        {
+            $addFields: {
+                infKey: { $toString: '$payload.influencerId' },
+                promoRaw: '$payload.promotionId',
+                hasUsed: {
+                    $and: [{ $ne: ['$usedAt', null] }, { $eq: [{ $type: '$usedAt' }, 'date'] }],
+                },
+            },
+        },
+        {
+            $addFields: {
+                promoKey: {
+                    $cond: [
+                        { $or: [{ $eq: ['$promoRaw', null] }, { $eq: ['$promoRaw', ''] }] },
+                        '__none__',
+                        { $toString: '$promoRaw' },
+                    ],
+                },
+                state: {
+                    $cond: [
+                        '$hasUsed',
+                        'redeemed',
+                        {
+                            $cond: [
+                                {
+                                    $and: [{ $ne: ['$expiresAt', null] }, { $lte: ['$expiresAt', now] }],
+                                },
+                                'expired_unused',
+                                'open',
+                            ],
+                        },
+                    ],
+                },
+            },
+        },
+        {
+            $group: {
+                _id: { influencerId: '$infKey', promoKey: '$promoKey' },
+                redeemed: { $sum: { $cond: [{ $eq: ['$state', 'redeemed'] }, 1, 0] } },
+                open: { $sum: { $cond: [{ $eq: ['$state', 'open'] }, 1, 0] } },
+                expiredUnused: { $sum: { $cond: [{ $eq: ['$state', 'expired_unused'] }, 1, 0] } },
+                lastRedeemedAt: { $max: '$usedAt' },
+            },
+        },
+    ]);
+
+    /** @type {Map<string, { promoKey: string, open: number, redeemed: number, expiredUnused: number, lastRedeemedAt?: Date }[]>} */
+    const qrByInf = new Map();
+    /** @type {Set<string>} */
+    const promoIdSet = new Set();
+
+    for (const g of agg) {
+        const infId = g._id?.influencerId;
+        const promoKey = g._id?.promoKey;
+        if (!infId || !ids.includes(infId)) continue;
+        if (!qrByInf.has(infId)) qrByInf.set(infId, []);
+        const entry = {
+            promoKey,
+            open: safeNum(g.open),
+            redeemed: safeNum(g.redeemed),
+            expiredUnused: safeNum(g.expiredUnused),
+            lastRedeemedAt: g.lastRedeemedAt,
+        };
+        qrByInf.get(infId).push(entry);
+        if (promoKey && promoKey !== '__none__' && mongoose.Types.ObjectId.isValid(promoKey)) {
+            promoIdSet.add(promoKey);
+        }
+    }
+
+    const promoOids = [...promoIdSet].map((id) => new mongoose.Types.ObjectId(id));
+    const promoDocs = promoOids.length
+        ? await Promotion.find({ _id: { $in: promoOids } })
+              .select('title brand validFrom validUntil status')
+              .lean()
+        : [];
+    const promoMap = new Map(promoDocs.map((p) => [String(p._id), p]));
+
+    const allBids = await Bid.find({ influencer: { $in: ids } })
+        .populate('promotion', 'title brand validFrom validUntil status')
+        .lean();
+    /** @type {Map<string, object[]>} */
+    const bidsByInf = new Map();
+    for (const b of allBids) {
+        const k = String(b.influencer || '');
+        if (!k) continue;
+        if (!bidsByInf.has(k)) bidsByInf.set(k, []);
+        bidsByInf.get(k).push(b);
+    }
+
+    const allApps = await PromotionApplication.find({
+        influencerApplicant: { $in: oids },
+        status: 'approved',
+    })
+        .populate('promotion')
+        .lean();
+    /** @type {Map<string, object[]>} */
+    const appsByInf = new Map();
+    for (const a of allApps) {
+        const k = String(a.influencerApplicant || '');
+        if (!k) continue;
+        if (!appsByInf.has(k)) appsByInf.set(k, []);
+        appsByInf.get(k).push(a);
+    }
+
+    for (const id of ids) {
+        const pack = buildSummaryRowsFromQrGroups(qrByInf.get(id) || [], promoMap, bidsByInf.get(id) || [], now);
+        map.set(id, {
+            rows: pack.rows,
+            tokensWithoutPromotionId: pack.tokensWithoutPromotionId,
+            apps: appsByInf.get(id) || [],
+        });
+    }
+
+    return map;
 }
 
 module.exports = {
     buildPublicInfluencerBidCards,
     buildPublicProfileFieldOverrides,
+    buildMarketplaceListEnrichmentMap,
+    computePublicProfileFieldOverrides,
     pricingToUsdCommission,
 };

@@ -14,6 +14,8 @@ const { toFrontendUgc, normalizeUgcProfileInput } = require('../utils/ugcProfile
 const {
     buildPublicInfluencerBidCards,
     buildPublicProfileFieldOverrides,
+    buildMarketplaceListEnrichmentMap,
+    computePublicProfileFieldOverrides,
 } = require('../utils/influencerProfileEnrichment');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 const { ensureInfluencerHasProfileShortCode } = require('../utils/influencerPromoShortCodes');
@@ -58,12 +60,19 @@ class InfluencerController {
             username: d.username || '',
             avatar: d.avatar || '',
             followers: {
-                instagram: d.followers?.instagram ?? 0,
-                tiktok: d.followers?.tiktok ?? 0,
-                youtube: d.followers?.youtube ?? 0,
-                twitter: d.followers?.twitter ?? 0
+                instagram: Number(d.followers?.instagram) || 0,
+                tiktok: Number(d.followers?.tiktok) || 0,
+                youtube: Number(d.followers?.youtube) || 0,
+                twitter: Number(d.followers?.twitter) || 0,
             },
-            totalFollowers: d.totalFollowers ?? 0,
+            totalFollowers: (() => {
+                const sum =
+                    (Number(d.followers?.instagram) || 0) +
+                    (Number(d.followers?.tiktok) || 0) +
+                    (Number(d.followers?.youtube) || 0) +
+                    (Number(d.followers?.twitter) || 0);
+                return Number(d.totalFollowers) > 0 ? Number(d.totalFollowers) : sum;
+            })(),
             engagement: d.engagement ?? 0,
             categories: Array.isArray(d.categories) ? d.categories : [],
             status: d.status || 'pending',
@@ -142,10 +151,34 @@ class InfluencerController {
 
             const totalPages = Math.ceil(totalDocs / limit) || 1;
 
+            const frontendDocs = docs.map((d) => this.toFrontendFormat({ toObject: () => d }));
+            const enrichList = req.query.enrich !== 'false';
+            if (enrichList && frontendDocs.length > 0) {
+                try {
+                    const enrichmentMap = await buildMarketplaceListEnrichmentMap(
+                        frontendDocs.map((doc) => doc.id),
+                    );
+                    for (let i = 0; i < frontendDocs.length; i++) {
+                        const base = frontendDocs[i];
+                        const pack = enrichmentMap.get(base.id);
+                        if (!pack) continue;
+                        const enriched = computePublicProfileFieldOverrides(
+                            pack.rows,
+                            pack.tokensWithoutPromotionId,
+                            base,
+                            pack.apps,
+                        );
+                        frontendDocs[i] = { ...base, ...enriched };
+                    }
+                } catch (e) {
+                    console.warn('⚠️ enrich listado influencers:', e.message);
+                }
+            }
+
             res.json({
                 success: true,
                 data: {
-                    docs: docs.map(d => this.toFrontendFormat({ toObject: () => d })),
+                    docs: frontendDocs,
                     totalDocs,
                     limit,
                     page,

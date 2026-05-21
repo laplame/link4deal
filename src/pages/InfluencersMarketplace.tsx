@@ -45,71 +45,17 @@ import {
   Twitter
 } from 'lucide-react';
 import InfluencerProfileModal from '../components/InfluencerProfileModal';
+import { apiUrl, mediaUrl } from '../utils/apiUrl';
+import {
+  normalizeMarketplaceInfluencer,
+  formatFollowersCount,
+  formatUsdAmount,
+  formatRedemptionCount,
+  socialPlatformsWithFollowers,
+  type MarketplaceInfluencer,
+} from '../utils/influencerMetrics';
 
-interface Influencer {
-  id: string;
-  name: string;
-  username: string;
-  avatar: string;
-  followers: {
-    instagram: number;
-    tiktok: number;
-    youtube: number;
-    twitter: number;
-  };
-  totalFollowers: number;
-  engagement: number;
-  categories: string[];
-  status: 'active' | 'pending' | 'verified' | 'suspended';
-  joinDate: string;
-  totalEarnings: number;
-  monthlyEarnings: number;
-  completedPromotions: number;
-  activePromotions: number;
-  rating: number;
-  location: string;
-  bio: string;
-  socialMedia: {
-    instagram?: string;
-    tiktok?: string;
-    youtube?: string;
-    twitter?: string;
-  };
-  recentPromotions: PromotionHistory[];
-  recentPayments: PaymentHistory[];
-  couponStats: CouponStats;
-  hot: boolean;
-  featured: boolean;
-}
-
-interface PromotionHistory {
-  id: string;
-  brand: string;
-  title: string;
-  date: string;
-  status: 'completed' | 'active' | 'pending';
-  earnings: number;
-  couponCode: string;
-  couponUsage: number;
-  totalSales: number;
-}
-
-interface PaymentHistory {
-  id: string;
-  date: string;
-  amount: number;
-  type: 'commission' | 'bonus' | 'referral';
-  status: 'paid' | 'pending' | 'processing';
-  description: string;
-}
-
-interface CouponStats {
-  totalCoupons: number;
-  activeCoupons: number;
-  totalSales: number;
-  totalCommission: number;
-  averageConversion: number;
-}
+type Influencer = MarketplaceInfluencer;
 
 interface FilterState {
   category: string;
@@ -143,7 +89,7 @@ export default function InfluencersMarketplace() {
   // Total de promociones activas en la plataforma (API de promociones, no por influencer)
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/promotions/active?limit=1&page=1')
+    fetch(apiUrl('/api/promotions/active?limit=1&page=1'))
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;
@@ -159,13 +105,15 @@ export default function InfluencersMarketplace() {
     let cancelled = false;
     setIsLoadingInfluencers(true);
     setApiMessage(null);
-    fetch('/api/influencers?limit=50&page=1')
+    fetch(apiUrl('/api/influencers?limit=50&page=1'))
       .then(res => res.json().then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
         if (cancelled) return;
         if (data.message) setApiMessage(data.message);
-        let list = (data.success && data.data?.docs) ? (data.data.docs as Influencer[]) : [];
-        list = list.filter(i => (i.username || '') !== 'influencer-general');
+        let list = (data.success && data.data?.docs)
+          ? (data.data.docs as Record<string, unknown>[]).map(normalizeMarketplaceInfluencer)
+          : [];
+        list = list.filter(i => (i.username || '').replace(/^@/, '') !== 'influencer-general');
         setInfluencers(list);
         setFilteredInfluencers(list);
         if (!ok && !data.message) setApiMessage('Error al cargar influencers. Comprueba la conexión y reintenta.');
@@ -244,8 +192,10 @@ export default function InfluencersMarketplace() {
   const statsTotalFollowers = filteredInfluencers.reduce((sum, i) => sum + (Number(i.totalFollowers) || 0), 0);
   const statsTotalEarnings = filteredInfluencers.reduce((sum, i) => sum + (Number(i.totalEarnings) || 0), 0);
   const statsActivePromotions = activePromotionsCount !== null ? activePromotionsCount : filteredInfluencers.reduce((sum, i) => sum + (Number(i.activePromotions) || 0), 0);
-  const formatFollowers = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
-  const formatEarnings = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n}`);
+  const statsTotalRedemptions = filteredInfluencers.reduce(
+    (sum, i) => sum + (i.redeemedCoupons ?? i.couponStats.totalSales ?? 0),
+    0,
+  );
 
   const profilePath = (inf: Influencer) => {
     const u = (inf.username || '').trim().replace(/^@/, '');
@@ -442,7 +392,7 @@ export default function InfluencersMarketplace() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Seguidores Totales</p>
-                <p className="text-2xl font-bold text-purple-600">{formatFollowers(statsTotalFollowers)}</p>
+                <p className="text-2xl font-bold text-purple-600">{formatFollowersCount(statsTotalFollowers)}</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -453,8 +403,9 @@ export default function InfluencersMarketplace() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Ganancias Totales</p>
-                <p className="text-2xl font-bold text-green-600">{formatEarnings(statsTotalEarnings)}</p>
+                <p className="text-sm text-gray-600">Comisiones (est.)</p>
+                <p className="text-2xl font-bold text-green-600">{formatUsdAmount(statsTotalEarnings)}</p>
+                <p className="text-xs text-gray-500 mt-1">{formatRedemptionCount(statsTotalRedemptions)} en listado</p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <DollarSign className="w-6 h-6 text-green-600" />
@@ -490,14 +441,20 @@ export default function InfluencersMarketplace() {
           <div className="py-12 text-center text-gray-500">Cargando influencers...</div>
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredInfluencers.map((influencer) => (
+          {filteredInfluencers.map((influencer) => {
+            const socialRows = socialPlatformsWithFollowers(influencer.followers);
+            const recentPromos = influencer.recentPromotions.slice(0, 2);
+            const redemptions = influencer.redeemedCoupons ?? influencer.couponStats.totalSales;
+            const cs = influencer.couponStats;
+
+            return (
             <div key={influencer.id} className="group bg-white rounded-2xl shadow-sm border border-gray-200/90 overflow-hidden hover:shadow-xl hover:border-purple-200/80 transition-all duration-300 ring-1 ring-transparent hover:ring-purple-100">
               <div className="h-1.5 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 opacity-90 group-hover:opacity-100 transition-opacity" />
               <div className="relative p-6 pb-4">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-4">
                     <img
-                      src={influencer.avatar}
+                      src={mediaUrl(influencer.avatar, influencer.name)}
                       alt={influencer.name}
                       className="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow-md"
                     />
@@ -548,75 +505,77 @@ export default function InfluencersMarketplace() {
               <div className="px-6 pb-4">
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="text-center">
-                    <p className="text-xs text-gray-500">Total Seguidores</p>
+                    <p className="text-xs text-gray-500">Seguidores</p>
                     <p className="font-semibold text-gray-900">
-                      {formatFollowers(Number(influencer.totalFollowers) || 0)}
+                      {formatFollowersCount(influencer.totalFollowers)}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-gray-500">Engagement</p>
-                    <p className="font-semibold text-blue-600">{influencer.engagement}%</p>
+                    <p className="text-xs text-gray-500">Canjes QR</p>
+                    <p className="font-semibold text-emerald-700">{redemptions}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-gray-500">Rating</p>
-                    <p className="font-semibold text-yellow-600">{influencer.rating}/5</p>
+                    <p className="text-xs text-gray-500">Campañas activas</p>
+                    <p className="font-semibold text-orange-600">{influencer.activePromotions}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-gray-500">Ganancias</p>
+                    <p className="text-xs text-gray-500">Comisión est.</p>
                     <p className="font-semibold text-green-600">
-                      {formatEarnings(Number(influencer.totalEarnings) || 0)}
+                      {formatUsdAmount(influencer.totalEarnings || cs.totalCommission)}
                     </p>
                   </div>
                 </div>
 
-                {/* Redes sociales */}
+                {socialRows.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">Redes Sociales:</p>
+                  <p className="text-xs text-gray-500 mb-2">Redes sociales</p>
                   <div className="flex flex-wrap gap-2">
-                    {Object.entries(influencer.followers).map(([platform, count]) => (
-                      <div key={platform} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
+                    {socialRows.map(({ platform, count }) => (
+                      <div key={platform} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs capitalize">
                         {getSocialIcon(platform)}
-                        <span className="text-gray-700">{formatFollowers(Number(count) || 0)}</span>
+                        <span className="text-gray-700">{formatFollowersCount(count)}</span>
                       </div>
                     ))}
                   </div>
                 </div>
+                )}
 
-                {/* Estadísticas de cupones */}
-                <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                  <p className="text-xs text-blue-600 mb-2 font-medium">Estadísticas de Cupones:</p>
+                <div className="bg-emerald-50 rounded-lg p-3 mb-4 border border-emerald-100">
+                  <p className="text-xs text-emerald-800 mb-2 font-medium">Cupones QR (datos API)</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-blue-600">Total Cupones:</span>
-                      <span className="ml-1 text-blue-900 font-medium">{influencer.couponStats.totalCoupons}</span>
+                      <span className="text-emerald-700">Emitidos:</span>
+                      <span className="ml-1 text-emerald-950 font-medium">{cs.totalCoupons}</span>
                     </div>
                     <div>
-                      <span className="text-blue-600">Ventas Totales:</span>
-                      <span className="ml-1 text-blue-900 font-medium">${(influencer.couponStats.totalSales / 1000).toFixed(1)}K</span>
+                      <span className="text-emerald-700">Vigentes:</span>
+                      <span className="ml-1 text-emerald-950 font-medium">{cs.activeCoupons}</span>
                     </div>
                     <div>
-                      <span className="text-blue-600">Conversión:</span>
-                      <span className="ml-1 text-blue-900 font-medium">{influencer.couponStats.averageConversion}%</span>
+                      <span className="text-emerald-700">Redimidos:</span>
+                      <span className="ml-1 text-emerald-950 font-medium">{formatRedemptionCount(redemptions)}</span>
                     </div>
                     <div>
-                      <span className="text-blue-600">Comisión Total:</span>
-                      <span className="ml-1 text-blue-900 font-medium">${(influencer.couponStats.totalCommission / 1000).toFixed(1)}K</span>
+                      <span className="text-emerald-700">Conversión:</span>
+                      <span className="ml-1 text-emerald-950 font-medium">{cs.averageConversion}%</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Promociones recientes */}
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2 font-medium">Promociones Recientes:</p>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">Campañas recientes</p>
+                  {recentPromos.length === 0 ? (
+                    <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">Sin campañas con actividad QR aún.</p>
+                  ) : (
                   <div className="space-y-2">
-                    {influencer.recentPromotions.slice(0, 2).map((promo) => (
+                    {recentPromos.map((promo) => (
                       <div key={promo.id} className="bg-gray-50 rounded p-2 text-xs">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium text-gray-900">{promo.brand}</p>
-                            <p className="text-gray-600">{promo.title}</p>
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{promo.brand || 'Marca'}</p>
+                            <p className="text-gray-600 truncate">{promo.title}</p>
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs ${
+                          <span className={`shrink-0 px-2 py-1 rounded text-xs ${
                             promo.status === 'completed' ? 'bg-green-100 text-green-700' :
                             promo.status === 'active' ? 'bg-blue-100 text-blue-700' :
                             'bg-yellow-100 text-yellow-700'
@@ -625,12 +584,13 @@ export default function InfluencersMarketplace() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center mt-1 text-gray-500">
-                          <span>Cupón: {promo.couponCode}</span>
-                          <span>${promo.earnings}</span>
+                          <span>{promo.couponUsage > 0 ? `${promo.couponUsage} canje(s)` : promo.date || '—'}</span>
+                          <span className="font-medium text-green-700">{formatUsdAmount(promo.earnings)}</span>
                         </div>
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
 
                 {/* Botón de ver perfil */}
@@ -659,7 +619,8 @@ export default function InfluencersMarketplace() {
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
         )}
 

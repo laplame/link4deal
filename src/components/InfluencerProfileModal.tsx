@@ -292,8 +292,8 @@ export default function InfluencerProfileModal({
                       <div className="text-sm text-blue-600">Cupones Activos</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">${(influencer.couponStats.totalSales / 1000).toFixed(1)}K</div>
-                      <div className="text-sm text-blue-600">Ventas Totales</div>
+                      <div className="text-2xl font-bold text-blue-600">{influencer.couponStats.totalSales}</div>
+                      <div className="text-sm text-blue-600">Canjes redimidos</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{influencer.couponStats.averageConversion}%</div>
@@ -346,8 +346,8 @@ export default function InfluencerProfileModal({
                         <span className="ml-2 font-medium">{promo.couponUsage}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Ventas:</span>
-                        <span className="ml-2 font-medium">${promo.totalSales.toLocaleString()}</span>
+                        <span className="text-gray-500">Canjes:</span>
+                        <span className="ml-2 font-medium">{promo.couponUsage || promo.totalSales}</span>
                       </div>
                     </div>
                   </div>
