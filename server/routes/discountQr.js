@@ -26,6 +26,10 @@ const {
     getInfluencerPromotionsCatalogByShortCode,
 } = require('../utils/influencerPromoShortCodes');
 const { runLuxaeSettlementForRedemption, isLuxaeSettlementWebhookConfigured } = require('../utils/luxaeSettlementWebhook');
+const {
+    createSettlementFromRedemption,
+    isSettlementEnabled,
+} = require('../utils/influencerTokenSettlement');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 const rateLimit = require('express-rate-limit');
 
@@ -1344,9 +1348,10 @@ router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
             await DiscountQrToken.updateOne({ tokenId: redeemed.tokenId }, { $set: { expiresAt: newExp } });
         }
 
+        const plain = redeemed.toObject ? redeemed.toObject() : redeemed;
+
         const settlementQueued = isLuxaeSettlementWebhookConfigured();
         if (settlementQueued) {
-            const plain = redeemed.toObject ? redeemed.toObject() : redeemed;
             setImmediate(() => {
                 void runLuxaeSettlementForRedemption(plain).catch((e) => {
                     console.warn('[luxaeSettlement] async:', e.message);
@@ -1354,9 +1359,20 @@ router.post('/redeem', discountQrWriteLimiter, async (req, res) => {
             });
         }
 
+        let influencerSettlementQueued = false;
+        if (isSettlementEnabled()) {
+            influencerSettlementQueued = true;
+            setImmediate(() => {
+                void createSettlementFromRedemption(plain).catch((e) => {
+                    console.warn('[influencerSettlement] async:', e.message);
+                });
+            });
+        }
+
         return res.json({
             ...buildRedeemSuccessPayload(redeemed),
             luxaeSettlementWebhookQueued: settlementQueued,
+            influencerSettlementQueued,
         });
     } catch (error) {
         return res.status(400).json({

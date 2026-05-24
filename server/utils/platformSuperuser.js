@@ -1,14 +1,16 @@
 'use strict';
 
+const { buildEmailCandidates } = require('./emailCandidates');
+
 /**
- * Superusuario de plataforma: puede alternar en el front entre paneles de
- * influencer, marca y agencia (sin cambiar primaryRole en BD).
- *
- * Lista por defecto incluye el correo indicado por producto; en producción
- * puedes sobreescribir con PLATFORM_SUPERUSER_EMAILS (CSV, minúsculas tras trim).
+ * Superusuario de plataforma: alterna paneles influencer, marca y agencia en el front.
+ * También aplica si User.isSuperAdmin === true.
  */
 
-const DEFAULT_PLATFORM_SUPERUSER_EMAILS = ['saul.laplame@gmail.com'];
+const DEFAULT_PLATFORM_SUPERUSER_EMAILS = [
+    'saul.laplame@gmail.com',
+    'saullaplame@gmail.com',
+];
 
 const CREATOR_DASHBOARD_ACCESS = ['influencer', 'brand', 'agency'];
 
@@ -18,7 +20,7 @@ function parseEmailSetFromEnv(raw) {
         String(raw)
             .split(',')
             .map((e) => e.trim().toLowerCase())
-            .filter(Boolean)
+            .filter(Boolean),
     );
     return set.size > 0 ? set : null;
 }
@@ -31,16 +33,21 @@ function platformSuperuserEmailSet() {
 
 function isPlatformSuperuserEmail(email) {
     if (!email || typeof email !== 'string') return false;
-    return platformSuperuserEmailSet().has(String(email).trim().toLowerCase());
+    const allow = platformSuperuserEmailSet();
+    for (const candidate of buildEmailCandidates(email)) {
+        if (allow.has(candidate)) return true;
+    }
+    return false;
 }
 
 /**
  * Campos extra en JSON de usuario para el cliente (login / register / me).
- * @param {{ email?: string | null }} user
+ * @param {{ email?: string | null, isSuperAdmin?: boolean }} user
  */
 function authUserDashboardFields(user) {
-    const isPlatformSuperuser = isPlatformSuperuserEmail(user && user.email);
-    if (!isPlatformSuperuser) {
+    const byEmail = isPlatformSuperuserEmail(user && user.email);
+    const byFlag = Boolean(user && user.isSuperAdmin);
+    if (!byEmail && !byFlag) {
         return { isPlatformSuperuser: false };
     }
     return {

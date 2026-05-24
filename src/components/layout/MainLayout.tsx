@@ -25,7 +25,11 @@ const pathTitles: Record<string, string> = {
   '/importar-sucursales': 'Importar sucursales',
   '/admin': 'Admin',
   '/dashboard/panel': 'Mi panel',
-  '/admin/influencers': 'Panel creador',
+  '/dashboard/influencer': 'Panel creador',
+  '/admin/influencers': 'Admin influencers',
+  '/admin/brands': 'Panel marcas',
+  '/dashboard/brand': 'Mi marca',
+  '/admin/agencies': 'Panel agencias',
   '/dashboard/suite': 'Multi-panel (superusuario)',
   '/demo/influencer-dashboard': 'Demo panel influencer'
 };
@@ -46,7 +50,7 @@ function getTitle(pathname: string): string | undefined {
 const ROUTES_WITH_OWN_NAV = ['/', '/landing', '/comisionista-digital'];
 
 /** Panel hub sin navbar global solo para influencer en estas rutas. */
-const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/admin/influencers'];
+const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/dashboard/influencer', '/admin/influencers'];
 const DEMO_INFLUENCER_HUB_PATH = '/demo/influencer-dashboard';
 
 export function MainLayout() {

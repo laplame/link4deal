@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SITE_CONFIG } from '../config/site';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { defaultRouteAfterLogin } from '../config/dashboardContexts';
 
 export default function SignInPage() {
     const navigate = useNavigate();
@@ -32,13 +33,7 @@ export default function SignInPage() {
         try {
             const data = await login({ login: formData.login, password: formData.password });
             const u = data?.user;
-            const dest = u?.isSuperAdmin
-                ? '/admin'
-                : u?.isPlatformSuperuser
-                  ? '/dashboard/suite'
-                  : u?.primaryRole === 'influencer'
-                    ? '/admin/influencers'
-                    : '/dashboard';
+            const dest = u ? defaultRouteAfterLogin(u) : '/dashboard';
             navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión');

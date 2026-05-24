@@ -8,6 +8,7 @@ const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
+const { buildPromotionShopIdQuery } = require('../utils/promotionShopFilter');
 const { parseChainLocations } = require('../utils/chainStore');
 const { normalizeIncomingCode, getInfluencerPromotionsCatalogByShortCode } = require('../utils/influencerPromoShortCodes');
 const mongoose = require('mongoose');
@@ -836,10 +837,18 @@ class PromotionController {
                 category, 
                 status, 
                 isHotOffer,
-                search 
+                search,
+                shopId: shopIdQuery,
             } = req.query;
 
             const query = {};
+            const shopFilter = shopIdQuery ? buildPromotionShopIdQuery(shopIdQuery) : null;
+            if (shopIdQuery && !shopFilter) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'shopId inválido (se espera ObjectId BizneAI de 24 caracteres hex)',
+                });
+            }
 
             // Filtros
             if (category) query.category = category;
@@ -858,12 +867,19 @@ class PromotionController {
             }
             if (isHotOffer) query.isHotOffer = isHotOffer === 'true';
             if (search) {
-                query.$or = [
+                const searchOr = [
                     { title: { $regex: search, $options: 'i' } },
                     { productName: { $regex: search, $options: 'i' } },
                     { description: { $regex: search, $options: 'i' } },
                     { tags: { $in: [new RegExp(search, 'i')] } }
                 ];
+                if (shopFilter) {
+                    query.$and = [{ $or: searchOr }, shopFilter];
+                } else {
+                    query.$or = searchOr;
+                }
+            } else if (shopFilter) {
+                Object.assign(query, shopFilter);
             }
 
             const options = {

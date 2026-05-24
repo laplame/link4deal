@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiUrl } from '../utils/apiUrl';
+import { useAuth } from '../context/AuthContext';
+import { BizneAiBrandOnboardingCard } from '../components/brand/BizneAiBrandOnboardingCard';
+import { BizneShopIdLinker } from '../components/brand/BizneShopIdLinker';
+import { isValidBizneShopObjectId, normalizeBizneShopId } from '../utils/bizneShopId';
+import {
+    prefillBrandFormFromBizneShop,
+    readBrandSetupBizneShop,
+    clearBrandSetupBizneShop,
+    persistBrandSetupBizneShop,
+} from '../utils/brandSetupBizneShop';
+import type { BizneShop } from '../components/BizneShopCard';
 import { parseJsonBody } from '../utils/parseApiBody';
 import { 
     ArrowLeft, 
@@ -34,17 +45,29 @@ interface TargetAudience {
     incomeLevel: string;
 }
 
+function getBrandSetupBootstrap() {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = normalizeBizneShopId(params.get('bizneShopId') || '');
+    const stored = readBrandSetupBizneShop();
+    const shopId = fromUrl || stored?.shopId || '';
+    const shop = stored && stored.shopId === shopId ? stored.shop : null;
+    return { shopId, shop, jumpToStep3: Boolean(shopId) };
+}
+
 const BrandSetup: React.FC = () => {
     const navigate = useNavigate();
-    const [currentStep, setCurrentStep] = useState(1);
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const bootstrap = getBrandSetupBootstrap();
+    const [currentStep, setCurrentStep] = useState(bootstrap.jumpToStep3 ? 3 : 1);
     const [isLoading, setIsLoading] = useState(false);
     const [brandScreenshotFile, setBrandScreenshotFile] = useState<File | null>(null);
     const [brandScreenshotPreview, setBrandScreenshotPreview] = useState<string | null>(null);
     const [isAnalyzingBrand, setIsAnalyzingBrand] = useState(false);
     const [analyzeBrandError, setAnalyzeBrandError] = useState<string | null>(null);
     
-    // Form data
-    const [formData, setFormData] = useState({
+    const emptyForm = {
         companyName: '',
         industry: '',
         website: '',
@@ -68,8 +91,43 @@ const BrandSetup: React.FC = () => {
         preferredChannels: [] as string[],
         campaignTypes: [] as string[],
         documents: [] as File[],
-        logo: null as File | null
-    });
+        logo: null as File | null,
+        bizneShopId: bootstrap.shopId,
+    };
+
+    const [formData, setFormData] = useState(() =>
+        bootstrap.shop ? prefillBrandFormFromBizneShop(emptyForm, bootstrap.shop) : emptyForm,
+    );
+
+    const [hydratedShop, setHydratedShop] = useState<BizneShop | null>(bootstrap.shop);
+    const [shopPrevalidated, setShopPrevalidated] = useState(Boolean(bootstrap.shop));
+
+    useEffect(() => {
+        const fromUrl = normalizeBizneShopId(searchParams.get('bizneShopId') || '');
+        const nav = location.state as { bizneShop?: BizneShop; bizneShopId?: string } | null;
+        const stored = readBrandSetupBizneShop();
+        const shopId = fromUrl || normalizeBizneShopId(nav?.bizneShopId || '') || stored?.shopId || '';
+        const shop =
+            nav?.bizneShop ||
+            (stored && stored.shopId === shopId ? stored.shop : null) ||
+            null;
+
+        if (!shopId) return;
+
+        setFormData((prev) => {
+            let next = { ...prev, bizneShopId: shopId };
+            if (shop) next = prefillBrandFormFromBizneShop(next, shop);
+            return next;
+        });
+
+        if (shop) {
+            setHydratedShop(shop);
+            setShopPrevalidated(true);
+            setCurrentStep(3);
+        } else if (fromUrl || nav?.bizneShopId) {
+            setCurrentStep(3);
+        }
+    }, [searchParams, location.state, location.key]);
 
     const brandCategories: BrandCategory[] = [
         { id: 'fashion', name: 'Moda', selected: false },
@@ -272,13 +330,18 @@ const BrandSetup: React.FC = () => {
                     currency: formData.marketingBudget.currency || 'USD'
                 },
                 preferredChannels: formData.preferredChannels,
-                campaignTypes: formData.campaignTypes
+                campaignTypes: formData.campaignTypes,
+                bizneShopId: formData.bizneShopId.trim() || undefined,
             };
 
-            const res = await fetch('/api/brands', {
+            const token = localStorage.getItem('auth_token');
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
+
+            const res = await fetch(apiUrl('/api/brands'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers,
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json().catch(() => ({}));
@@ -287,8 +350,8 @@ const BrandSetup: React.FC = () => {
                 throw new Error(data?.message || 'Error al registrar la marca o negocio');
             }
 
-            // Redirigir al listado de marcas para que vea su marca registrada
-            navigate('/brands');
+            clearBrandSetupBizneShop();
+            navigate('/dashboard/brand');
         } catch (error) {
             console.error('Error al crear perfil de marca:', error);
             alert(error instanceof Error ? error.message : 'Error al registrar. Intenta de nuevo.');
@@ -773,6 +836,34 @@ const BrandSetup: React.FC = () => {
                 )}
             </div>
 
+            <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Vincular tienda BizneAI *</p>
+                <BizneShopIdLinker
+                    shopId={formData.bizneShopId}
+                    onShopIdChange={(id) => {
+                        handleInputChange('bizneShopId', id);
+                        if (normalizeBizneShopId(id) !== normalizeBizneShopId(formData.bizneShopId)) {
+                            setHydratedShop(null);
+                            setShopPrevalidated(false);
+                        }
+                    }}
+                    persistToAccount={false}
+                    initialShop={hydratedShop}
+                    initialValidated={shopPrevalidated}
+                    autoValidateOnMount={Boolean(
+                        searchParams.get('bizneShopId')?.trim() && !shopPrevalidated,
+                    )}
+                    onLinked={({ shopId, shop }) => {
+                        if (shop) {
+                            setHydratedShop(shop);
+                            setShopPrevalidated(true);
+                            persistBrandSetupBizneShop(shopId, shop);
+                            setFormData((prev) => prefillBrandFormFromBizneShop(prev, shop));
+                        }
+                    }}
+                />
+            </div>
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-medium text-blue-900 mb-2">Si deseas verificación, puedes subir (opcional):</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
@@ -815,11 +906,23 @@ const BrandSetup: React.FC = () => {
             case 2:
                 return formData.categories.length > 0 && formData.preferredChannels.length > 0;
             case 3:
-                return true;
+                return isValidBizneShopObjectId(formData.bizneShopId);
             default:
                 return false;
         }
     };
+
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return <Navigate to="/signin" replace state={{ from: '/brand-setup' }} />;
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -857,9 +960,11 @@ const BrandSetup: React.FC = () => {
                         Configura tu perfil de Marca
                     </h1>
                     <p className="text-gray-600">
-                        Completa la información para crear tu perfil de marca profesional
+                        Completa la información y vincula tu tienda BizneAI
                     </p>
                 </div>
+
+                <BizneAiBrandOnboardingCard className="mb-6" />
 
                 {/* Sube menú o screenshot del negocio → IA rellena datos */}
                 <div className="bg-white rounded-2xl shadow-lg p-8 mb-6 border-2 border-dashed border-blue-200">

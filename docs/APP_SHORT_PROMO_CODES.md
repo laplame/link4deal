@@ -12,6 +12,8 @@ Base URL típica: `{API_ORIGIN}/api/discount-qr`
 
 **App influencer (login, wallet, campañas, story cards Nano Banana):** [APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md](./APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md).
 
+**Abonos al influencer por canje (ledger Mongo, wallet destino):** [INFLUENCER_TOKEN_SETTLEMENT_MONGO.md](./INFLUENCER_TOKEN_SETTLEMENT_MONGO.md).
+
 ---
 
 ## Implementación en la app (checklist)

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SITE_CONFIG } from '../config/site';
 import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, CheckCircle, Phone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { defaultRouteAfterLogin } from '../config/dashboardContexts';
 import { PRIMARY_ROLE_LABELS } from '../types/auth';
 import type { PrimaryRole } from '../types/auth';
 
@@ -74,13 +75,7 @@ export default function SignUpPage() {
                 primaryRole
             });
             const u = res.user;
-            const dest = u.isSuperAdmin
-                ? '/admin'
-                : u.isPlatformSuperuser
-                  ? '/dashboard/suite'
-                  : primaryRole === 'influencer'
-                    ? '/admin/influencers'
-                    : '/dashboard';
+            const dest = defaultRouteAfterLogin(u);
             navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al crear la cuenta');

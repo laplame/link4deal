@@ -1,13 +1,12 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { canAccessRolePanel } from '../config/dashboardContexts';
 import InfluencerDashboard from './dashboards/InfluencerDashboard';
 
-/**
- * Panel tipo hub (InfluencerHubLayout): accesible para creadores y para moderación.
- */
-export default function InfluencerHubPage() {
-  const { isAuthenticated, isLoading, primaryRole, user } = useAuth();
+/** Panel del creador / influencer (rol). No es administración Link4Deal. */
+export default function InfluencerDashboardPage() {
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -18,16 +17,10 @@ export default function InfluencerHubPage() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/signin" replace state={{ from: '/admin/influencers' }} />;
+    return <Navigate to="/signin" replace state={{ from: '/dashboard/influencer' }} />;
   }
 
-  const allowed =
-    primaryRole === 'influencer' ||
-    primaryRole === 'admin' ||
-    primaryRole === 'moderator' ||
-    user?.isPlatformSuperuser === true;
-
-  if (!allowed) {
+  if (!canAccessRolePanel(user, 'influencer')) {
     return <Navigate to="/dashboard" replace />;
   }
 

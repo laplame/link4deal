@@ -33,10 +33,16 @@ const brandSchema = new mongoose.Schema({
         default: 'active'
     },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    /** ID de tienda en BizneAI (Mongo _id o id devuelto por /api/shop). */
+    bizneShopId: { type: String, trim: true, default: '' },
+    bizneShopName: { type: String, trim: true, default: '' },
+    bizneLinkedAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, { collection: 'brands' });
 
 brandSchema.index({ companyName: 'text', industry: 'text', description: 'text' });
+brandSchema.index({ userId: 1 });
+brandSchema.index({ bizneShopId: 1 });
 
 module.exports = mongoose.models.Brand || mongoose.model('Brand', brandSchema);

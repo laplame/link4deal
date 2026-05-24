@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const influencerController = require('../controllers/influencerController');
 const influencerAppController = require('../controllers/influencerAppController');
+const influencerSettlementController = require('../controllers/influencerSettlementController');
 const { authenticateToken, optionalAuth } = require('../middleware/jwtAuth');
 const { memoryUpload, handleUploadError } = require('../middleware/upload');
 
@@ -52,6 +53,15 @@ router.get('/app/campaigns', influencerAppLimiter, authenticateToken, (req, res)
 );
 router.post('/app/story-cards', influencerAppLimiter, authenticateToken, (req, res) =>
     influencerAppController.generateStoryCard(req, res),
+);
+router.get('/app/settlements/summary', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerSettlementController.summary(req, res),
+);
+router.get('/app/settlements', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerSettlementController.list(req, res),
+);
+router.post('/app/settlements/process-pending', influencerAppLimiter, authenticateToken, (req, res) =>
+    influencerSettlementController.processPending(req, res),
 );
 
 // Perfil del influencer logueado (debe ir antes de /:id)

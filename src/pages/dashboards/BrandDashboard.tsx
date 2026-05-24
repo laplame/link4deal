@@ -27,7 +27,6 @@ import {
     Users,
     Calendar,
     Award,
-    Fire,
     Sparkles,
     Edit,
     Filter,
@@ -37,8 +36,11 @@ import {
     Package,
     Truck,
     Heart,
-    Share2
+    Share2,
+    Camera,
 } from 'lucide-react';
+import { apiUrl } from '../../utils/apiUrl';
+import type { RegisteredBrand } from '../../components/RegisteredBrandCard';
 
 interface Brand {
     id: string;
@@ -98,85 +100,75 @@ interface Sale {
     influencer?: string;
 }
 
+function mapRegisteredBrandToRow(b: RegisteredBrand): Brand {
+    const budgetMax = Number(b.marketingBudget?.max) || 0;
+    return {
+        id: b._id,
+        name: b.companyName,
+        logo: '',
+        industry: b.industry || '—',
+        status: (b.status as Brand['status']) || 'pending',
+        joinDate: b.createdAt
+            ? new Date(b.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—',
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        totalSpent: budgetMax,
+        monthlySpent: 0,
+        activeCampaigns: 0,
+        completedCampaigns: 0,
+        rating: 0,
+        location: b.headquarters || '—',
+        website: b.website || '',
+        socialMedia: {},
+    };
+}
+
 export default function BrandDashboard() {
     const [brands, setBrands] = useState<Brand[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [sales, setSales] = useState<Sale[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterIndustry, setFilterIndustry] = useState<string>('all');
 
-    // Mock data - en una aplicación real esto vendría de una API
     useEffect(() => {
-        const mockBrands: Brand[] = [
-            {
-                id: '1',
-                name: 'Zara',
-                logo: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&h=150&fit=crop',
-                industry: 'Moda',
-                status: 'verified',
-                joinDate: '2023-01-15',
-                totalRevenue: 1250000,
-                monthlyRevenue: 98000,
-                totalSpent: 45000,
-                monthlySpent: 3800,
-                activeCampaigns: 8,
-                completedCampaigns: 45,
-                rating: 4.8,
-                location: 'Madrid, España',
-                website: 'www.zara.com',
-                socialMedia: {
-                    instagram: '@zara',
-                    facebook: 'Zara',
-                    twitter: '@zara'
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            setLoadError(null);
+            try {
+                const res = await fetch(apiUrl('/api/brands'), { headers: { Accept: 'application/json' } });
+                const data = await res.json().catch(() => ({}));
+                if (cancelled) return;
+                if (!res.ok || !data?.success || !Array.isArray(data.data)) {
+                    setLoadError(
+                        typeof data?.message === 'string'
+                            ? data.message
+                            : 'No se pudieron cargar las marcas registradas',
+                    );
+                    setBrands([]);
+                    return;
                 }
-            },
-            {
-                id: '2',
-                name: 'Samsung',
-                logo: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=150&h=150&fit=crop',
-                industry: 'Tecnología',
-                status: 'verified',
-                joinDate: '2023-03-20',
-                totalRevenue: 890000,
-                monthlyRevenue: 75000,
-                totalSpent: 32000,
-                monthlySpent: 2800,
-                activeCampaigns: 6,
-                completedCampaigns: 32,
-                rating: 4.7,
-                location: 'Barcelona, España',
-                website: 'www.samsung.com',
-                socialMedia: {
-                    instagram: '@samsung',
-                    facebook: 'Samsung',
-                    twitter: '@samsung'
+                setBrands((data.data as RegisteredBrand[]).map(mapRegisteredBrandToRow));
+            } catch {
+                if (!cancelled) {
+                    setLoadError('Error de conexión al cargar marcas');
+                    setBrands([]);
                 }
-            },
-            {
-                id: '3',
-                name: 'MyProtein',
-                logo: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&h=150&fit=crop',
-                industry: 'Fitness',
-                status: 'active',
-                joinDate: '2023-05-10',
-                totalRevenue: 450000,
-                monthlyRevenue: 38000,
-                totalSpent: 18000,
-                monthlySpent: 1500,
-                activeCampaigns: 4,
-                completedCampaigns: 18,
-                rating: 4.6,
-                location: 'Valencia, España',
-                website: 'www.myprotein.es',
-                socialMedia: {
-                    instagram: '@myprotein',
-                    facebook: 'MyProtein'
-                }
+            } finally {
+                if (!cancelled) setLoading(false);
             }
-        ];
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
+    useEffect(() => {
         const mockCampaigns: Campaign[] = [
             {
                 id: '1',
@@ -278,7 +270,6 @@ export default function BrandDashboard() {
             }
         ];
 
-        setBrands(mockBrands);
         setCampaigns(mockCampaigns);
         setSales(mockSales);
     }, []);
@@ -345,10 +336,13 @@ export default function BrandDashboard() {
                             </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <Link
+                                to="/brand-setup"
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            >
                                 <Plus className="w-4 h-4" />
                                 Nueva Marca o Negocio
-                            </button>
+                            </Link>
                             <button className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors">
                                 <Settings className="w-5 h-5" />
                             </button>
@@ -358,6 +352,18 @@ export default function BrandDashboard() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 py-8">
+                {loading && (
+                    <div className="flex justify-center py-16">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+                    </div>
+                )}
+                {loadError && !loading && (
+                    <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
+                        {loadError}
+                    </div>
+                )}
+                {!loading && (
+                <>
                 {/* Stats Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
@@ -556,11 +562,17 @@ export default function BrandDashboard() {
                                         <tr key={brand.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <img
-                                                        className="w-10 h-10 rounded-lg object-cover"
-                                                        src={brand.logo}
-                                                        alt={brand.name}
-                                                    />
+                                                    {brand.logo ? (
+                                                        <img
+                                                            className="w-10 h-10 rounded-lg object-cover"
+                                                            src={brand.logo}
+                                                            alt={brand.name}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                                                            <Building2 className="w-5 h-5 text-blue-600" />
+                                                        </div>
+                                                    )}
                                                     <div className="ml-4">
                                                         <div className="text-sm font-medium text-gray-900">
                                                             {brand.name}
@@ -611,9 +623,13 @@ export default function BrandDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
-                                                    <button className="text-blue-600 hover:text-blue-900">
+                                                    <Link
+                                                        to={`/brand/${brand.id}`}
+                                                        className="text-blue-600 hover:text-blue-900"
+                                                        title="Ver perfil"
+                                                    >
                                                         <Eye className="w-4 h-4" />
-                                                    </button>
+                                                    </Link>
                                                     <button className="text-green-600 hover:text-green-900">
                                                         <Edit className="w-4 h-4" />
                                                     </button>
@@ -753,6 +769,8 @@ export default function BrandDashboard() {
                         </div>
                     </div>
                 </div>
+                </>
+                )}
             </div>
         </div>
     );

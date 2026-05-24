@@ -3,97 +3,48 @@
 const mongoose = require('mongoose');
 const Influencer = require('../models/Influencer');
 const InfluencerPromoShortCode = require('../models/InfluencerPromoShortCode');
-const User = require('../models/User');
-const UserProfile = require('../models/UserProfile');
 const {
     ensureInfluencerHasProfileShortCode,
     computeDiscountPctFromPromotion,
 } = require('./influencerPromoShortCodes');
+const {
+    normalizeWalletAddress,
+    resolveWalletForUser,
+    persistWalletForUser,
+} = require('./influencerWallet');
+const {
+    getSettlementSummaryForInfluencer,
+    settlementSummaryForPromotion,
+    resolveCommissionUsd,
+    isSettlementEnabled,
+} = require('./influencerTokenSettlement');
 
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
 const PROMOTION_CATALOG_SELECT =
     'title brand description currentPrice originalPrice currency discountPercentage status validFrom validUntil image redirectInsteadOfQr';
 
-/**
- * Normaliza dirección de wallet desde la app (EVM u otras cadenas).
- * @param {unknown} raw
- * @returns {string|null}
- */
-function normalizeWalletAddress(raw) {
-    const s = String(raw ?? '').trim();
-    if (!s) return null;
-    if (/^0x[a-fA-F0-9]{40}$/.test(s)) return s;
-    if (/^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(s)) return s;
-    if (s.length >= 26 && s.length <= 128 && /^[a-zA-Z0-9._-]+$/.test(s)) return s;
-    return null;
-}
-
-/**
- * @param {import('mongoose').Document|object} user
- * @returns {Promise<{ address: string|null, preferredNetwork: string|null, source: 'user'|'profile'|'app'|null }>}
- */
-async function resolveWalletForUser(user) {
-    const fromUser = user?.blockchain?.walletAddress && String(user.blockchain.walletAddress).trim();
-    if (fromUser) {
-        return {
-            address: fromUser,
-            preferredNetwork: user.blockchain?.preferredNetwork || null,
-            source: 'user',
-        };
-    }
-    const profile = await UserProfile.findOne({ user: user._id })
-        .select('blockchain.walletAddress blockchain.preferredNetwork')
-        .lean();
-    const fromProfile = profile?.blockchain?.walletAddress && String(profile.blockchain.walletAddress).trim();
-    if (fromProfile) {
-        return {
-            address: fromProfile,
-            preferredNetwork: profile.blockchain?.preferredNetwork || null,
-            source: 'profile',
-        };
-    }
-    return { address: null, preferredNetwork: null, source: null };
-}
-
-/**
- * Persiste wallet en User y UserProfile (influencer app).
- * @param {import('mongoose').Document} user
- * @param {string} walletAddress
- * @param {string} [preferredNetwork]
- */
-async function persistWalletForUser(user, walletAddress, preferredNetwork) {
-    user.blockchain = user.blockchain || {};
-    user.blockchain.walletAddress = walletAddress;
-    if (preferredNetwork) {
-        user.blockchain.preferredNetwork = preferredNetwork;
-    }
-    await user.save();
-
-    let profile = await UserProfile.findOne({ user: user._id });
-    if (!profile) {
-        profile = new UserProfile({
-            user: user._id,
-            profileType: 'influencer',
-            status: 'active',
-        });
-    }
-    profile.blockchain = profile.blockchain || {};
-    profile.blockchain.walletAddress = walletAddress;
-    if (preferredNetwork) {
-        profile.blockchain.preferredNetwork = preferredNetwork;
-    }
-    await profile.save();
-}
-
-function mapPromoRowToCampaignEntry(d, influencer) {
+function mapPromoRowToCampaignEntry(d, influencer, settlementCtx = null) {
     const p = d.promotion;
     const discountPct = computeDiscountPctFromPromotion(p);
+    const pid = p && p._id ? String(p._id) : null;
+    let settlement = null;
+    if (settlementCtx && pid) {
+        const perPromo = settlementSummaryForPromotion(settlementCtx.summary, pid);
+        settlement = {
+            commissionPerRedemptionUsd: settlementCtx.commissionByPromo?.[pid] ?? null,
+            pendingCount: perPromo.pendingCount,
+            pendingAmountUsd: perPromo.pendingAmountUsd,
+            paidCount: perPromo.paidCount,
+            paidAmountUsd: perPromo.paidAmountUsd,
+            tokenSymbol: settlementCtx.tokenSymbol || 'LUXAE',
+            transferMethod: 'mongo_ledger',
+        };
+    }
     const redirectInsteadOfQr = Boolean(p?.redirectInsteadOfQr);
     const blocked = influencer.username === INFLUENCER_GENERAL_USERNAME;
     let issueMode = 'qr';
     if (blocked) issueMode = 'blocked';
     else if (redirectInsteadOfQr) issueMode = 'redirect';
-    const pid = p && p._id ? String(p._id) : null;
     return {
         shortCode: d.code,
         label: (d.label && String(d.label).trim()) || null,
@@ -114,6 +65,7 @@ function mapPromoRowToCampaignEntry(d, influencer) {
                   redirectInsteadOfQr,
               }
             : null,
+        settlement,
     };
 }
 
@@ -143,9 +95,28 @@ async function listActiveCampaignsForInfluencer(influencerId) {
         .sort({ code: 1 })
         .lean();
 
+    let settlementCtx = null;
+    if (isSettlementEnabled()) {
+        const summary = await getSettlementSummaryForInfluencer(influencerId);
+        /** @type {Record<string, number>} */
+        const commissionByPromo = {};
+        for (const d of rows) {
+            const p = d.promotion;
+            if (p && p._id) {
+                const pid = String(p._id);
+                commissionByPromo[pid] = await resolveCommissionUsd(influencerId, pid);
+            }
+        }
+        settlementCtx = {
+            summary,
+            commissionByPromo,
+            tokenSymbol: process.env.INFLUENCER_SETTLEMENT_TOKEN_SYMBOL || 'LUXAE',
+        };
+    }
+
     const campaigns = rows
         .filter((d) => d.promotion && d.promotion.status === 'active')
-        .map((d) => mapPromoRowToCampaignEntry(d, inf));
+        .map((d) => mapPromoRowToCampaignEntry(d, inf, settlementCtx));
 
     return {
         influencer: {
@@ -159,6 +130,8 @@ async function listActiveCampaignsForInfluencer(influencerId) {
         influencerProfileShortCode: profileShortCode || inf.profileShortCode || null,
         campaigns,
         totalCampaigns: campaigns.length,
+        settlementsEnabled: isSettlementEnabled(),
+        settlementSummary: settlementCtx?.summary || null,
     };
 }
 
@@ -215,6 +188,16 @@ async function buildInfluencerAppSession(user, opts = {}) {
         influencerProfileShortCode: catalog.influencerProfileShortCode,
         campaigns: catalog.campaigns,
         totalCampaigns: catalog.totalCampaigns,
+        settlements: catalog.settlementsEnabled
+            ? {
+                  enabled: true,
+                  transferMethod: 'mongo_ledger',
+                  tokenSymbol: process.env.INFLUENCER_SETTLEMENT_TOKEN_SYMBOL || 'LUXAE',
+                  payoutWallet: wallet.address,
+                  payoutWalletRequired: !wallet.address,
+                  summary: catalog.settlementSummary,
+              }
+            : { enabled: false },
         verifiedAt: new Date().toISOString(),
     };
 }

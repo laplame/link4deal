@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Role = require('../models/Role');
 const { authUserDashboardFields } = require('../utils/platformSuperuser');
+const { buildEmailCandidates } = require('../utils/emailCandidates');
 const router = express.Router();
 const SESSION_EXPIRES_IN = '24h';
 
@@ -63,22 +64,6 @@ const authenticateToken = async (req, res, next) => {
 function normalizePhone(value) {
     if (typeof value !== 'string') return '';
     return value.replace(/\D/g, '').trim();
-}
-
-/** Variantes de email (Gmail ignora puntos en local-part). */
-function buildEmailCandidates(inputEmail) {
-    const email = (inputEmail || '').toLowerCase().trim();
-    if (!email.includes('@')) return [email];
-    const [localRaw, domainRaw] = email.split('@');
-    const domain = domainRaw.trim();
-    const local = localRaw.trim();
-    const localNoPlus = local.split('+')[0];
-    const candidates = new Set([`${local}@${domain}`, `${localNoPlus}@${domain}`]);
-    if (domain === 'gmail.com' || domain === 'googlemail.com') {
-        candidates.add(`${local.replace(/\./g, '')}@${domain}`);
-        candidates.add(`${localNoPlus.replace(/\./g, '')}@${domain}`);
-    }
-    return Array.from(candidates);
 }
 
 // Validaciones para registro (email opcional si hay phone; phone opcional si hay email)

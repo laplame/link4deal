@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import InfluencerDashboard from './dashboards/InfluencerDashboard';
-import BrandDashboard from './dashboards/BrandDashboard';
+import BrandOwnerDashboard from './dashboards/BrandOwnerDashboard';
 import AgencyDashboard from './dashboards/AgencyDashboard';
+import { DASHBOARD_ROUTES } from '../config/dashboardContexts';
 import type { DashboardPersona } from '../types/auth';
 import { DASHBOARD_PERSONA_LABELS } from '../types/auth';
 
@@ -45,7 +46,7 @@ export default function PlatformSuperuserSuitePage() {
     return <Navigate to="/signin" replace state={{ from: '/dashboard/suite' }} />;
   }
 
-  if (!user?.isPlatformSuperuser) {
+  if (!user?.isPlatformSuperuser && !user?.isSuperAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -118,8 +119,14 @@ export default function PlatformSuperuserSuitePage() {
       </header>
 
       <div className="flex-1 overflow-auto">
+        <p className="text-center text-xs text-amber-200/90 bg-amber-950/40 py-1 border-b border-amber-500/20">
+          Vista previa por rol (no es panel admin). Admin:{' '}
+          <a href={DASHBOARD_ROUTES.admin.home} className="underline">
+            /admin
+          </a>
+        </p>
         {panel === 'influencer' && <InfluencerDashboard />}
-        {panel === 'brand' && <BrandDashboard />}
+        {panel === 'brand' && <BrandOwnerDashboard />}
         {panel === 'agency' && <AgencyDashboard />}
       </div>
     </div>

@@ -1,28 +1,16 @@
 import React from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import { LayoutGrid } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import UserDashboard from './dashboards/UserDashboard';
-import BrandDashboard from './dashboards/BrandDashboard';
-import AgencyDashboard from './dashboards/AgencyDashboard';
-import AdminPage from './AdminPage';
-import type { PrimaryRole } from '../types/auth';
+import { defaultRouteAfterLogin } from '../config/dashboardContexts';
 
 /**
- * Dashboard de inicio: menú colapsable + contenido según primaryRole.
- *
- * Tipos de panel:
- * - user → UserDashboard (cuenta estándar).
- * - influencer → redirige al hub `/admin/influencers`.
- * - brand → BrandDashboard.
- * - agency → AgencyDashboard.
- * - admin | moderator → AdminPage.
- *
- * Superusuario de plataforma: además puede abrir `/dashboard/suite` (creador + marca + agencia).
+ * /dashboard — entrada según rol.
+ * Influencer / brand / agency / staff tienen rutas dedicadas (ver dashboardContexts.ts).
  */
 export default function DashboardPage() {
-  const { isAuthenticated, isLoading, primaryRole, user } = useAuth();
+  const { isAuthenticated, isLoading, user, primaryRole } = useAuth();
 
   if (isLoading) {
     return (
@@ -32,53 +20,26 @@ export default function DashboardPage() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <Navigate to="/signin" replace />;
   }
 
-  if (primaryRole === 'influencer') {
-    if (user?.isPlatformSuperuser) {
-      return <Navigate to="/dashboard/suite" replace />;
-    }
-    return <Navigate to="/admin/influencers" replace />;
+  if (primaryRole === 'user') {
+    return (
+      <DashboardLayout>
+        <UserDashboard />
+      </DashboardLayout>
+    );
   }
 
-  let content: React.ReactNode;
-  switch (primaryRole as PrimaryRole) {
-    case 'user':
-      content = <UserDashboard />;
-      break;
-    case 'brand':
-      content = <BrandDashboard />;
-      break;
-    case 'agency':
-      content = <AgencyDashboard />;
-      break;
-    case 'admin':
-    case 'moderator':
-      content = <AdminPage />;
-      break;
-    default:
-      content = <UserDashboard />;
+  const dest = defaultRouteAfterLogin(user);
+  if (dest !== '/dashboard') {
+    return <Navigate to={dest} replace />;
   }
 
   return (
     <DashboardLayout>
-      {user?.isPlatformSuperuser ? (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-950 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 shrink-0 text-amber-700" aria-hidden />
-            Tienes acceso multi-panel (creador, marca y agencia).
-          </span>
-          <Link
-            to="/dashboard/suite"
-            className="font-medium text-amber-900 underline-offset-2 hover:underline"
-          >
-            Abrir suite
-          </Link>
-        </div>
-      ) : null}
-      {content}
+      <UserDashboard />
     </DashboardLayout>
   );
 }

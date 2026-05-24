@@ -49,11 +49,14 @@ import Link4DealEconomyLanding from './pages/Link4DealEconomyLanding';
 import CheckoutPage from './pages/CheckoutPage';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerHubDemoPage from './pages/demo/InfluencerHubDemoPage';
-import InfluencerHubPage from './pages/InfluencerHubPage';
-import BrandDashboard from './pages/dashboards/BrandDashboard';
+import InfluencerDashboardPage from './pages/InfluencerDashboardPage';
+import BrandDashboardPage from './pages/BrandDashboardPage';
+import AgencyDashboardPage from './pages/AgencyDashboardPage';
+import AdminInfluencersPage from './pages/admin/AdminInfluencersPage';
+import AdminBrandsPage from './pages/admin/AdminBrandsPage';
+import AdminAgenciesPage from './pages/admin/AdminAgenciesPage';
 import BrandApplicationsDashboardPage from './pages/BrandApplicationsDashboardPage';
 import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
-import AgencyDashboard from './pages/dashboards/AgencyDashboard';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
 import InfluencerCrmPage from './pages/admin/InfluencerCrmPage';
@@ -157,9 +160,12 @@ function App() {
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
                   <Route path="/admin/crm" element={<InfluencerCrmPage />} />
-                  <Route path="/admin/influencers" element={<InfluencerHubPage />} />
-                  <Route path="/admin/brands" element={<BrandDashboard />} />
-                  <Route path="/admin/agencies" element={<AgencyDashboard />} />
+                  <Route path="/dashboard/influencer" element={<InfluencerDashboardPage />} />
+                  <Route path="/dashboard/brand" element={<BrandDashboardPage />} />
+                  <Route path="/dashboard/agency" element={<AgencyDashboardPage />} />
+                  <Route path="/admin/influencers" element={<AdminInfluencersPage />} />
+                  <Route path="/admin/brands" element={<AdminBrandsPage />} />
+                  <Route path="/admin/agencies" element={<AdminAgenciesPage />} />
                   <Route path="/admin/api-docs" element={<ApiDocsPage />} />
                   <Route path="/api-docs" element={<ApiDocsPage />} />
                   <Route path="/admin/ocr-profile" element={<InfluencerOCRProfile />} />

@@ -804,7 +804,7 @@ export default function InfluencerProfilePage() {
               </Link>
               {viewerInfluencerId === influencer.id ? (
                 <Link
-                  to="/admin/influencers?hub=ugc"
+                  to="/dashboard/influencer?hub=ugc"
                   className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-amber-300 text-gray-900 hover:bg-amber-200 transition-all min-w-0 shadow-md ring-2 ring-white/30"
                   title="Editar vitrina UGC: enlaces a piezas y frases públicas"
                 >
@@ -1172,7 +1172,7 @@ export default function InfluencerProfilePage() {
         <InfluencerUgcShowcase
           influencerName={influencer.name}
           ugc={influencer.ugcProfile}
-          ownerEditHref={viewerInfluencerId === influencer.id ? '/admin/influencers?hub=ugc' : undefined}
+          ownerEditHref={viewerInfluencerId === influencer.id ? '/dashboard/influencer?hub=ugc' : undefined}
         />
 
         {/* Pujas - justo después del resumen */}

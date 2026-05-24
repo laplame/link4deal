@@ -21,13 +21,17 @@ export function NavigationHeader({ title }: Props) {
   const { user, isAuthenticated, logout, primaryRole } = useAuth();
 
   const accountHref =
-    user?.isSuperAdmin === true
-      ? '/admin'
-      : user?.isPlatformSuperuser === true
-        ? '/dashboard/suite'
-        : primaryRole === 'influencer'
-          ? '/admin/influencers'
-          : '/dashboard';
+    user?.isSuperAdmin === true || user?.isPlatformSuperuser === true
+      ? '/dashboard/suite'
+      : primaryRole === 'influencer'
+        ? '/dashboard/influencer'
+        : primaryRole === 'brand'
+          ? '/dashboard/brand'
+          : primaryRole === 'agency'
+            ? '/dashboard/agency'
+            : primaryRole === 'admin' || primaryRole === 'moderator'
+              ? '/admin'
+              : '/dashboard';
   const location = useLocation();
   const desktopNavRef = useRef<HTMLDivElement>(null);
 

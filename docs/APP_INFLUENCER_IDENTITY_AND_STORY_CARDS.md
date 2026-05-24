@@ -21,8 +21,13 @@ Autenticación: **Bearer JWT** (mismo token que `POST /api/auth/login` / sesión
 | `PATCH` | `/app/wallet` | Solo actualizar wallet sin re-listar todo |
 | `GET` | `/app/campaigns` | Refrescar listado de campañas activas |
 | `POST` | `/app/story-cards` | Story vertical con código + % (Nano Banana en servidor o prompt para cliente) |
+| `GET` | `/app/settlements/summary` | Resumen abonos pending/paid por campaña |
+| `GET` | `/app/settlements` | Listado de abonos (ledger Mongo) |
+| `POST` | `/app/settlements/process-pending` | Marcar pending → paid (requiere wallet) |
 
-Rate limit: **60 peticiones / 15 min / IP** (mismo bucket en las cuatro rutas).
+**Abonos por canje (tokens/comisión):** [INFLUENCER_TOKEN_SETTLEMENT_MONGO.md](./INFLUENCER_TOKEN_SETTLEMENT_MONGO.md)
+
+Rate limit: **60 peticiones / 15 min / IP** (mismo bucket en las rutas `/app/*`).
 
 ---
 
@@ -109,10 +114,26 @@ Accept: application/json
     }
   ],
   "totalCampaigns": 1,
+  "settlements": {
+    "enabled": true,
+    "transferMethod": "mongo_ledger",
+    "tokenSymbol": "LUXAE",
+    "payoutWallet": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "payoutWalletRequired": false,
+    "summary": {
+      "pendingCount": 0,
+      "pendingAmountUsd": 0,
+      "paidCount": 3,
+      "paidAmountUsd": 3.6,
+      "byPromotion": []
+    }
+  },
   "verifiedAt": "2026-05-19T12:00:00.000Z",
   "deviceId": "app-install-uuid-v1"
 }
 ```
+
+Cada ítem de `campaigns[]` puede incluir `settlement` con comisión por canje y totales pending/paid de esa promoción (ver doc de settlement).
 
 **Errores**
 
@@ -294,6 +315,7 @@ Ejemplo: `https://www.damecodigo.com/uploads/story-cards/story-....png`
 | Emitir cupón desde código | `POST /api/discount-qr/codes/:code/issue` — ver [APP_SHORT_PROMO_CODES.md](./APP_SHORT_PROMO_CODES.md) |
 | `referralCode` sugerido | `campaigns[].referralCode` (`L4D-CODIGO`) |
 | `walletAddress` al crear QR | Usar `wallet.address` de `verify-session` en `POST /api/discount-qr/create` |
+| Abono tras canje | Automático: `influencer_token_settlements` — ver [INFLUENCER_TOKEN_SETTLEMENT_MONGO.md](./INFLUENCER_TOKEN_SETTLEMENT_MONGO.md) |
 
 Ejemplo encadenado en app:
 
@@ -374,6 +396,7 @@ async function generateStoryCard(accessToken: string, shortCode: string) {
 | Sesión + campañas | `server/utils/influencerAppSession.js` |
 | Nano Banana / prompt | `server/services/geminiStoryCardGenerator.js` |
 | Códigos cortos (catálogo) | `server/utils/influencerPromoShortCodes.js` |
+| Settlement influencer (Mongo) | `server/utils/influencerTokenSettlement.js`, `server/models/InfluencerTokenSettlement.js` |
 
 ---
 

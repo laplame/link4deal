@@ -3,9 +3,9 @@
  *
  * Paneles de producto (según primaryRole o suite multi-rol):
  * - user: Mi cuenta / marketplace (usuario final).
- * - influencer: hub creador (`/admin/influencers`).
- * - brand: panel marca (`BrandDashboard` en `/dashboard` o suite).
- * - agency: panel agencia (`AgencyDashboard`).
+ * - influencer: panel creador (`/dashboard/influencer`).
+ * - brand: panel marca (`/dashboard/brand`).
+ * - agency: panel agencia (`/dashboard/agency`).
  * - admin | moderator: `AdminPage` / rutas `/admin/*`.
  *
  * Superusuario de plataforma (`isPlatformSuperuser`, email en lista servidor):

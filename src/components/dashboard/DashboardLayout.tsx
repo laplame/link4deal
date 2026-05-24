@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  LayoutGrid,
   Tag,
   ShoppingCart,
   FolderTree,
@@ -14,11 +15,14 @@ import {
   Home,
   ShoppingBag,
   FileCode,
+  Users,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SITE_CONFIG } from '../../config/site';
 import { PRIMARY_ROLE_LABELS } from '../../types/auth';
 import type { PrimaryRole } from '../../types/auth';
+import { DASHBOARD_ROUTES, isStaffUser } from '../../config/dashboardContexts';
 
 const SIDEBAR_COLLAPSED_KEY = 'dashboard_sidebar_collapsed';
 
@@ -27,6 +31,8 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   roles?: PrimaryRole[];
+  staffOnly?: boolean;
+  rolePanelOnly?: boolean;
 }
 
 const commonNav: NavItem[] = [
@@ -36,13 +42,21 @@ const commonNav: NavItem[] = [
   { to: '/categories', label: 'Categorías', icon: <FolderTree className="h-5 w-5 shrink-0" /> },
 ];
 
-const roleNav: NavItem[] = [
-  { to: '/admin/promotions', label: 'Gestionar promociones', icon: <Tag className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator', 'agency'] },
-  { to: '/admin/influencers', label: 'Influencers', icon: <Sparkles className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
-  { to: '/admin/brands', label: 'Marcas', icon: <ShoppingBag className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
-  { to: '/admin/agencies', label: 'Agencias', icon: <Building2 className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
-  { to: '/admin/api-docs', label: 'API Docs', icon: <FileCode className="h-5 w-5 shrink-0" />, roles: ['agency'] },
-  { to: '/admin', label: 'Panel Admin', icon: <Shield className="h-5 w-5 shrink-0" />, roles: ['admin', 'moderator'] },
+const rolePanelNav: NavItem[] = [
+  { to: DASHBOARD_ROUTES.role.influencer, label: 'Mi panel creador', icon: <Sparkles className="h-5 w-5 shrink-0" />, roles: ['influencer'], rolePanelOnly: true },
+  { to: DASHBOARD_ROUTES.role.brand, label: 'Mi marca', icon: <Building2 className="h-5 w-5 shrink-0" />, roles: ['brand'], rolePanelOnly: true },
+  { to: DASHBOARD_ROUTES.role.agency, label: 'Mi agencia', icon: <Briefcase className="h-5 w-5 shrink-0" />, roles: ['agency'], rolePanelOnly: true },
+];
+
+const adminNav: NavItem[] = [
+  { to: DASHBOARD_ROUTES.suite, label: 'Multi-panel (suite)', icon: <LayoutGrid className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.home, label: 'Admin Link4Deal', icon: <Shield className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.crm, label: 'CRM influencers', icon: <Users className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.influencers, label: 'Admin influencers', icon: <Sparkles className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.brands, label: 'Admin marcas', icon: <ShoppingBag className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.agencies, label: 'Admin agencias', icon: <Building2 className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.promotions, label: 'Gestionar promociones', icon: <Tag className="h-5 w-5 shrink-0" />, staffOnly: true },
+  { to: DASHBOARD_ROUTES.admin.apiDocs, label: 'API Docs', icon: <FileCode className="h-5 w-5 shrink-0" />, roles: ['agency'], staffOnly: true },
 ];
 
 interface DashboardLayoutProps {
@@ -74,19 +88,32 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     navigate('/signin', { replace: true });
   };
 
-  const roleLabel = primaryRole ? PRIMARY_ROLE_LABELS[primaryRole] : 'Usuario';
-  const showRoleNav = (item: NavItem) => {
-    if (item.to === '/admin/api-docs') {
-      return primaryRole === 'agency' || user?.isSuperAdmin === true;
+  const staff = isStaffUser(user);
+  const roleLabel = staff
+    ? 'Staff Link4Deal'
+    : primaryRole
+      ? PRIMARY_ROLE_LABELS[primaryRole]
+      : 'Usuario';
+
+  const showNavItem = (item: NavItem) => {
+    if (item.staffOnly && !staff) return false;
+    if (item.to === DASHBOARD_ROUTES.admin.apiDocs) {
+      return staff || primaryRole === 'agency';
     }
-    return !item.roles || (primaryRole && item.roles.includes(primaryRole));
+    if (item.rolePanelOnly) {
+      if (staff) return true;
+      return Boolean(primaryRole && item.roles?.includes(primaryRole));
+    }
+    if (item.roles && primaryRole) {
+      return item.roles.includes(primaryRole) || staff;
+    }
+    return true;
   };
 
-  const navItems = [...commonNav, ...roleNav.filter(showRoleNav)];
+  const navItems = [...commonNav, ...rolePanelNav.filter(showNavItem), ...adminNav.filter(showNavItem)];
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
       <aside
         className={`flex flex-col border-r border-gray-200 bg-white transition-all duration-300 ${
           collapsed ? 'w-[72px]' : 'w-60'
@@ -108,18 +135,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
           >
-            {collapsed ? (
-              <PanelLeft className="h-5 w-5" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" />
-            )}
+            {collapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-2">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+              const isActive =
+                location.pathname === item.to || location.pathname.startsWith(item.to + '/');
               return (
                 <li key={item.to}>
                   <Link
@@ -174,10 +198,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }
