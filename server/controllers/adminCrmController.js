@@ -19,6 +19,11 @@ const {
     getOrCreateOutreach,
     PIPELINE_LABELS,
 } = require('../utils/influencerCrmOutreach');
+const {
+    IDENTITY_VERIFICATION_STATUSES,
+    IDENTITY_LABELS_ES,
+    normalizeIdentityVerificationStatus,
+} = require('../utils/influencerIdentity');
 
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
 
@@ -31,15 +36,21 @@ class AdminCrmController {
     async getStats(req, res) {
         try {
             const baseQuery = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
-            const [total, byStatus, termsAccepted, withUser] = await Promise.all([
-                Influencer.countDocuments(baseQuery),
-                Influencer.aggregate([
-                    { $match: baseQuery },
-                    { $group: { _id: '$status', count: { $sum: 1 } } },
-                ]),
-                Influencer.countDocuments({ ...baseQuery, 'crm.terms.accepted': true }),
-                Influencer.countDocuments({ ...baseQuery, userId: { $ne: null } }),
-            ]);
+            const [total, byStatus, termsAccepted, withUser, pendingIdentityVerification] =
+                await Promise.all([
+                    Influencer.countDocuments(baseQuery),
+                    Influencer.aggregate([
+                        { $match: baseQuery },
+                        { $group: { _id: '$status', count: { $sum: 1 } } },
+                    ]),
+                    Influencer.countDocuments({ ...baseQuery, 'crm.terms.accepted': true }),
+                    Influencer.countDocuments({ ...baseQuery, userId: { $ne: null } }),
+                    Influencer.countDocuments({
+                        ...baseQuery,
+                        identityVerificationStatus: 'pending',
+                        'crm.verification.screenshotUrl': { $exists: true, $ne: '' },
+                    }),
+                ]);
 
             const installAgg = await InfluencerCrmEvent.aggregate([
                 { $match: { eventType: 'install' } },
@@ -79,6 +90,7 @@ class AdminCrmController {
                     withDamecodigoApp: withDamecodigo,
                     withBizneaiApp: withBizneai,
                     withBothApps: withBoth,
+                    pendingIdentityVerification,
                 },
             });
         } catch (error) {
@@ -102,6 +114,17 @@ class AdminCrmController {
             }
             if (req.query.dataSubmissionStatus) {
                 query['crm.dataSubmissionStatus'] = String(req.query.dataSubmissionStatus);
+            }
+            if (req.query.identityVerificationStatus) {
+                const iv = normalizeIdentityVerificationStatus(
+                    req.query.identityVerificationStatus,
+                );
+                if (IDENTITY_VERIFICATION_STATUSES.includes(iv)) {
+                    query.identityVerificationStatus = iv;
+                }
+            }
+            if (req.query.hasVerificationScreenshot === 'true') {
+                query['crm.verification.screenshotUrl'] = { $exists: true, $ne: '' };
             }
             if (req.query.termsAccepted === 'true') query['crm.terms.accepted'] = true;
             if (req.query.termsAccepted === 'false') query['crm.terms.accepted'] = { $ne: true };
@@ -192,6 +215,8 @@ class AdminCrmController {
                 filters: {
                     activationStatuses: ACTIVATION_STATUSES,
                     dataSubmissionStatuses: DATA_SUBMISSION_STATUSES,
+                    identityVerificationStatuses: IDENTITY_VERIFICATION_STATUSES,
+                    identityVerificationLabels: IDENTITY_LABELS_ES,
                 },
             });
         } catch (error) {
@@ -246,6 +271,10 @@ class AdminCrmController {
                     socialMedia: doc.socialMedia || {},
                     followers: doc.followers || {},
                     ugcEnabled: Boolean(doc.ugcProfile?.enabled),
+                    identityVerificationStatus: normalizeIdentityVerificationStatus(
+                        doc.identityVerificationStatus,
+                    ),
+                    verification: doc.crm?.verification || null,
                     recentPromotions: doc.recentPromotions || [],
                     events: events.map((e) => ({
                         id: String(e._id),
@@ -365,6 +394,106 @@ class AdminCrmController {
             return res.json({ success: true, data: row, message: 'CRM actualizado' });
         } catch (error) {
             console.error('❌ CRM patch:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * POST /api/admin/crm/influencers/:id/identity-verification
+     * Confirma o rechaza que el User vinculado es el influencer del perfil (dashboard app).
+     */
+    async reviewIdentityVerification(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const decision = String(req.body?.decision || '')
+                .trim()
+                .toLowerCase();
+            if (!['approved', 'rejected'].includes(decision)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'decision debe ser approved o rejected',
+                });
+            }
+
+            const adminNote =
+                req.body?.adminNote != null
+                    ? String(req.body.adminNote).slice(0, 2000)
+                    : '';
+
+            const doc = await Influencer.findById(id);
+            if (!doc || doc.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            if (!doc.crm) doc.crm = defaultCrm();
+            doc.crm.verification = doc.crm.verification || {};
+            doc.crm.verification.reviewedAt = new Date();
+            doc.crm.verification.reviewedByAdminId = req.user._id;
+            doc.crm.verification.adminDecisionNote = adminNote;
+
+            doc.identityVerificationStatus = decision;
+            if (decision === 'approved') {
+                doc.status = 'active';
+                doc.crm.activationStatus = 'active';
+            } else if (decision === 'rejected') {
+                doc.crm.activationStatus = 'suspended';
+            }
+
+            doc.crm.updatedByAdminAt = new Date();
+            doc.markModified('crm');
+            await doc.save();
+
+            await InfluencerCrmEvent.create({
+                influencerId: doc._id,
+                userId: doc.userId || undefined,
+                appKey: 'web',
+                eventType: 'admin_update',
+                metadata: {
+                    adminUserId: String(req.user._id),
+                    identityVerificationDecision: decision,
+                },
+            });
+
+            const fresh = await Influencer.findById(doc._id)
+                .populate(
+                    'userId',
+                    'firstName lastName email phone isVerified isActive blockchain.walletAddress primaryRole',
+                )
+                .lean();
+            const [enrichmentMap, installAgg] = await Promise.all([
+                buildMarketplaceListEnrichmentMap([String(doc._id)]),
+                aggregateInstallCountsByInfluencer([String(doc._id)]),
+            ]);
+            const outreachFresh = await getOrCreateOutreach(
+                String(doc._id),
+                (fresh.socialMedia?.instagram || fresh.username || '').replace(/^@/, ''),
+            );
+            const row = await buildCrmInfluencerRow(
+                fresh,
+                enrichmentMap.get(String(doc._id)),
+                installAgg,
+                serializeOutreach(outreachFresh),
+            );
+
+            const label =
+                decision === 'approved'
+                    ? 'Identidad confirmada — acceso al dashboard habilitado'
+                    : 'Identidad rechazada';
+
+            return res.json({
+                success: true,
+                data: {
+                    ...row,
+                    verification: fresh.crm?.verification || null,
+                },
+                message: label,
+            });
+        } catch (error) {
+            console.error('❌ CRM identity verification:', error);
             return res.status(500).json({ success: false, message: error.message });
         }
     }

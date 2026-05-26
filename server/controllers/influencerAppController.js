@@ -86,12 +86,13 @@ class InfluencerAppController {
             });
         } catch (error) {
             const status = error.status || 500;
-            if (status === 404 || status === 400 || status === 503) {
+            if (status === 404 || status === 400 || status === 403 || status === 503) {
                 return res.status(status).json({
                     ok: false,
                     success: false,
                     message: error.message,
                     code: error.code || undefined,
+                    data: error.data || undefined,
                 });
             }
             console.error('❌ verify-session app influencer:', error);

@@ -53,6 +53,8 @@ export interface CrmInfluencerRow {
   username: string;
   avatar: string;
   status: string;
+  identityVerificationStatus: 'pending' | 'approved' | 'rejected';
+  hasVerificationScreenshot?: boolean;
   joinDate: string | null;
   profileShortCode: string;
   profileCompleteness: number;
@@ -100,6 +102,15 @@ export interface CrmInfluencerDetail extends CrmInfluencerRow {
   socialMedia: Record<string, string | undefined>;
   followers: Record<string, number>;
   ugcEnabled: boolean;
+  identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
+  verification?: {
+    screenshotUrl?: string;
+    screenshotUploadedAt?: string | null;
+    note?: string;
+    reviewedAt?: string | null;
+    reviewedByAdminId?: string | null;
+    adminDecisionNote?: string;
+  } | null;
   recentPromotions: unknown[];
   events: {
     id: string;
@@ -120,6 +131,7 @@ export interface CrmStats {
   withDamecodigoApp: number;
   withBizneaiApp: number;
   withBothApps: number;
+  pendingIdentityVerification: number;
 }
 
 export interface CrmListParams {
@@ -131,6 +143,8 @@ export interface CrmListParams {
   dataSubmissionStatus?: string;
   termsAccepted?: 'true' | 'false';
   app?: 'damecodigo' | 'bizneai' | 'both' | 'none';
+  identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
+  hasVerificationScreenshot?: 'true';
 }
 
 export async function fetchCrmStats(): Promise<CrmStats> {
@@ -150,6 +164,12 @@ export async function fetchCrmInfluencers(params: CrmListParams = {}) {
   if (params.dataSubmissionStatus) q.set('dataSubmissionStatus', params.dataSubmissionStatus);
   if (params.termsAccepted) q.set('termsAccepted', params.termsAccepted);
   if (params.app) q.set('app', params.app);
+  if (params.identityVerificationStatus) {
+    q.set('identityVerificationStatus', params.identityVerificationStatus);
+  }
+  if (params.hasVerificationScreenshot === 'true') {
+    q.set('hasVerificationScreenshot', 'true');
+  }
 
   const res = await fetch(apiUrl(`/api/admin/crm/influencers?${q}`), { headers: authHeaders() });
   const data = await res.json();
@@ -183,6 +203,20 @@ export async function patchCrmOutreach(
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Error al guardar outreach');
+  return data.data;
+}
+
+export async function reviewCrmIdentityVerification(
+  id: string,
+  body: { decision: 'approved' | 'rejected'; adminNote?: string },
+): Promise<CrmInfluencerDetail> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${id}/identity-verification`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al revisar identidad');
   return data.data;
 }
 

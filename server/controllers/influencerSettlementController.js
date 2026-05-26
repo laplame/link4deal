@@ -1,6 +1,7 @@
 'use strict';
 
 const Influencer = require('../models/Influencer');
+const { isDashboardAccessAllowed } = require('../utils/influencerIdentity');
 const {
     getSettlementSummaryForInfluencer,
     listSettlementsForInfluencer,
@@ -10,11 +11,19 @@ const {
 
 class InfluencerSettlementController {
     async requireInfluencer(user) {
-        const influencer = await Influencer.findOne({ userId: user._id }).select('_id').lean();
+        const influencer = await Influencer.findOne({ userId: user._id }).select('_id status').lean();
         if (!influencer) {
             const e = new Error('No tienes perfil de influencer vinculado');
             e.status = 404;
             e.code = 'INFLUENCER_NOT_LINKED';
+            throw e;
+        }
+        if (!isDashboardAccessAllowed(influencer)) {
+            const e = new Error(
+                'Debes tener la identidad confirmada por un super admin para usar abonos y campañas en la app.',
+            );
+            e.status = 403;
+            e.code = 'INFLUENCER_IDENTITY_NOT_APPROVED';
             throw e;
         }
         return influencer;

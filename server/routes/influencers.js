@@ -64,6 +64,20 @@ router.post('/app/settlements/process-pending', influencerAppLimiter, authentica
     influencerSettlementController.processPending(req, res),
 );
 
+// Evidencia para verificación (screenshot del perfil) — requiere sesión influencer
+router.post(
+    '/app/verification-screenshot',
+    influencerAppLimiter,
+    authenticateToken,
+    (req, res, next) => {
+        memoryUpload.single('image')(req, res, (err) => {
+            if (err) return handleUploadError(err, res);
+            next();
+        });
+    },
+    (req, res) => influencerController.uploadVerificationScreenshot(req, res)
+);
+
 // Perfil del influencer logueado (debe ir antes de /:id)
 router.get('/me', authenticateToken, (req, res) => influencerController.getMe(req, res));
 router.patch('/me/ugc-profile', authenticateToken, (req, res) => influencerController.updateMeUgcProfile(req, res));

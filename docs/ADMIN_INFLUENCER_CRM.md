@@ -6,6 +6,7 @@ Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con 
 
 | Dimensión | Fuente |
 |-----------|--------|
+| Verificación identidad (dashboard app) | `Influencer.identityVerificationStatus` (`pending` / `approved` / `rejected`) + evidencia `crm.verification` |
 | Activación CRM | `Influencer.crm.activationStatus` + estado `Influencer.status` |
 | Envío de datos | `crm.dataSubmissionStatus` + % completitud (bio, avatar, redes, categorías, userId) |
 | Términos | `crm.terms.accepted`, `acceptedAt`, `version` |
@@ -18,11 +19,29 @@ Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con 
 | Método | Ruta |
 |--------|------|
 | GET | `/api/admin/crm/stats` |
-| GET | `/api/admin/crm/influencers?page&limit&search&status&activationStatus&dataSubmissionStatus&termsAccepted&app` |
+| GET | `/api/admin/crm/influencers?...&identityVerificationStatus&hasVerificationScreenshot` |
 | GET | `/api/admin/crm/influencers/:id` |
 | PATCH | `/api/admin/crm/influencers/:id` |
+| POST | `/api/admin/crm/influencers/:id/identity-verification` |
 
 Filtro `app`: `damecodigo` | `bizneai` | `both` | `none`.
+
+Filtro `identityVerificationStatus`: `pending` | `approved` | `rejected`.  
+`hasVerificationScreenshot=true` — solo con screenshot subido (cola de revisión).
+
+### Confirmar identidad (dashboard app)
+
+En la ficha CRM, bloque **Verificación de identidad**:
+
+- **Confirmar identidad** → `decision: approved` — pone `identityVerificationStatus: approved`, `status: active`, `crm.activationStatus: active`.
+- **Rechazar** → `decision: rejected` — el perfil público sigue visible; la app no muestra campañas ni abonos.
+
+```json
+POST /api/admin/crm/influencers/:id/identity-verification
+{ "decision": "approved", "adminNote": "Coincide Instagram @handle" }
+```
+
+Stats: `pendingIdentityVerification` — pendientes con screenshot subido.
 
 ## Tracking desde apps
 

@@ -53,7 +53,7 @@ export function defaultRouteAfterLogin(user: AuthUser): string {
     case 'brand':
       return DASHBOARD_ROUTES.role.brand;
     case 'agency':
-      return DASHBOARD_ROUTES.role.agency;
+      return '/agency-setup';
     case 'admin':
     case 'moderator':
       return DASHBOARD_ROUTES.admin.home;

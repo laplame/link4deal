@@ -6,6 +6,13 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const { authUserDashboardFields } = require('../utils/platformSuperuser');
 const { buildEmailCandidates } = require('../utils/emailCandidates');
+const {
+    allowDuplicatePhonesForTesting,
+    normalizePhone,
+    publicPhone,
+    phoneLookupFilter,
+    resolveStoragePhone,
+} = require('../utils/phoneTesting');
 const router = express.Router();
 const SESSION_EXPIRES_IN = '24h';
 
@@ -59,12 +66,6 @@ const authenticateToken = async (req, res, next) => {
         return res.status(403).json({ message: 'Token inválido' });
     }
 };
-
-/** Normaliza teléfono/WhatsApp a solo dígitos para búsqueda. */
-function normalizePhone(value) {
-    if (typeof value !== 'string') return '';
-    return value.replace(/\D/g, '').trim();
-}
 
 // Validaciones para registro (email opcional si hay phone; phone opcional si hay email)
 const registerValidation = [
@@ -139,10 +140,18 @@ router.post('/register', registerValidation, async (req, res) => {
                 return res.status(409).json({ message: 'Ya existe un usuario con este email' });
             }
         }
+        let phoneStored = null;
         if (phone) {
-            const existingByPhone = await User.findOne({ phone });
-            if (existingByPhone) {
-                return res.status(409).json({ message: 'Ya existe un usuario con este teléfono/WhatsApp' });
+            if (!allowDuplicatePhonesForTesting()) {
+                const existingByPhone = await User.findOne({ phone });
+                if (existingByPhone) {
+                    return res.status(409).json({
+                        message: 'Ya existe un usuario con este teléfono/WhatsApp',
+                    });
+                }
+                phoneStored = phone;
+            } else {
+                phoneStored = await resolveStoragePhone(phone);
             }
         }
 
@@ -151,7 +160,7 @@ router.post('/register', registerValidation, async (req, res) => {
 
         const user = new User({
             email: email || undefined,
-            phone: phone || undefined,
+            phone: phoneStored || undefined,
             password,
             firstName,
             lastName,
@@ -191,7 +200,7 @@ router.post('/register', registerValidation, async (req, res) => {
             user: {
                 id: user._id,
                 email: user.email || undefined,
-                phone: user.phone || undefined,
+                phone: publicPhone(user.phone),
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
@@ -207,6 +216,13 @@ router.post('/register', registerValidation, async (req, res) => {
 
     } catch (error) {
         console.error('Error en registro:', error);
+        if (error.code === 11000 && String(error.message || '').includes('phone')) {
+            return res.status(409).json({
+                message: allowDuplicatePhonesForTesting()
+                    ? 'Conflicto al guardar teléfono; reintenta el registro'
+                    : 'Ya existe un usuario con este teléfono/WhatsApp',
+            });
+        }
         const message = process.env.NODE_ENV === 'development' ? error.message : 'Error interno del servidor';
         res.status(500).json({
             message,
@@ -238,6 +254,7 @@ router.post('/login', loginValidation, async (req, res) => {
         const isEmail = loginTrim.includes('@');
 
         let user;
+        let passwordAlreadyVerified = false;
         if (isEmail) {
             const emailCandidates = buildEmailCandidates(loginTrim);
             user = await User.findOne({ email: { $in: emailCandidates } })
@@ -248,7 +265,34 @@ router.post('/login', loginValidation, async (req, res) => {
             if (!phoneNorm || phoneNorm.length < 10) {
                 return res.status(400).json({ message: 'Teléfono/WhatsApp inválido' });
             }
-            user = await User.findOne({ phone: phoneNorm }).select('+password').populate('roles');
+            const phoneCandidates = await User.find(phoneLookupFilter(phoneNorm))
+                .select('+password')
+                .populate('roles');
+
+            if (phoneCandidates.length === 0) {
+                return res.status(401).json({ message: 'Credenciales inválidas' });
+            }
+
+            if (phoneCandidates.length === 1) {
+                user = phoneCandidates[0];
+            } else if (allowDuplicatePhonesForTesting()) {
+                for (const candidate of phoneCandidates) {
+                    const match = await bcrypt.compare(password, candidate.password);
+                    if (match) {
+                        user = candidate;
+                        passwordAlreadyVerified = true;
+                        break;
+                    }
+                }
+                if (!user) {
+                    return res.status(401).json({ message: 'Credenciales inválidas' });
+                }
+            } else {
+                return res.status(409).json({
+                    message:
+                        'Varias cuentas comparten este teléfono. Usa email para iniciar sesión o contacta soporte.',
+                });
+            }
         }
 
         if (!user) {
@@ -273,7 +317,7 @@ router.post('/login', loginValidation, async (req, res) => {
             }
         }
 
-        // Verificar contraseña
+        if (!passwordAlreadyVerified) {
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             // Incrementar intentos fallidos
@@ -288,6 +332,7 @@ router.post('/login', loginValidation, async (req, res) => {
             return res.status(401).json({
                 message: 'Credenciales inválidas'
             });
+        }
         }
 
         // Resetear intentos fallidos y actualizar último acceso
@@ -321,7 +366,7 @@ router.post('/login', loginValidation, async (req, res) => {
             user: {
                 id: user._id,
                 email: user.email || undefined,
-                phone: user.phone || undefined,
+                phone: publicPhone(user.phone),
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,
@@ -447,7 +492,7 @@ router.get('/me', authenticateToken, async (req, res) => {
             user: {
                 id: user._id,
                 email: user.email || undefined,
-                phone: user.phone || undefined,
+                phone: publicPhone(user.phone),
                 firstName: user.firstName,
                 lastName: user.lastName,
                 primaryRole: user.primaryRole,

@@ -191,6 +191,7 @@ server/
 - `NODE_ENV` - Entorno (development/production)
 - `FRONTEND_URL` - URL del frontend para CORS
 - `SESSION_SECRET` - Clave secreta para sesiones
+- `ALLOW_DUPLICATE_PHONES_FOR_TESTING` - `true` / `false`. Por defecto (si no es producción) permite registrar varias cuentas con el mismo teléfono; el login con teléfono usa la contraseña para elegir la cuenta. En producción desactivado salvo `true` explícito.
 
 ## Seguridad
 

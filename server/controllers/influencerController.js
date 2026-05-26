@@ -82,6 +82,7 @@ class InfluencerController {
             engagement: d.engagement ?? 0,
             categories: Array.isArray(d.categories) ? d.categories : [],
             status: d.status || 'pending',
+            identityVerificationStatus: d.identityVerificationStatus || 'pending',
             joinDate: d.joinDate ? new Date(d.joinDate).toISOString().split('T')[0] : '',
             totalEarnings: d.totalEarnings ?? 0,
             monthlyEarnings: d.monthlyEarnings ?? 0,
@@ -250,6 +251,7 @@ class InfluencerController {
                 engagement: body.engagement != null ? Number(body.engagement) : 0,
                 categories,
                 status: 'pending',
+                identityVerificationStatus: 'pending',
                 location: (body.location || '').trim(),
                 bio: (body.bio || '').trim(),
                 socialMedia,
@@ -335,6 +337,104 @@ class InfluencerController {
             res.status(500).json({
                 success: false,
                 message: err.message || 'Error al subir la imagen'
+            });
+        }
+    }
+
+    /**
+     * POST /api/influencers/app/verification-screenshot
+     * Sube screenshot del perfil (evidencia) y lo guarda en Influencer.crm.verification.
+     * Requiere JWT y que exista influencer vinculado (Influencer.userId).
+     * Body: multipart/form-data con campo "image" + opcional "note".
+     */
+    async uploadVerificationScreenshot(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({ ok: false, success: false, message: 'Token de acceso requerido' });
+            }
+            if (!req.file || !req.file.buffer) {
+                return res.status(400).json({
+                    ok: false,
+                    success: false,
+                    message: 'Sube una imagen en el campo "image"',
+                });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({ ok: false, success: false, message: 'Base de datos no disponible' });
+            }
+
+            const doc = await Influencer.findOne({ userId: user._id });
+            if (!doc || doc.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({
+                    ok: false,
+                    success: false,
+                    message: 'No tienes perfil de influencer vinculado',
+                    code: 'INFLUENCER_NOT_LINKED',
+                });
+            }
+
+            let screenshotUrl = '';
+            if (cloudinaryConfig.isConfigured) {
+                try {
+                    const cloudinaryFile = {
+                        buffer: req.file.buffer,
+                        originalname: req.file.originalname,
+                        mimetype: req.file.mimetype,
+                    };
+                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile, {
+                        folder: 'link4deal/influencers-verification',
+                    });
+                    if (cloudinaryResult?.success && cloudinaryResult.data?.secure_url) {
+                        screenshotUrl = cloudinaryResult.data.secure_url;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Cloudinary verification no disponible, usando disco local:', e.message);
+                }
+            }
+
+            if (!screenshotUrl) {
+                const dir = getInfluencerUploadDir();
+                await fs.mkdir(dir, { recursive: true });
+                const ext = path.extname(req.file.originalname) || '.jpg';
+                const filename = `influencer-verification-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+                const fullPath = path.join(dir, filename);
+                await fs.writeFile(fullPath, req.file.buffer);
+                screenshotUrl = `/uploads/influencers/${filename}`;
+            }
+
+            if (!doc.crm) doc.crm = {};
+            doc.crm.verification = doc.crm.verification || {};
+            doc.crm.verification.screenshotUrl = screenshotUrl;
+            doc.crm.verification.screenshotUploadedAt = new Date();
+            if (doc.identityVerificationStatus === 'rejected') {
+                doc.identityVerificationStatus = 'pending';
+            }
+            if (!doc.crm.activationStatus || doc.crm.activationStatus === 'not_started') {
+                doc.crm.activationStatus = 'pending_review';
+            }
+            if (req.body?.note != null) {
+                doc.crm.verification.note = String(req.body.note).slice(0, 500);
+            }
+            doc.markModified('crm');
+            await doc.save();
+
+            return res.status(200).json({
+                ok: true,
+                success: true,
+                data: {
+                    influencerId: String(doc._id),
+                    screenshotUrl,
+                    uploadedAt: doc.crm.verification.screenshotUploadedAt.toISOString(),
+                },
+                message: 'Evidencia subida correctamente',
+            });
+        } catch (err) {
+            console.error('Error subiendo screenshot verification influencer:', err);
+            return res.status(500).json({
+                ok: false,
+                success: false,
+                message: err.message || 'Error al subir la imagen',
             });
         }
     }

@@ -227,6 +227,20 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/agencies/mine - Agencia del usuario autenticado (dueño)
+router.get('/mine', authenticateToken, async (req, res) => {
+    try {
+        const agency = await Agency.findOne({ owner: req.user._id })
+            .select('name type status isVerified headquarters createdAt')
+            .lean();
+
+        return res.json({ agency: agency || null });
+    } catch (error) {
+        console.error('Error al obtener mi agencia:', error);
+        return res.status(500).json({ message: 'Error interno del servidor' });
+    }
+});
+
 // GET /api/agencies/:id - Obtener agencia específica
 router.get('/:id', async (req, res) => {
     try {

@@ -34,6 +34,16 @@ const influencerSchema = new mongoose.Schema({
         enum: ['active', 'pending', 'verified', 'suspended'],
         default: 'pending'
     },
+    /**
+     * Verificación manual por super admin: ¿la cuenta User que pidió acceso es el influencer del perfil?
+     * El perfil público puede verse con `pending`; el dashboard de app exige `approved`.
+     */
+    identityVerificationStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending',
+        index: true,
+    },
     joinDate: { type: Date, default: Date.now },
 
     // Earnings (interno; OCR no suele tenerlo)
@@ -157,6 +167,19 @@ const influencerSchema = new mongoose.Schema({
         },
         onboardingStep: { type: String, trim: true, default: '' },
         adminNotes: { type: String, trim: true, maxlength: 8000, default: '' },
+        /**
+         * Evidencia para verificación manual: screenshot del perfil social (lo sube el influencer desde la app).
+         * El super admin lo revisa en /admin/crm.
+         */
+        verification: {
+            screenshotUrl: { type: String, trim: true, default: '' },
+            screenshotUploadedAt: { type: Date, default: null },
+            /** Texto libre opcional: link al perfil o nota del influencer. */
+            note: { type: String, trim: true, maxlength: 500, default: '' },
+            reviewedAt: { type: Date, default: null },
+            reviewedByAdminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+            adminDecisionNote: { type: String, trim: true, maxlength: 2000, default: '' },
+        },
         lastContactAt: { type: Date, default: null },
         updatedByAdminAt: { type: Date, default: null },
     },

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, 
     Building2, 
@@ -14,6 +14,8 @@ import {
     Award,
     Briefcase
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 interface AgencyService {
     id: string;
@@ -28,10 +30,18 @@ interface TeamMember {
     experience: number;
 }
 
+function mapEmployeesToSize(employees: string): string {
+    if (employees === '2-5') return '1-5';
+    if (['1-5', '6-10', '11-25', '26-50', '51-100', '100+'].includes(employees)) return employees;
+    return '1-5';
+}
+
 const AgencySetup: React.FC = () => {
     const navigate = useNavigate();
+    const { isAuthenticated, isLoading: authLoading, user } = useAuth();
     const [currentStep, setCurrentStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     
     // Form data
     const [formData, setFormData] = useState({
@@ -178,20 +188,67 @@ const AgencySetup: React.FC = () => {
     };
 
     const handleSubmit = async () => {
+        setSubmitError(null);
         setIsLoading(true);
-        
+
         try {
-            // Aquí se haría la llamada a la API para crear el perfil de agencia
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Redirigir al dashboard
-            navigate('/dashboard');
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                setSubmitError('Debes iniciar sesión para registrar tu agencia.');
+                navigate('/signin', { state: { from: '/agency-setup' } });
+                return;
+            }
+
+            const fd = new FormData();
+            fd.append('name', formData.agencyName.trim());
+            fd.append('type', formData.type);
+            fd.append('category', (formData.headquarters || 'marketing').trim().slice(0, 50));
+            fd.append('description', formData.description.trim());
+            if (formData.website.trim()) fd.append('website', formData.website.trim());
+            fd.append('size', mapEmployeesToSize(formData.employees));
+            fd.append('founded', String(formData.founded));
+            fd.append('headquarters', formData.headquarters.trim());
+            fd.append('services', JSON.stringify(formData.services));
+            fd.append('team', JSON.stringify(formData.team));
+            if (user?.email) fd.append('contact[email]', user.email);
+            if (user?.phone) fd.append('contact[phone]', user.phone);
+            if (formData.logo) fd.append('logo', formData.logo);
+            formData.documents.forEach((file) => fd.append('documents', file));
+
+            const res = await fetch(apiUrl('/api/agencies'), {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const msg =
+                    data.message ||
+                    (Array.isArray(data.errors) ? data.errors.map((e: { msg?: string }) => e.msg).join(', ') : null) ||
+                    'No se pudo crear la agencia';
+                throw new Error(msg);
+            }
+
+            navigate('/dashboard/agency', { replace: true });
         } catch (error) {
             console.error('Error al crear perfil de agencia:', error);
+            setSubmitError(error instanceof Error ? error.message : 'Error al crear la agencia');
         } finally {
             setIsLoading(false);
         }
     };
+
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return <Navigate to="/signin" replace state={{ from: '/agency-setup' }} />;
+    }
 
     const renderStep1 = () => (
         <div className="space-y-6">
@@ -267,7 +324,7 @@ const AgencySetup: React.FC = () => {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="">Seleccionar</option>
-                        <option value="2-5">2-5</option>
+                        <option value="1-5">1-5</option>
                         <option value="6-10">6-10</option>
                         <option value="11-25">11-25</option>
                         <option value="26-50">26-50</option>
@@ -690,6 +747,12 @@ const AgencySetup: React.FC = () => {
                         Completa la información para crear tu perfil de agencia profesional
                     </p>
                 </div>
+
+                {submitError && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {submitError}
+                    </div>
+                )}
 
                 {/* Step Content */}
                 <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">

@@ -688,7 +688,10 @@ export default function KYCForm() {
                   {currentStep > step.id ? (
                     <CheckCircle className="w-5 h-5" />
                   ) : (
-                    <step.icon className="w-5 h-5" />
+                    (() => {
+                      const StepIcon = step.icon;
+                      return <StepIcon className="w-5 h-5" />;
+                    })()
                   )}
                 </div>
                 {index < steps.length - 1 && (

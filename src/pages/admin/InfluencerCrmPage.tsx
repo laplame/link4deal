@@ -13,6 +13,8 @@ import {
   ExternalLink,
   Save,
   X,
+  ShieldCheck,
+  ShieldX,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -28,6 +30,7 @@ import {
   fetchCrmInfluencerDetail,
   patchCrmInfluencer,
   patchCrmOutreach,
+  reviewCrmIdentityVerification,
   type CrmInfluencerRow,
   type CrmInfluencerDetail,
   type CrmStats,
@@ -49,6 +52,18 @@ const DATA_LABELS: Record<string, string> = {
   partial: 'Parcial',
   complete: 'Completo',
 };
+
+const IDENTITY_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  approved: 'Confirmada',
+  rejected: 'Rechazada',
+};
+
+function identityBadgeClass(status: string) {
+  if (status === 'approved') return 'bg-emerald-100 text-emerald-800';
+  if (status === 'rejected') return 'bg-red-100 text-red-800';
+  return 'bg-amber-100 text-amber-900';
+}
 
 function AppBadges({ row }: { row: CrmInfluencerRow }) {
   const d = row.apps.damecodigoInfluencer.installCount;
@@ -96,6 +111,7 @@ export default function InfluencerCrmPage() {
   const [dataFilter, setDataFilter] = useState('');
   const [termsFilter, setTermsFilter] = useState('');
   const [appFilter, setAppFilter] = useState('');
+  const [identityFilter, setIdentityFilter] = useState('');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CrmInfluencerDetail | null>(null);
@@ -108,6 +124,8 @@ export default function InfluencerCrmPage() {
   const [editTerms, setEditTerms] = useState(false);
   const [editContactEmail, setEditContactEmail] = useState('');
   const [editNextAction, setEditNextAction] = useState('');
+  const [identityAdminNote, setIdentityAdminNote] = useState('');
+  const [identityReviewing, setIdentityReviewing] = useState(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -124,6 +142,11 @@ export default function InfluencerCrmPage() {
           dataSubmissionStatus: dataFilter || undefined,
           termsAccepted: termsFilter === 'yes' ? 'true' : termsFilter === 'no' ? 'false' : undefined,
           app: (appFilter || undefined) as 'damecodigo' | 'bizneai' | 'both' | 'none' | undefined,
+          identityVerificationStatus: (identityFilter || undefined) as
+            | 'pending'
+            | 'approved'
+            | 'rejected'
+            | undefined,
         }),
       ]);
       setStats(st);
@@ -136,7 +159,7 @@ export default function InfluencerCrmPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter]);
+  }, [page, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter]);
 
   useEffect(() => {
     if (!isSuperAdmin || !unlocked) return;
@@ -161,6 +184,7 @@ export default function InfluencerCrmPage() {
         setEditTerms(d.terms.accepted);
         setEditContactEmail(d.outreach?.contactEmail || d.user?.email || '');
         setEditNextAction(d.outreach?.nextAction || '');
+        setIdentityAdminNote(d.verification?.adminDecisionNote || '');
       })
       .catch(() => {
         if (!cancelled) setDetail(null);
@@ -181,6 +205,28 @@ export default function InfluencerCrmPage() {
       setPinError(false);
     } else {
       setPinError(true);
+    }
+  };
+
+  const handleIdentityReview = async (decision: 'approved' | 'rejected') => {
+    if (!selectedId) return;
+    const msg =
+      decision === 'approved'
+        ? '¿Confirmas que la cuenta User es el influencer de este perfil? Habilitará el dashboard en la app.'
+        : '¿Rechazas la identidad de este solicitante?';
+    if (!window.confirm(msg)) return;
+    setIdentityReviewing(true);
+    try {
+      const updated = await reviewCrmIdentityVerification(selectedId, {
+        decision,
+        adminNote: identityAdminNote.trim() || undefined,
+      });
+      setDetail(updated);
+      await loadList();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al revisar identidad');
+    } finally {
+      setIdentityReviewing(false);
     }
   };
 
@@ -313,6 +359,12 @@ export default function InfluencerCrmPage() {
               <p className="text-xs text-gray-500">Ambas apps</p>
               <p className="text-2xl font-bold text-purple-600">{stats.withBothApps}</p>
             </div>
+            <div className="bg-white rounded-xl border p-4 col-span-2 md:col-span-1">
+              <p className="text-xs text-gray-500">Identidad pendiente</p>
+              <p className="text-2xl font-bold text-amber-700">
+                {stats.pendingIdentityVerification ?? 0}
+              </p>
+            </div>
           </div>
         )}
 
@@ -386,6 +438,19 @@ export default function InfluencerCrmPage() {
             <option value="no">Pendientes</option>
           </select>
           <select
+            value={identityFilter}
+            onChange={(e) => {
+              setIdentityFilter(e.target.value);
+              setPage(1);
+            }}
+            className="py-2 px-3 border rounded-lg text-sm"
+          >
+            <option value="">Verificación identidad</option>
+            <option value="pending">Pendiente</option>
+            <option value="approved">Confirmada</option>
+            <option value="rejected">Rechazada</option>
+          </select>
+          <select
             value={appFilter}
             onChange={(e) => {
               setAppFilter(e.target.value);
@@ -419,6 +484,7 @@ export default function InfluencerCrmPage() {
                     <thead className="bg-slate-50 text-left text-xs text-gray-600 uppercase">
                       <tr>
                         <th className="px-3 py-3">Influencer</th>
+                        <th className="px-3 py-3">Identidad</th>
                         <th className="px-3 py-3">Activación</th>
                         <th className="px-3 py-3">Datos</th>
                         <th className="px-3 py-3">Outreach</th>
@@ -452,6 +518,19 @@ export default function InfluencerCrmPage() {
                                 )}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${identityBadgeClass(
+                                row.identityVerificationStatus,
+                              )}`}
+                            >
+                              {IDENTITY_LABELS[row.identityVerificationStatus] ||
+                                row.identityVerificationStatus}
+                            </span>
+                            {row.hasVerificationScreenshot && row.identityVerificationStatus === 'pending' && (
+                              <span className="block text-[10px] text-amber-700 mt-0.5">📷 evidencia</span>
+                            )}
                           </td>
                           <td className="px-3 py-3">
                             <span className="text-xs font-medium">
@@ -545,6 +624,97 @@ export default function InfluencerCrmPage() {
                       </Link>
                     </div>
                   </div>
+
+                  <div className="mb-4 rounded-xl border-2 border-purple-200 bg-purple-50/50 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold text-purple-900 uppercase">
+                        Verificación de identidad (dashboard app)
+                      </p>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-semibold ${identityBadgeClass(
+                          detail.identityVerificationStatus || 'pending',
+                        )}`}
+                      >
+                        {IDENTITY_LABELS[detail.identityVerificationStatus || 'pending'] ||
+                          detail.identityVerificationStatus}
+                      </span>
+                    </div>
+                    <p className="text-xs text-purple-900/80 mb-3">
+                      Confirma si la cuenta vinculada ({detail.user?.email || 'sin email'}) es quien
+                      controla este perfil de influencer. El perfil público sigue visible; esto solo
+                      habilita campañas y abonos en la app.
+                    </p>
+                    <label className="block text-[11px] text-gray-600 mb-1">Nota interna (opcional)</label>
+                    <textarea
+                      value={identityAdminNote}
+                      onChange={(e) => setIdentityAdminNote(e.target.value)}
+                      rows={2}
+                      className="w-full text-xs border rounded-lg p-2 mb-2 bg-white"
+                      placeholder="Motivo de rechazo o comentario para el equipo…"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={identityReviewing || detail.identityVerificationStatus === 'approved'}
+                        onClick={() => handleIdentityReview('approved')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium disabled:opacity-50"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Confirmar identidad
+                      </button>
+                      <button
+                        type="button"
+                        disabled={identityReviewing || detail.identityVerificationStatus === 'rejected'}
+                        onClick={() => handleIdentityReview('rejected')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-red-700 text-xs font-medium disabled:opacity-50 bg-white"
+                      >
+                        <ShieldX className="w-3.5 h-3.5" />
+                        Rechazar
+                      </button>
+                    </div>
+                    {detail.verification?.reviewedAt && (
+                      <p className="text-[11px] text-gray-500 mt-2">
+                        Revisado: {new Date(detail.verification.reviewedAt).toLocaleString('es')}
+                        {detail.verification.adminDecisionNote && (
+                          <> · {detail.verification.adminDecisionNote}</>
+                        )}
+                      </p>
+                    )}
+                  </div>
+
+                  {detail.verification?.screenshotUrl ? (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-gray-700 uppercase mb-2">
+                        Evidencia (screenshot perfil)
+                      </p>
+                      <img
+                        src={mediaUrl(detail.verification.screenshotUrl, detail.name)}
+                        alt="Evidencia influencer"
+                        className="w-full rounded-lg border bg-white object-contain max-h-[420px]"
+                        loading="lazy"
+                      />
+                      <div className="mt-2 text-xs text-gray-600 space-y-1">
+                        {detail.verification.screenshotUploadedAt && (
+                          <p>
+                            <span className="text-gray-500">Subido:</span>{' '}
+                            {new Date(detail.verification.screenshotUploadedAt).toLocaleString('es')}
+                          </p>
+                        )}
+                        {detail.verification.note && (
+                          <p className="whitespace-pre-line">
+                            <span className="text-gray-500">Nota:</span> {detail.verification.note}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-gray-600">
+                      <p className="font-semibold text-gray-700 uppercase mb-1">
+                        Evidencia (screenshot perfil)
+                      </p>
+                      <p>No hay evidencia subida aún.</p>
+                    </div>
+                  )}
 
                   <div className="space-y-3 text-sm mb-4">
                     <div className="grid grid-cols-2 gap-2">

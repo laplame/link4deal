@@ -1,15 +1,37 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import { canAccessRolePanel } from '../config/dashboardContexts';
 import AgencyDashboard from './dashboards/AgencyDashboard';
+import { apiUrl } from '../utils/apiUrl';
 
 /** Panel de la agencia (rol). No es el listado admin de todas las agencias. */
 export default function AgencyDashboardPage() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [agencyCheck, setAgencyCheck] = useState<'loading' | 'missing' | 'ready'>('loading');
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return;
+    let cancelled = false;
+    const token = localStorage.getItem('auth_token');
+    fetch(apiUrl('/api/agencies/mine'), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setAgencyCheck(data?.agency ? 'ready' : 'missing');
+      })
+      .catch(() => {
+        if (!cancelled) setAgencyCheck('missing');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isLoading]);
+
+  if (isLoading || agencyCheck === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
@@ -23,6 +45,10 @@ export default function AgencyDashboardPage() {
 
   if (!canAccessRolePanel(user, 'agency')) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (agencyCheck === 'missing') {
+    return <Navigate to="/agency-setup" replace />;
   }
 
   return (

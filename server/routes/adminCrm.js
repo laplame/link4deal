@@ -12,6 +12,9 @@ router.get('/stats', (req, res) => adminCrmController.getStats(req, res));
 router.get('/influencers', (req, res) => adminCrmController.listInfluencers(req, res));
 router.get('/influencers/:id', (req, res) => adminCrmController.getInfluencerDetail(req, res));
 router.patch('/influencers/:id', (req, res) => adminCrmController.patchInfluencerCrm(req, res));
+router.post('/influencers/:id/identity-verification', (req, res) =>
+    adminCrmController.reviewIdentityVerification(req, res),
+);
 router.get('/influencers/:id/outreach', (req, res) => adminCrmController.getOutreach(req, res));
 router.patch('/influencers/:id/outreach', (req, res) => adminCrmController.patchOutreach(req, res));
 

@@ -21,6 +21,7 @@ Autenticación: **Bearer JWT** (mismo token que `POST /api/auth/login` / sesión
 | `PATCH` | `/app/wallet` | Solo actualizar wallet sin re-listar todo |
 | `GET` | `/app/campaigns` | Refrescar listado de campañas activas |
 | `POST` | `/app/story-cards` | Story vertical con código + % (Nano Banana en servidor o prompt para cliente) |
+| `POST` | `/app/verification-screenshot` | Subir evidencia (screenshot del perfil) para verificación super admin |
 | `GET` | `/app/settlements/summary` | Resumen abonos pending/paid por campaña |
 | `GET` | `/app/settlements` | Listado de abonos (ledger Mongo) |
 | `POST` | `/app/settlements/process-pending` | Marcar pending → paid (requiere wallet) |
@@ -66,16 +67,29 @@ Accept: application/json
 
 **Respuesta 200**
 
+El perfil público del influencer **siempre** se devuelve si existe `userId` en `influencers`. El acceso al **dashboard** (campañas, abonos) depende de `identityVerificationStatus === 'approved'` (confirmado por super admin en CRM).
+
+| Campo | Significado |
+|-------|-------------|
+| `dashboardAccess` | `true` si el super admin confirmó identidad |
+| `verified` | Igual que `dashboardAccess` (compatibilidad) |
+| `identityVerificationStatus` | `pending` \| `approved` \| `rejected` |
+| `campaigns` | Vacío si `dashboardAccess` es `false` |
+| `accessMessage` | Texto para mostrar en app si aún no hay acceso |
+
 ```json
 {
   "success": true,
   "ok": true,
   "verified": true,
+  "dashboardAccess": true,
+  "identityVerificationStatus": "approved",
   "identity": {
     "userId": "64abc...",
     "email": "creador@ejemplo.com",
     "influencerId": "64def...",
-    "influencerStatus": "active"
+    "influencerStatus": "active",
+    "identityVerificationStatus": "approved"
   },
   "wallet": {
     "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
@@ -142,8 +156,17 @@ Cada ítem de `campaigns[]` puede incluir `settlement` con comisión por canje y
 | 401 | — | Sin token o token inválido |
 | 400 | `INVALID_WALLET` | `walletAddress` con formato no aceptado |
 | 404 | `INFLUENCER_NOT_LINKED` | Usuario sin fila en `influencers` (`userId`) |
+| 403 | `INFLUENCER_IDENTITY_NOT_APPROVED` | Solo en rutas `/app/settlements/*` si identidad no aprobada |
 | 503 | — | MongoDB no conectado |
 | 429 | — | Rate limit |
+
+### Verificación de identidad (onboarding app)
+
+1. `POST /api/analyze-profile-image` — extraer datos del screenshot del perfil social.
+2. `POST /api/influencers` — crear perfil (`identityVerificationStatus: pending`, perfil público visible).
+3. `POST /api/influencers/app/verification-screenshot` — subir evidencia (`crm.verification.screenshotUrl`).
+4. Super admin en **`/admin/crm`** → **Confirmar identidad** (`POST /api/admin/crm/influencers/:id/identity-verification`).
+5. `POST /app/verify-session` — con `dashboardAccess: true`, campañas y settlements activos.
 
 **Flujo recomendado en app**
 

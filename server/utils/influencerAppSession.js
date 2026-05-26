@@ -18,6 +18,10 @@ const {
     resolveCommissionUsd,
     isSettlementEnabled,
 } = require('./influencerTokenSettlement');
+const {
+    isDashboardAccessAllowed,
+    normalizeIdentityVerificationStatus,
+} = require('./influencerIdentity');
 
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
 const PROMOTION_CATALOG_SELECT =
@@ -154,6 +158,11 @@ async function buildInfluencerAppSession(user, opts = {}) {
         throw e;
     }
 
+    const identityVerificationStatus = normalizeIdentityVerificationStatus(
+        influencer.identityVerificationStatus,
+    );
+    const dashboardAccess = isDashboardAccessAllowed(influencer);
+
     let walletSynced = false;
     const incomingWallet = normalizeWalletAddress(opts.walletAddress);
     if (incomingWallet && opts.syncWalletFromApp !== false) {
@@ -169,14 +178,30 @@ async function buildInfluencerAppSession(user, opts = {}) {
         throw e;
     }
 
+    const campaigns = dashboardAccess ? catalog.campaigns : [];
+    const settlementBlock =
+        dashboardAccess && catalog.settlementsEnabled
+            ? {
+                  enabled: true,
+                  transferMethod: 'mongo_ledger',
+                  tokenSymbol: process.env.INFLUENCER_SETTLEMENT_TOKEN_SYMBOL || 'LUXAE',
+                  payoutWallet: wallet.address,
+                  payoutWalletRequired: !wallet.address,
+                  summary: catalog.settlementSummary,
+              }
+            : { enabled: false };
+
     return {
         ok: true,
-        verified: true,
+        verified: dashboardAccess,
+        dashboardAccess,
+        identityVerificationStatus,
         identity: {
             userId: String(user._id),
             email: user.email || null,
             influencerId: String(influencer._id),
             influencerStatus: influencer.status || null,
+            identityVerificationStatus,
         },
         wallet: {
             address: wallet.address,
@@ -186,18 +211,14 @@ async function buildInfluencerAppSession(user, opts = {}) {
         },
         influencer: catalog.influencer,
         influencerProfileShortCode: catalog.influencerProfileShortCode,
-        campaigns: catalog.campaigns,
-        totalCampaigns: catalog.totalCampaigns,
-        settlements: catalog.settlementsEnabled
-            ? {
-                  enabled: true,
-                  transferMethod: 'mongo_ledger',
-                  tokenSymbol: process.env.INFLUENCER_SETTLEMENT_TOKEN_SYMBOL || 'LUXAE',
-                  payoutWallet: wallet.address,
-                  payoutWalletRequired: !wallet.address,
-                  summary: catalog.settlementSummary,
-              }
-            : { enabled: false },
+        campaigns,
+        totalCampaigns: campaigns.length,
+        settlements: settlementBlock,
+        accessMessage: dashboardAccess
+            ? null
+            : identityVerificationStatus === 'rejected'
+              ? 'Tu solicitud de identidad fue rechazada. Contacta soporte.'
+              : 'Tu perfil está visible. Un super admin debe confirmar que eres el dueño de la cuenta para usar el dashboard.',
         verifiedAt: new Date().toISOString(),
     };
 }

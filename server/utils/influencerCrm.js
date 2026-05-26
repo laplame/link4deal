@@ -3,6 +3,7 @@
 const mongoose = require('mongoose');
 const Influencer = require('../models/Influencer');
 const InfluencerCrmEvent = require('../models/InfluencerCrmEvent');
+const { normalizeIdentityVerificationStatus } = require('./influencerIdentity');
 const { buildMarketplaceListEnrichmentMap, computePublicProfileFieldOverrides } = require('./influencerProfileEnrichment');
 const InfluencerCrmOutreach = require('../models/InfluencerCrmOutreach');
 const { serializeOutreach } = require('./influencerCrmOutreach');
@@ -285,6 +286,12 @@ async function buildCrmInfluencerRow(doc, enrichmentPack, installAgg, outreachSe
         username: d.username || '',
         avatar: d.avatar || '',
         status: d.status || 'pending',
+        identityVerificationStatus: normalizeIdentityVerificationStatus(
+            d.identityVerificationStatus,
+        ),
+        hasVerificationScreenshot: Boolean(
+            String(crmRaw.verification?.screenshotUrl || '').trim(),
+        ),
         joinDate: d.joinDate ? new Date(d.joinDate).toISOString() : null,
         profileShortCode: d.profileShortCode || '',
         location: d.location || '',
