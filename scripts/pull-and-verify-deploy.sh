@@ -2,7 +2,7 @@
 # Ejecutar en el servidor (ej. cto@damecode) desde la raíz del proyecto:
 #   cd ~/project/link4deal && bash scripts/pull-and-verify-deploy.sh
 #
-# Hace: git pull, npm install, build, pm2 reload, nginx reload, y verificación.
+# Hace: git pull, pnpm install, build, pm2 reload, nginx reload, y verificación.
 
 set -e
 cd "$(dirname "$0")/.."
@@ -16,15 +16,16 @@ git pull
 echo ""
 
 echo "=========================================="
-echo "2. NPM INSTALL"
+echo "2. PNPM INSTALL"
 echo "=========================================="
-npm install
+corepack enable 2>/dev/null || true
+pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 echo ""
 
 echo "=========================================="
 echo "3. BUILD (frontend)"
 echo "=========================================="
-npm run build
+pnpm run build
 echo ""
 
 echo "=========================================="

@@ -17,8 +17,19 @@ export default defineConfig(({ mode }) => {
       exclude: ['lucide-react'],
     },
     build: {
+      sourcemap: false,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         input: 'index.html',
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+            if (id.includes('jspdf')) return 'pdf';
+            if (id.includes('react')) return 'react-vendor';
+            return 'vendor';
+          },
+        },
       },
     },
     server: {

@@ -81,8 +81,9 @@ Sustituye `<URL_DEL_REPO>` por tu repo (ej. `git@github.com:tu-org/link4deal.git
 ### 2.2 Dependencias y build
 
 ```bash
-npm install
-npm run build
+corepack enable
+pnpm install
+pnpm run build
 ```
 
 ### 2.3 Variables de entorno (servidor)
@@ -196,8 +197,9 @@ sudo rm -f /etc/nginx/sites-available/link4deal
 # 4. Clonar y build
 git clone <URL_DEL_REPO> link4deal
 cd link4deal
-npm install
-npm run build
+corepack enable
+pnpm install
+pnpm run build
 mkdir -p logs server/uploads server/uploads/promotions
 cp server/.env.example server/.env
 # Editar server/.env con tus valores

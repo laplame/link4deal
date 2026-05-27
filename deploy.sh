@@ -70,19 +70,18 @@ fi
 echo -e "${YELLOW}🏗️ Building frontend...${NC}"
 cd $PROJECT_DIR
 if [ -f "package.json" ]; then
-    npm install || { echo -e "${RED}❌ npm install failed${NC}"; exit 1; }
-    npm run build || { echo -e "${RED}❌ Frontend build failed${NC}"; exit 1; }
+    corepack enable 2>/dev/null || true
+    pnpm install --frozen-lockfile 2>/dev/null || pnpm install || { echo -e "${RED}❌ pnpm install failed${NC}"; exit 1; }
+    pnpm run build || { echo -e "${RED}❌ Frontend build failed${NC}"; exit 1; }
     echo -e "${GREEN}✅ Frontend built successfully${NC}"
 else
     echo -e "${YELLOW}⚠️ No package.json found, skipping frontend build${NC}"
 fi
 
-# Step 5: Install backend dependencies
-echo -e "${YELLOW}📦 Installing backend dependencies...${NC}"
-cd $PROJECT_DIR/server
-if [ -f "package.json" ]; then
-    npm install || { echo -e "${RED}❌ Backend npm install failed${NC}"; exit 1; }
-    echo -e "${GREEN}✅ Backend dependencies installed${NC}"
+# Step 5: Backend deps (pnpm workspace incluye server/ desde la raíz)
+echo -e "${YELLOW}📦 Backend dependencies (workspace server/)...${NC}"
+if [ -f "$PROJECT_DIR/server/package.json" ]; then
+    echo -e "${GREEN}✅ Instaladas con pnpm install en la raíz${NC}"
 else
     echo -e "${YELLOW}⚠️ No package.json found in server directory${NC}"
 fi
