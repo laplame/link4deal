@@ -29,6 +29,67 @@ const {
 
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
 
+/** Filtros compartidos entre listado CRM y tablero de fichas. */
+function buildCrmListMongoQuery(queryParams = {}) {
+    const query = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
+
+    if (queryParams.status) query.status = String(queryParams.status);
+    if (queryParams.activationStatus) {
+        query['crm.activationStatus'] = String(queryParams.activationStatus);
+    }
+    if (queryParams.dataSubmissionStatus) {
+        query['crm.dataSubmissionStatus'] = String(queryParams.dataSubmissionStatus);
+    }
+    if (queryParams.identityVerificationStatus) {
+        const iv = normalizeIdentityVerificationStatus(queryParams.identityVerificationStatus);
+        if (IDENTITY_VERIFICATION_STATUSES.includes(iv)) {
+            query.identityVerificationStatus = iv;
+        }
+    }
+    if (queryParams.hasVerificationScreenshot === 'true') {
+        query['crm.verification.screenshotUrl'] = { $exists: true, $ne: '' };
+    }
+    if (queryParams.termsAccepted === 'true') query['crm.terms.accepted'] = true;
+    if (queryParams.termsAccepted === 'false') query['crm.terms.accepted'] = { $ne: true };
+
+    if (queryParams.app === 'damecodigo') {
+        query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
+    }
+    if (queryParams.app === 'bizneai') {
+        query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
+    }
+    if (queryParams.app === 'both') {
+        query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
+        query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
+    }
+    if (queryParams.app === 'none') {
+        query.$and = [
+            {
+                $or: [
+                    { 'crm.apps.damecodigoInfluencer.installCount': { $exists: false } },
+                    { 'crm.apps.damecodigoInfluencer.installCount': null },
+                    { 'crm.apps.damecodigoInfluencer.installCount': 0 },
+                ],
+            },
+            {
+                $or: [
+                    { 'crm.apps.bizneaiMerchant.installCount': { $exists: false } },
+                    { 'crm.apps.bizneaiMerchant.installCount': null },
+                    { 'crm.apps.bizneaiMerchant.installCount': 0 },
+                ],
+            },
+        ];
+    }
+
+    const search = (queryParams.search || '').trim();
+    if (search) {
+        const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        query.$or = [{ name: re }, { username: re }, { profileShortCode: re }, { bio: re }];
+    }
+
+    return query;
+}
+
 class AdminCrmController {
     isValidObjectId(id) {
         return mongoose.Types.ObjectId.isValid(id);
@@ -108,63 +169,7 @@ class AdminCrmController {
             const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
             const skip = (page - 1) * limit;
 
-            const query = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
-
-            if (req.query.status) query.status = String(req.query.status);
-            if (req.query.activationStatus) {
-                query['crm.activationStatus'] = String(req.query.activationStatus);
-            }
-            if (req.query.dataSubmissionStatus) {
-                query['crm.dataSubmissionStatus'] = String(req.query.dataSubmissionStatus);
-            }
-            if (req.query.identityVerificationStatus) {
-                const iv = normalizeIdentityVerificationStatus(
-                    req.query.identityVerificationStatus,
-                );
-                if (IDENTITY_VERIFICATION_STATUSES.includes(iv)) {
-                    query.identityVerificationStatus = iv;
-                }
-            }
-            if (req.query.hasVerificationScreenshot === 'true') {
-                query['crm.verification.screenshotUrl'] = { $exists: true, $ne: '' };
-            }
-            if (req.query.termsAccepted === 'true') query['crm.terms.accepted'] = true;
-            if (req.query.termsAccepted === 'false') query['crm.terms.accepted'] = { $ne: true };
-
-            if (req.query.app === 'damecodigo') {
-                query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
-            }
-            if (req.query.app === 'bizneai') {
-                query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
-            }
-            if (req.query.app === 'both') {
-                query['crm.apps.damecodigoInfluencer.installCount'] = { $gt: 0 };
-                query['crm.apps.bizneaiMerchant.installCount'] = { $gt: 0 };
-            }
-            if (req.query.app === 'none') {
-                query.$and = [
-                    {
-                        $or: [
-                            { 'crm.apps.damecodigoInfluencer.installCount': { $exists: false } },
-                            { 'crm.apps.damecodigoInfluencer.installCount': null },
-                            { 'crm.apps.damecodigoInfluencer.installCount': 0 },
-                        ],
-                    },
-                    {
-                        $or: [
-                            { 'crm.apps.bizneaiMerchant.installCount': { $exists: false } },
-                            { 'crm.apps.bizneaiMerchant.installCount': null },
-                            { 'crm.apps.bizneaiMerchant.installCount': 0 },
-                        ],
-                    },
-                ];
-            }
-
-            const search = (req.query.search || '').trim();
-            if (search) {
-                const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                query.$or = [{ name: re }, { username: re }, { profileShortCode: re }, { bio: re }];
-            }
+            const query = buildCrmListMongoQuery(req.query);
 
             const [docs, totalDocs] = await Promise.all([
                 Influencer.find(query)
@@ -503,28 +508,27 @@ class AdminCrmController {
     /** GET /api/admin/crm/pipeline/board — tablero por columnas (pipelineStage) */
     async getPipelineBoard(req, res) {
         try {
-            const search = (req.query.search || '').trim();
-            const query = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
-
-            if (search) {
-                const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                query.$or = [{ name: re }, { username: re }, { profileShortCode: re }, { bio: re }];
-            }
+            const query = buildCrmListMongoQuery(req.query);
 
             const influencers = await Influencer.find(query)
-                .select(
-                    'name username avatar identityVerificationStatus profileShortCode userId socialMedia updatedAt',
-                )
-                .populate('userId', 'email phone')
-                .sort({ updatedAt: -1 })
+                .sort({ updatedAt: -1, joinDate: -1 })
                 .limit(500)
+                .populate(
+                    'userId',
+                    'firstName lastName email phone isVerified isActive blockchain.walletAddress',
+                )
                 .lean();
 
-            const ids = influencers.map((d) => d._id);
-            const outreachDocs = await InfluencerCrmOutreach.find({
-                influencerId: { $in: ids },
-            }).lean();
-            const outreachMap = new Map(outreachDocs.map((o) => [String(o.influencerId), o]));
+            const ids = influencers.map((d) => String(d._id));
+            const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
+            const [enrichmentMap, installAgg, outreachDocs] = await Promise.all([
+                buildMarketplaceListEnrichmentMap(ids),
+                aggregateInstallCountsByInfluencer(ids),
+                InfluencerCrmOutreach.find({ influencerId: { $in: oids } }).lean(),
+            ]);
+            const outreachMap = new Map(
+                outreachDocs.map((o) => [String(o.influencerId), serializeOutreach(o)]),
+            );
 
             const columns = PIPELINE_STAGE_ORDER.map((stage) => ({
                 stage,
@@ -535,13 +539,18 @@ class AdminCrmController {
 
             for (const inf of influencers) {
                 const infId = String(inf._id);
-                const outreach = outreachMap.get(infId);
+                const outreach = outreachMap.get(infId) || null;
+                const row = await buildCrmInfluencerRow(
+                    inf,
+                    enrichmentMap.get(infId),
+                    installAgg,
+                    outreach,
+                );
                 const stage =
                     outreach?.pipelineStage && isValidPipelineStage(outreach.pipelineStage)
                         ? outreach.pipelineStage
                         : 'lead';
                 const col = columnByStage.get(stage) || columnByStage.get('lead');
-                const user = inf.userId && typeof inf.userId === 'object' ? inf.userId : null;
                 const slug =
                     (inf.socialMedia?.instagram || '').replace(/^@/, '') ||
                     (inf.username || '').replace(/^@/, '') ||
@@ -549,19 +558,24 @@ class AdminCrmController {
 
                 col.cards.push({
                     influencerId: infId,
-                    name: inf.name || '',
-                    username: inf.username || '',
-                    avatar: inf.avatar || '',
-                    profileShortCode: inf.profileShortCode || '',
-                    identityVerificationStatus: inf.identityVerificationStatus || 'pending',
+                    name: row.name,
+                    username: row.username,
+                    avatar: row.avatar,
+                    profileShortCode: row.profileShortCode,
+                    identityVerificationStatus: row.identityVerificationStatus,
+                    activationStatus: row.activationStatus,
+                    dataSubmissionStatus: row.dataSubmissionStatus,
+                    profileCompleteness: row.profileCompleteness,
+                    redeemedCoupons: row.redeemedCoupons ?? 0,
+                    termsAccepted: row.terms?.accepted ?? false,
+                    damecodigoInstalls: row.apps?.damecodigoInfluencer?.installCount ?? 0,
+                    bizneaiInstalls: row.apps?.bizneaiMerchant?.installCount ?? 0,
                     pipelineStage: stage,
                     pipelineStageLabel: PIPELINE_LABELS[stage] || stage,
-                    contactEmail: outreach?.contactEmail || user?.email || '',
-                    contactPhone: user?.phone || '',
+                    contactEmail: outreach?.contactEmail || row.user?.email || '',
+                    contactPhone: row.user?.phone || '',
                     nextAction: outreach?.nextAction || '',
-                    outreachPendingCount: (outreach?.deliveries || []).filter(
-                        (d) => d.status === 'pending',
-                    ).length,
+                    outreachPendingCount: row.outreachPendingCount ?? 0,
                     profilePublicUrl: outreach?.profilePublicUrl || '',
                     publicSlug: outreach?.publicSlug || slug,
                     updatedAt: inf.updatedAt ? new Date(inf.updatedAt).toISOString() : null,

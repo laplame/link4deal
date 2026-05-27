@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
@@ -160,6 +160,7 @@ function App() {
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
                   <Route path="/admin/crm" element={<InfluencerCrmPage />} />
+                  <Route path="/dashboard/crm" element={<Navigate to="/admin/crm" replace />} />
                   <Route path="/dashboard/influencer" element={<InfluencerDashboardPage />} />
                   <Route path="/dashboard/brand" element={<BrandDashboardPage />} />
                   <Route path="/dashboard/agency" element={<AgencyDashboardPage />} />

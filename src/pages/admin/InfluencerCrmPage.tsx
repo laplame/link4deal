@@ -119,7 +119,23 @@ export default function InfluencerCrmPage() {
   const [termsFilter, setTermsFilter] = useState('');
   const [appFilter, setAppFilter] = useState('');
   const [identityFilter, setIdentityFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('pipeline');
+  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>(() => {
+    try {
+      const saved = localStorage.getItem('crm-influencer-view');
+      return saved === 'list' || saved === 'pipeline' ? saved : 'pipeline';
+    } catch {
+      return 'pipeline';
+    }
+  });
+
+  const setViewModePersisted = (mode: 'list' | 'pipeline') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('crm-influencer-view', mode);
+    } catch {
+      /* ignore */
+    }
+  };
   const [pipelineBoard, setPipelineBoard] = useState<CrmPipelineBoardData | null>(null);
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineMovingId, setPipelineMovingId] = useState<string | null>(null);
@@ -173,10 +189,31 @@ export default function InfluencerCrmPage() {
     }
   }, [page, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter]);
 
+  const pipelineFilterParams = useCallback(
+    () => ({
+      search: search.trim() || undefined,
+      status: statusFilter || undefined,
+      activationStatus: activationFilter || undefined,
+      dataSubmissionStatus: dataFilter || undefined,
+      termsAccepted: termsFilter === 'yes' ? ('true' as const) : termsFilter === 'no' ? ('false' as const) : undefined,
+      app: (appFilter || undefined) as 'damecodigo' | 'bizneai' | 'both' | 'none' | undefined,
+      identityVerificationStatus: (identityFilter || undefined) as
+        | 'pending'
+        | 'approved'
+        | 'rejected'
+        | undefined,
+    }),
+    [search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter],
+  );
+
   const loadPipeline = useCallback(async () => {
     setPipelineLoading(true);
     try {
-      const board = await fetchCrmPipelineBoard(search.trim() || undefined);
+      const [st, board] = await Promise.all([
+        fetchCrmStats(),
+        fetchCrmPipelineBoard(pipelineFilterParams()),
+      ]);
+      setStats(st);
       setPipelineBoard(board);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar pipeline');
@@ -184,7 +221,7 @@ export default function InfluencerCrmPage() {
     } finally {
       setPipelineLoading(false);
     }
-  }, [search]);
+  }, [pipelineFilterParams]);
 
   useEffect(() => {
     if (!isSuperAdmin || !unlocked) return;
@@ -414,35 +451,42 @@ export default function InfluencerCrmPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setViewMode('pipeline')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
-                viewMode === 'pipeline' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              Pipeline
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
-                viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <List className="w-4 h-4" />
-              Lista
-            </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setViewModePersisted('pipeline')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
+                  viewMode === 'pipeline' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Tablero de fichas
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewModePersisted('list')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
+                  viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                Lista detallada
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1.5 max-w-xl">
+              {viewMode === 'pipeline'
+                ? 'Estado de trabajo por etapa outreach — arrastra fichas entre columnas o abre Ver ficha.'
+                : 'Tabla con todas las columnas — clic en fila para abrir la ficha lateral.'}
+            </p>
           </div>
           {viewMode === 'pipeline' && (
             <button
               type="button"
               onClick={() => loadPipeline()}
               disabled={pipelineLoading}
-              className="text-sm text-purple-700 hover:underline disabled:opacity-50"
+              className="text-sm text-purple-700 hover:underline disabled:opacity-50 shrink-0"
             >
               Actualizar tablero
             </button>
@@ -559,6 +603,7 @@ export default function InfluencerCrmPage() {
           >
             {viewMode === 'pipeline' ? (
               <div className="bg-white rounded-xl border shadow-sm p-4">
+                <h2 className="text-sm font-semibold text-slate-800 mb-3">Estado de trabajo por cuenta</h2>
                 <CrmPipelineBoard
                   board={pipelineBoard}
                   loading={pipelineLoading}

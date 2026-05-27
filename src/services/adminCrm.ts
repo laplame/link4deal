@@ -157,6 +157,13 @@ export interface CrmPipelineCard {
   avatar: string;
   profileShortCode: string;
   identityVerificationStatus: string;
+  activationStatus: string;
+  dataSubmissionStatus: string;
+  profileCompleteness: number;
+  redeemedCoupons: number;
+  termsAccepted: boolean;
+  damecodigoInstalls: number;
+  bizneaiInstalls: number;
   pipelineStage: string;
   pipelineStageLabel: string;
   contactEmail: string;
@@ -193,9 +200,19 @@ export interface CrmListParams {
   hasVerificationScreenshot?: 'true';
 }
 
-export async function fetchCrmPipelineBoard(search?: string): Promise<CrmPipelineBoardData> {
+export async function fetchCrmPipelineBoard(
+  params: Omit<CrmListParams, 'page' | 'limit'> = {},
+): Promise<CrmPipelineBoardData> {
   const q = new URLSearchParams();
-  if (search?.trim()) q.set('search', search.trim());
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  if (params.status) q.set('status', params.status);
+  if (params.activationStatus) q.set('activationStatus', params.activationStatus);
+  if (params.dataSubmissionStatus) q.set('dataSubmissionStatus', params.dataSubmissionStatus);
+  if (params.termsAccepted) q.set('termsAccepted', params.termsAccepted);
+  if (params.app) q.set('app', params.app);
+  if (params.identityVerificationStatus) {
+    q.set('identityVerificationStatus', params.identityVerificationStatus);
+  }
   const res = await fetch(apiUrl(`/api/admin/crm/pipeline/board?${q}`), { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Error al cargar tablero pipeline');
