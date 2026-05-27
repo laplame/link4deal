@@ -21,6 +21,21 @@ const {
     PIPELINE_STAGE_ORDER,
     isValidPipelineStage,
 } = require('../utils/influencerCrmOutreach');
+const InfluencerCrmMonetization = require('../models/InfluencerCrmMonetization');
+const {
+    MONETIZATION_STAGE_ORDER,
+    MONETIZATION_LABELS,
+    OUTREACH_COMPLETE_STAGES,
+    isValidMonetizationStage,
+    getOrCreateMonetization,
+    serializeMonetization,
+} = require('../utils/influencerCrmMonetization');
+const { aggregateSettlementSummariesForInfluencers } = require('../utils/influencerTokenSettlement');
+const {
+    buildLiveActivityBatch,
+    buildLiveActivityForInfluencer,
+    enrichLiveActivityWithCrmRow,
+} = require('../utils/influencerCrmLiveActivity');
 const {
     IDENTITY_VERIFICATION_STATUSES,
     IDENTITY_LABELS_ES,
@@ -88,6 +103,113 @@ function buildCrmListMongoQuery(queryParams = {}) {
     }
 
     return query;
+}
+
+function parseCrmPagination(queryParams, defaultLimit = 50) {
+    const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(queryParams.limit, 10) || defaultLimit));
+    return { page, limit, skip: (page - 1) * limit };
+}
+
+function buildPaginationMeta(page, limit, totalDocs) {
+    const totalPages = Math.ceil(totalDocs / limit) || 1;
+    return {
+        page,
+        limit,
+        totalDocs,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+    };
+}
+
+/** Conteos por columna de activación (todos los influencers del filtro). */
+async function aggregateActivationStageCounts(influencerQuery) {
+    const rows = await Influencer.aggregate([
+        { $match: influencerQuery },
+        {
+            $lookup: {
+                from: 'influencer_crm_outreach',
+                localField: '_id',
+                foreignField: 'influencerId',
+                as: 'outreach',
+            },
+        },
+        {
+            $project: {
+                stageRaw: { $ifNull: [{ $arrayElemAt: ['$outreach.pipelineStage', 0] }, 'lead'] },
+            },
+        },
+        { $group: { _id: '$stageRaw', count: { $sum: 1 } } },
+    ]);
+    const counts = Object.fromEntries(PIPELINE_STAGE_ORDER.map((s) => [s, 0]));
+    for (const r of rows) {
+        const s = isValidPipelineStage(r._id) ? r._id : 'lead';
+        counts[s] = (counts[s] || 0) + r.count;
+    }
+    return counts;
+}
+
+/** Página de IDs elegibles para monetización + conteos por etapa. */
+async function paginateMonetizationEligible(influencerQuery, skip, limit) {
+    const completeStages = [...OUTREACH_COMPLETE_STAGES];
+    const [facetResult] = await Influencer.aggregate([
+        { $match: influencerQuery },
+        {
+            $lookup: {
+                from: 'influencer_crm_outreach',
+                localField: '_id',
+                foreignField: 'influencerId',
+                as: 'outreach',
+            },
+        },
+        {
+            $lookup: {
+                from: 'influencer_crm_monetization',
+                localField: '_id',
+                foreignField: 'influencerId',
+                as: 'monetization',
+            },
+        },
+        {
+            $match: {
+                $or: [
+                    { 'outreach.pipelineStage': { $in: completeStages } },
+                    { $expr: { $gt: [{ $size: '$monetization' }, 0] } },
+                ],
+            },
+        },
+        { $sort: { updatedAt: -1 } },
+        {
+            $facet: {
+                meta: [{ $count: 'total' }],
+                stageCounts: [
+                    {
+                        $project: {
+                            stageRaw: {
+                                $ifNull: [
+                                    { $arrayElemAt: ['$monetization.monetizationStage', 0] },
+                                    'ready',
+                                ],
+                            },
+                        },
+                    },
+                    { $group: { _id: '$stageRaw', count: { $sum: 1 } } },
+                ],
+                page: [{ $skip: skip }, { $limit: limit }, { $project: { _id: 1 } }],
+            },
+        },
+    ]);
+
+    const facet = facetResult || { meta: [], stageCounts: [], page: [] };
+    const totalDocs = facet.meta[0]?.total || 0;
+    const stageCounts = Object.fromEntries(MONETIZATION_STAGE_ORDER.map((s) => [s, 0]));
+    for (const r of facet.stageCounts || []) {
+        const s = isValidMonetizationStage(r._id) ? r._id : 'ready';
+        stageCounts[s] = (stageCounts[s] || 0) + r.count;
+    }
+    const ids = (facet.page || []).map((x) => x._id);
+    return { totalDocs, ids, stageCounts };
 }
 
 class AdminCrmController {
@@ -509,15 +631,21 @@ class AdminCrmController {
     async getPipelineBoard(req, res) {
         try {
             const query = buildCrmListMongoQuery(req.query);
+            const { page, limit, skip } = parseCrmPagination(req.query, 50);
 
-            const influencers = await Influencer.find(query)
-                .sort({ updatedAt: -1, joinDate: -1 })
-                .limit(500)
-                .populate(
-                    'userId',
-                    'firstName lastName email phone isVerified isActive blockchain.walletAddress',
-                )
-                .lean();
+            const [totalDocs, stageCounts, influencers] = await Promise.all([
+                Influencer.countDocuments(query),
+                aggregateActivationStageCounts(query),
+                Influencer.find(query)
+                    .sort({ updatedAt: -1, joinDate: -1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .populate(
+                        'userId',
+                        'firstName lastName email phone isVerified isActive blockchain.walletAddress',
+                    )
+                    .lean(),
+            ]);
 
             const ids = influencers.map((d) => String(d._id));
             const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
@@ -534,6 +662,7 @@ class AdminCrmController {
                 stage,
                 label: PIPELINE_LABELS[stage] || stage,
                 cards: [],
+                totalInStage: stageCounts[stage] || 0,
             }));
             const columnByStage = new Map(columns.map((c) => [c.stage, c]));
 
@@ -593,6 +722,7 @@ class AdminCrmController {
                         label: PIPELINE_LABELS[id] || id,
                     })),
                     totalCards,
+                    pagination: buildPaginationMeta(page, limit, totalDocs),
                 },
             });
         } catch (error) {
@@ -712,6 +842,266 @@ class AdminCrmController {
             });
         } catch (error) {
             console.error('❌ CRM patch outreach:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/monetization/board — tablero post-onboarding */
+    async getMonetizationBoard(req, res) {
+        try {
+            const query = buildCrmListMongoQuery(req.query);
+            const { page, limit, skip } = parseCrmPagination(req.query, 50);
+
+            const { totalDocs, ids: pageIds, stageCounts } = await paginateMonetizationEligible(
+                query,
+                skip,
+                limit,
+            );
+
+            if (!pageIds.length) {
+                return res.json({
+                    success: true,
+                    data: {
+                        columns: MONETIZATION_STAGE_ORDER.map((stage) => ({
+                            stage,
+                            label: MONETIZATION_LABELS[stage] || stage,
+                            cards: [],
+                            totalInStage: stageCounts[stage] || 0,
+                        })),
+                        stages: MONETIZATION_STAGE_ORDER.map((id) => ({
+                            id,
+                            label: MONETIZATION_LABELS[id] || id,
+                        })),
+                        totalCards: 0,
+                        pagination: buildPaginationMeta(page, limit, totalDocs),
+                        eligibilityNote:
+                            'Solo influencers con activación completada (outreach onboarded o materials_complete) o con ficha monetización ya creada.',
+                    },
+                });
+            }
+
+            const influencers = await Influencer.find({ _id: { $in: pageIds } })
+                .populate(
+                    'userId',
+                    'firstName lastName email phone isVerified isActive blockchain.walletAddress',
+                )
+                .lean();
+            const orderMap = new Map(pageIds.map((id, index) => [String(id), index]));
+            influencers.sort(
+                (a, b) => (orderMap.get(String(a._id)) ?? 0) - (orderMap.get(String(b._id)) ?? 0),
+            );
+
+            const filteredIds = influencers.map((d) => String(d._id));
+            const filteredOids = filteredIds.map((id) => new mongoose.Types.ObjectId(id));
+
+            const [enrichmentMap, installAgg, outreachDocs, monetizationDocs, liveActivityMap] =
+                await Promise.all([
+                    buildMarketplaceListEnrichmentMap(filteredIds),
+                    aggregateInstallCountsByInfluencer(filteredIds),
+                    InfluencerCrmOutreach.find({ influencerId: { $in: filteredOids } }).lean(),
+                    InfluencerCrmMonetization.find({ influencerId: { $in: filteredOids } }).lean(),
+                    buildLiveActivityBatch(filteredIds, { recentPerInfluencer: 3 }),
+                ]);
+
+            const outreachMap = new Map(
+                outreachDocs.map((o) => [String(o.influencerId), serializeOutreach(o)]),
+            );
+            const monetizationMap = new Map(
+                monetizationDocs.map((m) => [String(m.influencerId), m]),
+            );
+
+            const columns = MONETIZATION_STAGE_ORDER.map((stage) => ({
+                stage,
+                label: MONETIZATION_LABELS[stage] || stage,
+                cards: [],
+                totalInStage: stageCounts[stage] || 0,
+            }));
+            const columnByStage = new Map(columns.map((c) => [c.stage, c]));
+
+            for (const inf of influencers) {
+                const infId = String(inf._id);
+                const outreach = outreachMap.get(infId) || null;
+                const monetizationDoc = monetizationMap.get(infId);
+
+                const row = await buildCrmInfluencerRow(
+                    inf,
+                    enrichmentMap.get(infId),
+                    installAgg,
+                    outreach,
+                );
+                const stage =
+                    monetizationDoc?.monetizationStage &&
+                    isValidMonetizationStage(monetizationDoc.monetizationStage)
+                        ? monetizationDoc.monetizationStage
+                        : 'ready';
+                const col = columnByStage.get(stage) || columnByStage.get('ready');
+                const slug =
+                    (inf.socialMedia?.instagram || '').replace(/^@/, '') ||
+                    (inf.username || '').replace(/^@/, '') ||
+                    '';
+
+                const liveBase = liveActivityMap.get(infId) || {};
+                const live = enrichLiveActivityWithCrmRow(liveBase, {
+                    walletAddress: row.walletAddress,
+                    activePromotions: row.activePromotions,
+                    redeemedCoupons: row.redeemedCoupons,
+                    totalEarnings: row.totalEarnings,
+                    monetizationStage: stage,
+                });
+
+                col.cards.push({
+                    influencerId: infId,
+                    name: row.name,
+                    username: row.username,
+                    avatar: row.avatar,
+                    profileShortCode: row.profileShortCode,
+                    identityVerificationStatus: row.identityVerificationStatus,
+                    activationStatus: row.activationStatus,
+                    profileCompleteness: row.profileCompleteness,
+                    totalEarnings: live.totalEarningsUsd ?? row.totalEarnings ?? 0,
+                    redeemedCoupons: live.redeemedCount ?? row.redeemedCoupons ?? 0,
+                    activePromotions: row.activePromotions ?? 0,
+                    hasWallet: live.hasWallet ?? Boolean(row.walletAddress),
+                    openCouponsCount: live.openCouponsCount ?? 0,
+                    settlementPendingCount: live.settlementPendingCount ?? 0,
+                    settlementPendingUsd: live.settlementPendingUsd ?? 0,
+                    settlementPaidCount: live.settlementPaidCount ?? 0,
+                    settlementPaidUsd: live.settlementPaidUsd ?? 0,
+                    lastRedeemedAt: live.lastRedeemedAt ?? null,
+                    hasRecentActivity: live.hasRecentActivity ?? false,
+                    suggestedMonetizationStage: live.suggestedMonetizationStage,
+                    suggestedMonetizationStageLabel: live.suggestedMonetizationStageLabel,
+                    stageMismatch: live.stageMismatch ?? false,
+                    liveFetchedAt: live.fetchedAt,
+                    outreachStage: outreach?.pipelineStage || 'lead',
+                    outreachStageLabel: outreach?.pipelineStageLabel || 'Lead',
+                    monetizationStage: stage,
+                    monetizationStageLabel: MONETIZATION_LABELS[stage] || stage,
+                    nextAction: monetizationDoc?.nextAction || '',
+                    publicSlug: outreach?.publicSlug || slug,
+                    profilePublicUrl: outreach?.profilePublicUrl || '',
+                    updatedAt: inf.updatedAt ? new Date(inf.updatedAt).toISOString() : null,
+                });
+            }
+
+            const totalCards = columns.reduce((n, c) => n + c.cards.length, 0);
+
+            return res.json({
+                success: true,
+                data: {
+                    columns,
+                    stages: MONETIZATION_STAGE_ORDER.map((id) => ({
+                        id,
+                        label: MONETIZATION_LABELS[id] || id,
+                    })),
+                    totalCards,
+                    pagination: buildPaginationMeta(page, limit, totalDocs),
+                    eligibilityNote:
+                        'Solo influencers con activación completada (outreach onboarded o materials_complete) o con ficha monetización ya creada.',
+                },
+            });
+        } catch (error) {
+            console.error('❌ CRM monetization board:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/influencers/:id/live-activity — canjes / cupones en tiempo casi real */
+    async getInfluencerLiveActivity(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const inf = await Influencer.findById(id)
+                .populate('userId', 'blockchain.walletAddress')
+                .lean();
+            if (!inf) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const liveBase = await buildLiveActivityForInfluencer(id, { recentPerInfluencer: 8 });
+            const wallet =
+                inf.userId?.blockchain?.walletAddress &&
+                String(inf.userId.blockchain.walletAddress).trim()
+                    ? String(inf.userId.blockchain.walletAddress).trim()
+                    : null;
+
+            const live = enrichLiveActivityWithCrmRow(liveBase, {
+                walletAddress: wallet,
+                activePromotions: inf.activePromotions,
+                redeemedCoupons: inf.couponStats?.totalSales,
+                totalEarnings: inf.totalEarnings,
+            });
+
+            return res.json({
+                success: true,
+                data: live,
+            });
+        } catch (error) {
+            console.error('❌ CRM live activity:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/influencers/:id/monetization */
+    async getMonetization(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const doc = await getOrCreateMonetization(id);
+            return res.json({
+                success: true,
+                data: serializeMonetization(doc),
+                stageLabels: MONETIZATION_LABELS,
+            });
+        } catch (error) {
+            console.error('❌ CRM get monetization:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** PATCH /api/admin/crm/influencers/:id/monetization */
+    async patchMonetization(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const inf = await Influencer.findById(id).select('_id').lean();
+            if (!inf) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const body = req.body || {};
+            const doc = await getOrCreateMonetization(id);
+
+            if (body.monetizationStage) {
+                const stage = String(body.monetizationStage).trim();
+                if (!isValidMonetizationStage(stage)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'monetizationStage inválido',
+                        validStages: MONETIZATION_STAGE_ORDER,
+                    });
+                }
+                doc.monetizationStage = stage;
+            }
+            if (body.nextAction != null) doc.nextAction = String(body.nextAction).slice(0, 500);
+            if (body.notes != null) doc.notes = String(body.notes).slice(0, 4000);
+
+            doc.updatedByAdminId = req.user._id;
+            await doc.save();
+
+            return res.json({
+                success: true,
+                data: serializeMonetization(doc),
+                message: 'Monetización actualizada',
+            });
+        } catch (error) {
+            console.error('❌ CRM patch monetization:', error);
             return res.status(500).json({ success: false, message: error.message });
         }
     }

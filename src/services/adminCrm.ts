@@ -179,17 +179,118 @@ export interface CrmPipelineColumn {
   stage: string;
   label: string;
   cards: CrmPipelineCard[];
+  /** Total en esta columna (todos los resultados filtrados, no solo la página). */
+  totalInStage?: number;
+}
+
+export interface CrmPaginationMeta {
+  page: number;
+  limit: number;
+  totalDocs: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 }
 
 export interface CrmPipelineBoardData {
   columns: CrmPipelineColumn[];
   stages: { id: string; label: string }[];
   totalCards: number;
+  pagination: CrmPaginationMeta;
+  eligibilityNote?: string;
+}
+
+/** Columnas del tablero monetización (post-onboarding). */
+export const CRM_MONETIZATION_STAGES: { id: string; label: string }[] = [
+  { id: 'ready', label: 'Listo para monetizar' },
+  { id: 'wallet_setup', label: 'Wallet / cuenta' },
+  { id: 'seeking_campaigns', label: 'Buscando campañas' },
+  { id: 'coupons_live', label: 'Cupones activos' },
+  { id: 'first_redemption', label: 'Primer canje' },
+  { id: 'payout_pending', label: 'Abono pendiente' },
+  { id: 'payout_active', label: 'Abonos realizados' },
+  { id: 'scaling', label: 'Escalando ingresos' },
+  { id: 'stalled', label: 'Estancado' },
+  { id: 'inactive', label: 'Inactivo monetización' },
+];
+
+export interface CrmLiveRedemption {
+  couponId: string;
+  promotionId: string | null;
+  shopId: string | null;
+  redeemedAt: string | null;
+  shortCode: string | null;
+}
+
+export interface CrmInfluencerLiveActivity {
+  redeemedCount: number;
+  openCouponsCount: number;
+  settlementPendingCount: number;
+  settlementPendingUsd: number;
+  settlementPaidCount: number;
+  settlementPaidUsd: number;
+  lastRedeemedAt: string | null;
+  hasRecentActivity: boolean;
+  recentRedemptions: CrmLiveRedemption[];
+  suggestedMonetizationStage: string;
+  suggestedMonetizationStageLabel: string;
+  stageMismatch?: boolean;
+  hasWallet?: boolean;
+  activePromotions?: number;
+  totalEarningsUsd?: number;
+  fetchedAt: string;
+}
+
+export interface CrmMonetizationCard {
+  influencerId: string;
+  name: string;
+  username: string;
+  avatar: string;
+  profileShortCode: string;
+  identityVerificationStatus: string;
+  activationStatus: string;
+  profileCompleteness: number;
+  totalEarnings: number;
+  redeemedCoupons: number;
+  activePromotions: number;
+  hasWallet: boolean;
+  openCouponsCount?: number;
+  settlementPendingCount: number;
+  settlementPendingUsd: number;
+  settlementPaidCount: number;
+  settlementPaidUsd: number;
+  lastRedeemedAt?: string | null;
+  hasRecentActivity?: boolean;
+  suggestedMonetizationStage?: string;
+  suggestedMonetizationStageLabel?: string;
+  stageMismatch?: boolean;
+  liveFetchedAt?: string;
+  outreachStage: string;
+  outreachStageLabel: string;
+  monetizationStage: string;
+  monetizationStageLabel: string;
+  nextAction: string;
+  publicSlug: string;
+  profilePublicUrl: string;
+  updatedAt: string | null;
+}
+
+export interface CrmMonetization {
+  id: string;
+  influencerId: string;
+  monetizationStage: string;
+  monetizationStageLabel: string;
+  nextAction: string;
+  notes: string;
+  updatedAt: string | null;
 }
 
 export interface CrmListParams {
   page?: number;
   limit?: number;
+  /** Alias explícito para tableros (misma semántica que page/limit). */
+  boardPage?: number;
+  boardLimit?: number;
   search?: string;
   status?: string;
   activationStatus?: string;
@@ -200,10 +301,11 @@ export interface CrmListParams {
   hasVerificationScreenshot?: 'true';
 }
 
-export async function fetchCrmPipelineBoard(
-  params: Omit<CrmListParams, 'page' | 'limit'> = {},
-): Promise<CrmPipelineBoardData> {
-  const q = new URLSearchParams();
+function appendCrmBoardQuery(q: URLSearchParams, params: CrmListParams) {
+  const page = params.page ?? params.boardPage;
+  const limit = params.limit ?? params.boardLimit;
+  if (page) q.set('page', String(page));
+  if (limit) q.set('limit', String(limit));
   if (params.search?.trim()) q.set('search', params.search.trim());
   if (params.status) q.set('status', params.status);
   if (params.activationStatus) q.set('activationStatus', params.activationStatus);
@@ -213,6 +315,11 @@ export async function fetchCrmPipelineBoard(
   if (params.identityVerificationStatus) {
     q.set('identityVerificationStatus', params.identityVerificationStatus);
   }
+}
+
+export async function fetchCrmPipelineBoard(params: CrmListParams = {}): Promise<CrmPipelineBoardData> {
+  const q = new URLSearchParams();
+  appendCrmBoardQuery(q, params);
   const res = await fetch(apiUrl(`/api/admin/crm/pipeline/board?${q}`), { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Error al cargar tablero pipeline');
@@ -224,6 +331,56 @@ export async function moveCrmLeadStage(
   pipelineStage: string,
 ): Promise<CrmOutreach> {
   return patchCrmOutreach(influencerId, { pipelineStage });
+}
+
+export async function fetchCrmMonetizationBoard(params: CrmListParams = {}): Promise<CrmPipelineBoardData> {
+  const q = new URLSearchParams();
+  appendCrmBoardQuery(q, params);
+  const res = await fetch(apiUrl(`/api/admin/crm/monetization/board?${q}`), {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al cargar tablero monetización');
+  return data.data;
+}
+
+export async function moveCrmMonetizationStage(
+  influencerId: string,
+  monetizationStage: string,
+): Promise<CrmMonetization> {
+  return patchCrmMonetization(influencerId, { monetizationStage });
+}
+
+export async function fetchCrmInfluencerLiveActivity(id: string): Promise<CrmInfluencerLiveActivity> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${id}/live-activity`), {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al cargar actividad en vivo');
+  return data.data;
+}
+
+export async function fetchCrmMonetization(id: string): Promise<CrmMonetization> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${id}/monetization`), {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al cargar monetización');
+  return data.data;
+}
+
+export async function patchCrmMonetization(
+  id: string,
+  body: Record<string, unknown>,
+): Promise<CrmMonetization> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${id}/monetization`), {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al guardar monetización');
+  return data.data;
 }
 
 export async function fetchCrmStats(): Promise<CrmStats> {

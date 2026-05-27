@@ -19,8 +19,11 @@ Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con 
 | Método | Ruta |
 |--------|------|
 | GET | `/api/admin/crm/stats` |
-| GET | `/api/admin/crm/pipeline/board?search` — tablero Kanban por `pipelineStage` |
-| GET | `/api/admin/crm/influencers?...&identityVerificationStatus&hasVerificationScreenshot` |
+| GET | `/api/admin/crm/pipeline/board?search` — tablero Kanban activación (`pipelineStage`) |
+| GET | `/api/admin/crm/monetization/board?...` — tablero monetización (`monetizationStage`) |
+| GET | `/api/admin/crm/influencers?page&limit&...` — lista paginada (default `limit=25`, máx. 100) |
+| GET | `/api/admin/crm/pipeline/board?page&limit&...` — tablero activación (default `limit=50`) |
+| GET | `/api/admin/crm/monetization/board?page&limit&...` — tablero monetización |
 | GET | `/api/admin/crm/influencers/:id` |
 | PATCH | `/api/admin/crm/influencers/:id` |
 | POST | `/api/admin/crm/influencers/:id/identity-verification` |
@@ -84,6 +87,7 @@ En **`/admin/crm`**, vista **Pipeline**: columnas según `influencer_crm_outreac
 - **Arrastrar** una tarjeta entre columnas → `PATCH /api/admin/crm/influencers/:id/outreach` con `{ "pipelineStage": "..." }`.
 - **Clic** en tarjeta → ficha lateral con detalle, verificación de identidad y selector de etapa.
 - Influencers sin documento outreach aparecen en **Lead**.
+- **Paginación:** `?page=1&limit=50` (máx. 100). El número en cada columna muestra `fichas en página / total en columna` (el total usa todos los influencers del filtro, no solo la página).
 
 ## Modelo de outreach (envíos por influencer)
 
@@ -101,6 +105,34 @@ API:
 
 - `GET /api/admin/crm/influencers/:id/outreach`
 - `PATCH /api/admin/crm/influencers/:id/outreach`
+
+## Tablero monetización (post-onboarding)
+
+Vista **Monetización** en `/admin/crm` (junto a **Activación**). Colección **`influencer_crm_monetization`**.
+
+**Quién aparece:** influencers con outreach en `onboarded` o `materials_complete`, o con documento monetización ya guardado.
+
+| Columna | `monetizationStage` |
+|---------|---------------------|
+| Listo para monetizar | `ready` |
+| Wallet / cuenta | `wallet_setup` |
+| Buscando campañas | `seeking_campaigns` |
+| Cupones activos | `coupons_live` |
+| Primer canje | `first_redemption` |
+| Abono pendiente | `payout_pending` |
+| Abonos realizados | `payout_active` |
+| Escalando ingresos | `scaling` |
+| Estancado / Inactivo | `stalled`, `inactive` |
+
+Las fichas muestran canjes, promos activas, wallet y resumen de `influencer_token_settlements` (pendiente / pagado).
+
+API:
+
+- `GET /api/admin/crm/monetization/board`
+- `GET` / `PATCH` `/api/admin/crm/influencers/:id/monetization`
+- `GET /api/admin/crm/influencers/:id/live-activity` — canjes/cupones desde `discount_qr_tokens` + abonos (actualización en tablero cada 20s)
+
+En el tablero **Monetización**: punto verde = canje en los últimos 5 min; cifras de canjes/abonos en vivo; aviso si la etapa manual no coincide con la sugerida por actividad real.
 
 ### Ejemplo: moris.fitnesscoach
 

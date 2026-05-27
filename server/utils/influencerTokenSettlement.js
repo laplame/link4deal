@@ -369,6 +369,53 @@ async function listSettlementsForInfluencer(influencerId, query = {}) {
     };
 }
 
+/**
+ * Resúmenes de abonos por influencer (batch para tablero CRM monetización).
+ * @returns {Map<string, { pendingCount, pendingAmountUsd, paidCount, paidAmountUsd }>}
+ */
+async function aggregateSettlementSummariesForInfluencers(influencerIds) {
+    const oids = influencerIds
+        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+        .map((id) => new mongoose.Types.ObjectId(String(id)));
+    const map = new Map();
+    if (!oids.length) return map;
+
+    const agg = await InfluencerTokenSettlement.aggregate([
+        { $match: { influencer: { $in: oids } } },
+        {
+            $group: {
+                _id: { influencer: '$influencer', status: '$status' },
+                count: { $sum: 1 },
+                amountUsd: { $sum: '$amountUsd' },
+            },
+        },
+    ]);
+
+    for (const g of agg) {
+        const infId = String(g._id.influencer);
+        if (!map.has(infId)) {
+            map.set(infId, {
+                pendingCount: 0,
+                pendingAmountUsd: 0,
+                paidCount: 0,
+                paidAmountUsd: 0,
+            });
+        }
+        const row = map.get(infId);
+        const st = g._id.status;
+        const cnt = safeNum(g.count);
+        const usd = Math.round(safeNum(g.amountUsd) * 100) / 100;
+        if (st === 'pending' || st === 'processing') {
+            row.pendingCount += cnt;
+            row.pendingAmountUsd = Math.round((row.pendingAmountUsd + usd) * 100) / 100;
+        } else if (st === 'paid') {
+            row.paidCount += cnt;
+            row.paidAmountUsd = Math.round((row.paidAmountUsd + usd) * 100) / 100;
+        }
+    }
+    return map;
+}
+
 module.exports = {
     isSettlementEnabled,
     isAutoPayMongoEnabled,
@@ -376,6 +423,7 @@ module.exports = {
     createSettlementFromRedemption,
     processPendingSettlementsForInfluencer,
     getSettlementSummaryForInfluencer,
+    aggregateSettlementSummariesForInfluencers,
     settlementSummaryForPromotion,
     listSettlementsForInfluencer,
     serializeSettlement,

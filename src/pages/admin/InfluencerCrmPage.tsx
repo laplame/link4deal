@@ -17,8 +17,13 @@ import {
   ShieldX,
   LayoutGrid,
   List,
+  DollarSign,
+  RefreshCw,
+  Radio,
 } from 'lucide-react';
 import CrmPipelineBoard from '../../components/admin/CrmPipelineBoard';
+import CrmPagination from '../../components/admin/CrmPagination';
+import type { CrmPaginationMeta } from '../../services/adminCrm';
 import { useAuth } from '../../context/AuthContext';
 import {
   clearAdminPinUnlockSession,
@@ -35,12 +40,19 @@ import {
   patchCrmOutreach,
   reviewCrmIdentityVerification,
   fetchCrmPipelineBoard,
+  fetchCrmMonetizationBoard,
+  fetchCrmMonetization,
+  fetchCrmInfluencerLiveActivity,
   moveCrmLeadStage,
+  moveCrmMonetizationStage,
+  patchCrmMonetization,
   CRM_PIPELINE_STAGES,
+  CRM_MONETIZATION_STAGES,
   type CrmInfluencerRow,
   type CrmInfluencerDetail,
   type CrmStats,
   type CrmPipelineBoardData,
+  type CrmInfluencerLiveActivity,
 } from '../../services/adminCrm';
 
 const ACTIVATION_LABELS: Record<string, string> = {
@@ -107,8 +119,12 @@ export default function InfluencerCrmPage() {
   const [stats, setStats] = useState<CrmStats | null>(null);
   const [rows, setRows] = useState<CrmInfluencerRow[]>([]);
   const [page, setPage] = useState(1);
+  const [listLimit, setListLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalDocs, setTotalDocs] = useState(0);
+  const [boardPage, setBoardPage] = useState(1);
+  const [boardLimit, setBoardLimit] = useState(50);
+  const [boardPagination, setBoardPagination] = useState<CrmPaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,6 +152,14 @@ export default function InfluencerCrmPage() {
       /* ignore */
     }
   };
+  const [pipelineTab, setPipelineTab] = useState<'activation' | 'monetization'>(() => {
+    try {
+      const saved = localStorage.getItem('crm-pipeline-tab');
+      return saved === 'monetization' || saved === 'activation' ? saved : 'activation';
+    } catch {
+      return 'activation';
+    }
+  });
   const [pipelineBoard, setPipelineBoard] = useState<CrmPipelineBoardData | null>(null);
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineMovingId, setPipelineMovingId] = useState<string | null>(null);
@@ -152,8 +176,15 @@ export default function InfluencerCrmPage() {
   const [editContactEmail, setEditContactEmail] = useState('');
   const [editNextAction, setEditNextAction] = useState('');
   const [editPipelineStage, setEditPipelineStage] = useState('lead');
+  const [editMonetizationStage, setEditMonetizationStage] = useState('ready');
+  const [editMonetizationNextAction, setEditMonetizationNextAction] = useState('');
+  const [editMonetizationNotes, setEditMonetizationNotes] = useState('');
   const [identityAdminNote, setIdentityAdminNote] = useState('');
   const [identityReviewing, setIdentityReviewing] = useState(false);
+  const [liveActivity, setLiveActivity] = useState<CrmInfluencerLiveActivity | null>(null);
+  const [liveActivityLoading, setLiveActivityLoading] = useState(false);
+  const [liveAutoRefresh, setLiveAutoRefresh] = useState(true);
+  const [boardLastRefreshedAt, setBoardLastRefreshedAt] = useState<Date | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -163,7 +194,7 @@ export default function InfluencerCrmPage() {
         fetchCrmStats(),
         fetchCrmInfluencers({
           page,
-          limit: 25,
+          limit: listLimit,
           search: search.trim() || undefined,
           status: statusFilter || undefined,
           activationStatus: activationFilter || undefined,
@@ -187,10 +218,17 @@ export default function InfluencerCrmPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter]);
+  }, [page, listLimit, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter]);
+
+  const resetCrmPages = () => {
+    setPage(1);
+    setBoardPage(1);
+  };
 
   const pipelineFilterParams = useCallback(
     () => ({
+      page: boardPage,
+      limit: boardLimit,
       search: search.trim() || undefined,
       status: statusFilter || undefined,
       activationStatus: activationFilter || undefined,
@@ -203,7 +241,7 @@ export default function InfluencerCrmPage() {
         | 'rejected'
         | undefined,
     }),
-    [search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter],
+    [boardPage, boardLimit, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter],
   );
 
   const loadPipeline = useCallback(async () => {
@@ -215,26 +253,64 @@ export default function InfluencerCrmPage() {
       ]);
       setStats(st);
       setPipelineBoard(board);
+      setBoardPagination(board.pagination);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar pipeline');
       setPipelineBoard(null);
+      setBoardPagination(null);
     } finally {
       setPipelineLoading(false);
     }
   }, [pipelineFilterParams]);
 
+  const loadMonetizationBoard = useCallback(async (silent = false) => {
+    if (!silent) setPipelineLoading(true);
+    try {
+      const [st, board] = await Promise.all([
+        fetchCrmStats(),
+        fetchCrmMonetizationBoard(pipelineFilterParams()),
+      ]);
+      setStats(st);
+      setPipelineBoard(board);
+      setBoardPagination(board.pagination);
+      setBoardLastRefreshedAt(new Date());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar tablero monetización');
+      setPipelineBoard(null);
+      setBoardPagination(null);
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [pipelineFilterParams]);
+
+  const setPipelineTabPersisted = (tab: 'activation' | 'monetization') => {
+    setBoardPage(1);
+    setPipelineTab(tab);
+    try {
+      localStorage.setItem('crm-pipeline-tab', tab);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const reloadActiveBoard = useCallback(async () => {
+    if (pipelineTab === 'monetization') await loadMonetizationBoard();
+    else await loadPipeline();
+  }, [pipelineTab, loadMonetizationBoard, loadPipeline]);
+
   useEffect(() => {
     if (!isSuperAdmin || !unlocked) return;
     if (viewMode === 'list') loadList();
+    else if (pipelineTab === 'monetization') loadMonetizationBoard();
     else loadPipeline();
-  }, [isSuperAdmin, unlocked, viewMode, loadList, loadPipeline]);
+  }, [isSuperAdmin, unlocked, viewMode, pipelineTab, page, listLimit, boardPage, boardLimit, loadList, loadPipeline, loadMonetizationBoard]);
 
   const handleMovePipelineCard = async (influencerId: string, pipelineStage: string) => {
     setPipelineMovingId(influencerId);
     setError(null);
     try {
       await moveCrmLeadStage(influencerId, pipelineStage);
-      await loadPipeline();
+      await reloadActiveBoard();
       if (selectedId === influencerId) {
         const d = await fetchCrmInfluencerDetail(influencerId);
         setDetail(d);
@@ -247,15 +323,62 @@ export default function InfluencerCrmPage() {
     }
   };
 
+  const refreshLiveActivity = useCallback(async (influencerId: string) => {
+    setLiveActivityLoading(true);
+    try {
+      const live = await fetchCrmInfluencerLiveActivity(influencerId);
+      setLiveActivity(live);
+    } catch {
+      setLiveActivity(null);
+    } finally {
+      setLiveActivityLoading(false);
+    }
+  }, []);
+
+  const handleApplySuggestedStage = async (influencerId: string, stage: string) => {
+    setPipelineMovingId(influencerId);
+    try {
+      await moveCrmMonetizationStage(influencerId, stage);
+      await reloadActiveBoard();
+      if (selectedId === influencerId) {
+        setEditMonetizationStage(stage);
+        await refreshLiveActivity(influencerId);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al aplicar etapa sugerida');
+    } finally {
+      setPipelineMovingId(null);
+    }
+  };
+
+  const handleMoveMonetizationCard = async (influencerId: string, monetizationStage: string) => {
+    setPipelineMovingId(influencerId);
+    setError(null);
+    try {
+      await moveCrmMonetizationStage(influencerId, monetizationStage);
+      await reloadActiveBoard();
+      if (selectedId === influencerId) {
+        const m = await fetchCrmMonetization(influencerId);
+        setEditMonetizationStage(m.monetizationStage);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al mover ficha monetización');
+    } finally {
+      setPipelineMovingId(null);
+    }
+  };
+
   useEffect(() => {
     if (!selectedId || !unlocked) {
       setDetail(null);
+      setLiveActivity(null);
       return;
     }
     let cancelled = false;
     setDetailLoading(true);
-    fetchCrmInfluencerDetail(selectedId)
-      .then((d) => {
+    void refreshLiveActivity(selectedId);
+    Promise.all([fetchCrmInfluencerDetail(selectedId), fetchCrmMonetization(selectedId)])
+      .then(([d, m]) => {
         if (cancelled) return;
         setDetail(d);
         setEditNotes(d.adminNotes || '');
@@ -266,6 +389,9 @@ export default function InfluencerCrmPage() {
         setEditContactEmail(d.outreach?.contactEmail || d.user?.email || '');
         setEditNextAction(d.outreach?.nextAction || '');
         setEditPipelineStage(d.outreach?.pipelineStage || 'lead');
+        setEditMonetizationStage(m.monetizationStage || 'ready');
+        setEditMonetizationNextAction(m.nextAction || '');
+        setEditMonetizationNotes(m.notes || '');
         setIdentityAdminNote(d.verification?.adminDecisionNote || '');
       })
       .catch(() => {
@@ -277,7 +403,26 @@ export default function InfluencerCrmPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, unlocked]);
+  }, [selectedId, unlocked, refreshLiveActivity]);
+
+  useEffect(() => {
+    if (!unlocked || viewMode !== 'pipeline' || pipelineTab !== 'monetization' || !liveAutoRefresh) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      void loadMonetizationBoard(true);
+      if (selectedId) void refreshLiveActivity(selectedId);
+    }, 20000);
+    return () => window.clearInterval(id);
+  }, [
+    unlocked,
+    viewMode,
+    pipelineTab,
+    liveAutoRefresh,
+    selectedId,
+    loadMonetizationBoard,
+    refreshLiveActivity,
+  ]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,7 +449,7 @@ export default function InfluencerCrmPage() {
         adminNote: identityAdminNote.trim() || undefined,
       });
       setDetail(updated);
-      if (viewMode === 'pipeline') await loadPipeline();
+      if (viewMode === 'pipeline') await reloadActiveBoard();
       else await loadList();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al revisar identidad');
@@ -331,7 +476,12 @@ export default function InfluencerCrmPage() {
         contactEmailStatus: editContactEmail ? 'received' : undefined,
         nextAction: editNextAction,
       });
-      if (viewMode === 'pipeline') await loadPipeline();
+      await patchCrmMonetization(selectedId, {
+        monetizationStage: editMonetizationStage,
+        nextAction: editMonetizationNextAction,
+        notes: editMonetizationNotes,
+      });
+      if (viewMode === 'pipeline') await reloadActiveBoard();
       else await loadList();
       const d = await fetchCrmInfluencerDetail(selectedId);
       setDetail(d);
@@ -477,14 +627,40 @@ export default function InfluencerCrmPage() {
             </div>
             <p className="text-xs text-gray-500 mt-1.5 max-w-xl">
               {viewMode === 'pipeline'
-                ? 'Estado de trabajo por etapa outreach — arrastra fichas entre columnas o abre Ver ficha.'
+                ? pipelineTab === 'monetization'
+                  ? 'Post-onboarding: campañas, canjes y abonos — solo cuentas con activación completada.'
+                  : 'Activación inicial: outreach, datos, app y términos — arrastra fichas entre columnas.'
                 : 'Tabla con todas las columnas — clic en fila para abrir la ficha lateral.'}
             </p>
+            {viewMode === 'pipeline' && (
+              <div className="inline-flex rounded-lg border border-emerald-200 bg-emerald-50/50 p-1 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setPipelineTabPersisted('activation')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium ${
+                    pipelineTab === 'activation' ? 'bg-white shadow text-purple-800' : 'text-gray-600'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Activación
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPipelineTabPersisted('monetization')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium ${
+                    pipelineTab === 'monetization' ? 'bg-white shadow text-emerald-800' : 'text-gray-600'
+                  }`}
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                  Monetización
+                </button>
+              </div>
+            )}
           </div>
           {viewMode === 'pipeline' && (
             <button
               type="button"
-              onClick={() => loadPipeline()}
+              onClick={() => reloadActiveBoard()}
               disabled={pipelineLoading}
               className="text-sm text-purple-700 hover:underline disabled:opacity-50 shrink-0"
             >
@@ -500,7 +676,7 @@ export default function InfluencerCrmPage() {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(1);
+                resetCrmPages();
               }}
               placeholder="Nombre, usuario, código…"
               className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
@@ -510,7 +686,7 @@ export default function InfluencerCrmPage() {
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -524,7 +700,7 @@ export default function InfluencerCrmPage() {
             value={activationFilter}
             onChange={(e) => {
               setActivationFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -539,7 +715,7 @@ export default function InfluencerCrmPage() {
             value={dataFilter}
             onChange={(e) => {
               setDataFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -554,7 +730,7 @@ export default function InfluencerCrmPage() {
             value={termsFilter}
             onChange={(e) => {
               setTermsFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -566,7 +742,7 @@ export default function InfluencerCrmPage() {
             value={identityFilter}
             onChange={(e) => {
               setIdentityFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -579,7 +755,7 @@ export default function InfluencerCrmPage() {
             value={appFilter}
             onChange={(e) => {
               setAppFilter(e.target.value);
-              setPage(1);
+              resetCrmPages();
             }}
             className="py-2 px-3 border rounded-lg text-sm"
           >
@@ -603,14 +779,64 @@ export default function InfluencerCrmPage() {
           >
             {viewMode === 'pipeline' ? (
               <div className="bg-white rounded-xl border shadow-sm p-4">
-                <h2 className="text-sm font-semibold text-slate-800 mb-3">Estado de trabajo por cuenta</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    {pipelineTab === 'monetization'
+                      ? 'Monetización por cuenta'
+                      : 'Activación / outreach por cuenta'}
+                  </h2>
+                  {pipelineTab === 'monetization' && (
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={liveAutoRefresh}
+                          onChange={(e) => setLiveAutoRefresh(e.target.checked)}
+                          className="rounded border-gray-300 text-emerald-600"
+                        />
+                        <Radio className="w-3.5 h-3.5 text-emerald-600" />
+                        Auto-actualizar (20s)
+                      </label>
+                      {boardLastRefreshedAt && (
+                        <span>
+                          Datos vivos ·{' '}
+                          {boardLastRefreshedAt.toLocaleTimeString('es', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <CrmPipelineBoard
                   board={pipelineBoard}
                   loading={pipelineLoading}
                   movingId={pipelineMovingId}
+                  boardKind={pipelineTab}
                   onSelectCard={(id) => setSelectedId(id)}
-                  onMoveCard={handleMovePipelineCard}
+                  onMoveCard={
+                    pipelineTab === 'monetization' ? handleMoveMonetizationCard : handleMovePipelineCard
+                  }
+                  onApplySuggestedStage={
+                    pipelineTab === 'monetization' ? handleApplySuggestedStage : undefined
+                  }
                 />
+                {boardPagination && (
+                  <CrmPagination
+                    page={boardPagination.page}
+                    totalPages={boardPagination.totalPages}
+                    totalDocs={boardPagination.totalDocs}
+                    limit={boardPagination.limit}
+                    onPageChange={setBoardPage}
+                    onLimitChange={(n) => {
+                      setBoardLimit(n);
+                      setBoardPage(1);
+                    }}
+                    className="rounded-b-xl border -mt-1"
+                  />
+                )}
               </div>
             ) : loading ? (
               <div className="py-16 text-center text-gray-500">
@@ -708,29 +934,17 @@ export default function InfluencerCrmPage() {
                 {rows.length === 0 && (
                   <p className="text-center py-10 text-gray-500">Sin resultados</p>
                 )}
-                <div className="flex items-center justify-between px-4 py-3 border-t text-sm">
-                  <span className="text-gray-500">
-                    {totalDocs} registro(s) · página {page}/{totalPages}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className="p-2 rounded border disabled:opacity-40"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage((p) => p + 1)}
-                      className="p-2 rounded border disabled:opacity-40"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <CrmPagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalDocs={totalDocs}
+                  limit={listLimit}
+                  onPageChange={setPage}
+                  onLimitChange={(n) => {
+                    setListLimit(n);
+                    setPage(1);
+                  }}
+                />
               </div>
             ) : null}
           </div>
@@ -974,6 +1188,103 @@ export default function InfluencerCrmPage() {
                       onChange={(e) => setEditNextAction(e.target.value)}
                       className="w-full border rounded-lg px-3 py-2 text-sm"
                     />
+                    <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50/80 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-xs font-semibold text-sky-900 uppercase flex items-center gap-1">
+                          <Radio className="w-3.5 h-3.5" />
+                          Actividad en vivo (canjes)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => selectedId && refreshLiveActivity(selectedId)}
+                          disabled={liveActivityLoading}
+                          className="text-xs text-sky-800 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`w-3 h-3 ${liveActivityLoading ? 'animate-spin' : ''}`}
+                          />
+                          Actualizar
+                        </button>
+                      </div>
+                      {liveActivityLoading && !liveActivity ? (
+                        <p className="text-xs text-gray-500">Cargando canjes…</p>
+                      ) : liveActivity ? (
+                        <>
+                          <p className="text-xs text-sky-950">
+                            <strong>{liveActivity.redeemedCount}</strong> canje(s) ·{' '}
+                            <strong>{liveActivity.openCouponsCount}</strong> cupón(es) abierto(s)
+                            {liveActivity.settlementPendingCount > 0 && (
+                              <>
+                                {' '}
+                                · <strong>${liveActivity.settlementPendingUsd.toFixed(2)}</strong>{' '}
+                                abono pend.
+                              </>
+                            )}
+                            {liveActivity.lastRedeemedAt && (
+                              <>
+                                {' '}
+                                · Último:{' '}
+                                {new Date(liveActivity.lastRedeemedAt).toLocaleString('es')}
+                              </>
+                            )}
+                          </p>
+                          {liveActivity.stageMismatch && (
+                            <p className="text-xs text-amber-900 mt-1">
+                              Etapa sugerida por actividad:{' '}
+                              <strong>{liveActivity.suggestedMonetizationStageLabel}</strong>
+                            </p>
+                          )}
+                          {liveActivity.recentRedemptions.length > 0 && (
+                            <ul className="mt-2 max-h-32 overflow-y-auto space-y-1 border-t border-sky-100 pt-2">
+                              {liveActivity.recentRedemptions.map((r) => (
+                                <li key={r.couponId} className="text-[11px] text-gray-700 flex justify-between gap-2">
+                                  <span className="truncate font-mono">{r.shortCode || r.couponId}</span>
+                                  <span className="shrink-0 text-gray-500">
+                                    {r.redeemedAt
+                                      ? new Date(r.redeemedAt).toLocaleString('es', {
+                                          dateStyle: 'short',
+                                          timeStyle: 'short',
+                                        })
+                                      : '—'}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-500">Sin datos de canjes en vivo.</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 space-y-3">
+                      <p className="text-xs font-semibold text-emerald-900 uppercase">Pipeline monetización</p>
+                      <label className="block text-xs font-medium text-gray-600">Etapa monetización</label>
+                      <select
+                        value={editMonetizationStage}
+                        onChange={(e) => setEditMonetizationStage(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                      >
+                        {CRM_MONETIZATION_STAGES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="block text-xs font-medium text-gray-600">Siguiente acción monetización</label>
+                      <input
+                        value={editMonetizationNextAction}
+                        onChange={(e) => setEditMonetizationNextAction(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <label className="block text-xs font-medium text-gray-600">Notas monetización</label>
+                      <textarea
+                        value={editMonetizationNotes}
+                        onChange={(e) => setEditMonetizationNotes(e.target.value)}
+                        rows={2}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
                     <label className="block text-xs font-medium text-gray-600">Estado perfil (Mongo)</label>
                     <select
                       value={editStatus}
