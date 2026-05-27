@@ -2,6 +2,22 @@
 
 const InfluencerCrmOutreach = require('../models/InfluencerCrmOutreach');
 
+/** Orden visual del tablero CRM (izquierda → derecha). */
+const PIPELINE_STAGE_ORDER = [
+    'lead',
+    'contacted',
+    'awaiting_contact_email',
+    'profile_link_sent',
+    'profile_confirmed',
+    'in_database',
+    'app_link_sent',
+    'terms_sent',
+    'materials_complete',
+    'onboarded',
+    'stalled',
+    'inactive',
+];
+
 const PIPELINE_LABELS = {
     lead: 'Lead',
     contacted: 'Contactado',
@@ -16,6 +32,10 @@ const PIPELINE_LABELS = {
     stalled: 'Estancado',
     inactive: 'Inactivo',
 };
+
+function isValidPipelineStage(stage) {
+    return PIPELINE_STAGE_ORDER.includes(String(stage || '').trim());
+}
 
 const DELIVERY_TYPE_LABELS = {
     spotify_episode: 'Episodio Spotify',
@@ -228,7 +248,9 @@ function buildMorisFitnessCoachOutreach(influencerId) {
 }
 
 module.exports = {
+    PIPELINE_STAGE_ORDER,
     PIPELINE_LABELS,
+    isValidPipelineStage,
     DELIVERY_TYPE_LABELS,
     DELIVERY_STATUS_LABELS,
     defaultOutreachPayload,

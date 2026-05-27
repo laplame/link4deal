@@ -48,7 +48,7 @@ if [ "$code" = "200" ]; then
 else
   echo "   AVISO: Backend no responde en puerto $BACKEND_PORT (HTTP $code)"
   echo "   Asegúrate de tener PM2 o el proceso escuchando en $BACKEND_PORT."
-  echo "   Ejemplo: pm2 start server/server.js --name server (usa PORT=3000 por defecto)"
+  echo "   Arrancar backend: bash scripts/ensure-backend-running.sh"
 fi
 echo ""
 

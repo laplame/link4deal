@@ -49,13 +49,14 @@ case "$1" in
         echo "✅ Aplicación desplegada y guardada"
         ;;
     setup)
-        echo "⚙️  Configurando PM2 para inicio automático..."
-        pm2 startup
-        pm2 save
-        echo "✅ PM2 configurado para inicio automático"
+        echo "⚙️  Configurando PM2 + watchdog..."
+        bash scripts/ensure-backend-running.sh --setup-boot --with-cron
+        ;;
+    ensure)
+        bash scripts/ensure-backend-running.sh "$@"
         ;;
     *)
-        echo "Uso: $0 {start|stop|restart|reload|status|logs|build|deploy|setup}"
+        echo "Uso: $0 {start|stop|restart|reload|status|logs|build|deploy|setup|ensure}"
         echo ""
         echo "Comandos disponibles:"
         echo "  start   - Iniciar aplicación"
@@ -66,7 +67,8 @@ case "$1" in
         echo "  logs    - Ver logs en tiempo real"
         echo "  build   - Construir frontend"
         echo "  deploy  - Desplegar aplicación completa"
-        echo "  setup   - Configurar inicio automático"
+        echo "  setup   - PM2 al boot + cron watchdog (recomendado en VPS)"
+        echo "  ensure  - Igual que scripts/ensure-backend-running.sh"
         exit 1
         ;;
 esac

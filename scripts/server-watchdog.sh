@@ -82,8 +82,12 @@ elif command -v pm2 >/dev/null 2>&1; then
       exit 1
     fi
   else
-    log "ERROR: PM2 no tiene la app '$PM2_APP'. Crea: pm2 start ecosystem.config.cjs — o define RESTART_CMD."
-    exit 1
+    log "PM2 sin app '$PM2_APP' — arrancando ecosystem.config.cjs"
+    if ! pm2 start "$ROOT/ecosystem.config.cjs" --env production; then
+      log "ERROR: pm2 start falló"
+      exit 1
+    fi
+    pm2 save 2>/dev/null || true
   fi
 else
   log "ERROR: No hay PM2 ni RESTART_CMD. Instala PM2 o export RESTART_CMD='systemctl restart tu-servicio'"

@@ -25,6 +25,10 @@ dist-ssr
 
 # Python server (not currently in use)
 server_py/
+
+# Copia anidada accidental (no usar; el backend es server/index.js)
+server/server/
+
 .env
 
 # APK Android — superan el límite de 100 MB de GitHub; no versionar el binario.

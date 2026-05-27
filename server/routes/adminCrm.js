@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(requireSuperAdmin);
 
 router.get('/stats', (req, res) => adminCrmController.getStats(req, res));
+router.get('/pipeline/board', (req, res) => adminCrmController.getPipelineBoard(req, res));
 router.get('/influencers', (req, res) => adminCrmController.listInfluencers(req, res));
 router.get('/influencers/:id', (req, res) => adminCrmController.getInfluencerDetail(req, res));
 router.patch('/influencers/:id', (req, res) => adminCrmController.patchInfluencerCrm(req, res));

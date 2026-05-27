@@ -18,6 +18,8 @@ const {
     serializeOutreach,
     getOrCreateOutreach,
     PIPELINE_LABELS,
+    PIPELINE_STAGE_ORDER,
+    isValidPipelineStage,
 } = require('../utils/influencerCrmOutreach');
 const {
     IDENTITY_VERIFICATION_STATUSES,
@@ -498,6 +500,93 @@ class AdminCrmController {
         }
     }
 
+    /** GET /api/admin/crm/pipeline/board — tablero por columnas (pipelineStage) */
+    async getPipelineBoard(req, res) {
+        try {
+            const search = (req.query.search || '').trim();
+            const query = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
+
+            if (search) {
+                const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                query.$or = [{ name: re }, { username: re }, { profileShortCode: re }, { bio: re }];
+            }
+
+            const influencers = await Influencer.find(query)
+                .select(
+                    'name username avatar identityVerificationStatus profileShortCode userId socialMedia updatedAt',
+                )
+                .populate('userId', 'email phone')
+                .sort({ updatedAt: -1 })
+                .limit(500)
+                .lean();
+
+            const ids = influencers.map((d) => d._id);
+            const outreachDocs = await InfluencerCrmOutreach.find({
+                influencerId: { $in: ids },
+            }).lean();
+            const outreachMap = new Map(outreachDocs.map((o) => [String(o.influencerId), o]));
+
+            const columns = PIPELINE_STAGE_ORDER.map((stage) => ({
+                stage,
+                label: PIPELINE_LABELS[stage] || stage,
+                cards: [],
+            }));
+            const columnByStage = new Map(columns.map((c) => [c.stage, c]));
+
+            for (const inf of influencers) {
+                const infId = String(inf._id);
+                const outreach = outreachMap.get(infId);
+                const stage =
+                    outreach?.pipelineStage && isValidPipelineStage(outreach.pipelineStage)
+                        ? outreach.pipelineStage
+                        : 'lead';
+                const col = columnByStage.get(stage) || columnByStage.get('lead');
+                const user = inf.userId && typeof inf.userId === 'object' ? inf.userId : null;
+                const slug =
+                    (inf.socialMedia?.instagram || '').replace(/^@/, '') ||
+                    (inf.username || '').replace(/^@/, '') ||
+                    '';
+
+                col.cards.push({
+                    influencerId: infId,
+                    name: inf.name || '',
+                    username: inf.username || '',
+                    avatar: inf.avatar || '',
+                    profileShortCode: inf.profileShortCode || '',
+                    identityVerificationStatus: inf.identityVerificationStatus || 'pending',
+                    pipelineStage: stage,
+                    pipelineStageLabel: PIPELINE_LABELS[stage] || stage,
+                    contactEmail: outreach?.contactEmail || user?.email || '',
+                    contactPhone: user?.phone || '',
+                    nextAction: outreach?.nextAction || '',
+                    outreachPendingCount: (outreach?.deliveries || []).filter(
+                        (d) => d.status === 'pending',
+                    ).length,
+                    profilePublicUrl: outreach?.profilePublicUrl || '',
+                    publicSlug: outreach?.publicSlug || slug,
+                    updatedAt: inf.updatedAt ? new Date(inf.updatedAt).toISOString() : null,
+                });
+            }
+
+            const totalCards = columns.reduce((n, c) => n + c.cards.length, 0);
+
+            return res.json({
+                success: true,
+                data: {
+                    columns,
+                    stages: PIPELINE_STAGE_ORDER.map((id) => ({
+                        id,
+                        label: PIPELINE_LABELS[id] || id,
+                    })),
+                    totalCards,
+                },
+            });
+        } catch (error) {
+            console.error('❌ CRM pipeline board:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     /** GET /api/admin/crm/influencers/:id/outreach */
     async getOutreach(req, res) {
         try {
@@ -543,7 +632,17 @@ class AdminCrmController {
                 '';
             const doc = await getOrCreateOutreach(id, slug);
 
-            if (body.pipelineStage) doc.pipelineStage = String(body.pipelineStage);
+            if (body.pipelineStage) {
+                const stage = String(body.pipelineStage).trim();
+                if (!isValidPipelineStage(stage)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'pipelineStage inválido',
+                        validStages: PIPELINE_STAGE_ORDER,
+                    });
+                }
+                doc.pipelineStage = stage;
+            }
             if (body.primaryChannel) doc.primaryChannel = String(body.primaryChannel);
             if (body.contactEmail != null) doc.contactEmail = String(body.contactEmail).trim().toLowerCase();
             if (body.contactEmailStatus) doc.contactEmailStatus = String(body.contactEmailStatus);

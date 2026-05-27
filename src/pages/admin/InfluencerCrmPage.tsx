@@ -15,7 +15,10 @@ import {
   X,
   ShieldCheck,
   ShieldX,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
+import CrmPipelineBoard from '../../components/admin/CrmPipelineBoard';
 import { useAuth } from '../../context/AuthContext';
 import {
   clearAdminPinUnlockSession,
@@ -31,9 +34,13 @@ import {
   patchCrmInfluencer,
   patchCrmOutreach,
   reviewCrmIdentityVerification,
+  fetchCrmPipelineBoard,
+  moveCrmLeadStage,
+  CRM_PIPELINE_STAGES,
   type CrmInfluencerRow,
   type CrmInfluencerDetail,
   type CrmStats,
+  type CrmPipelineBoardData,
 } from '../../services/adminCrm';
 
 const ACTIVATION_LABELS: Record<string, string> = {
@@ -112,6 +119,10 @@ export default function InfluencerCrmPage() {
   const [termsFilter, setTermsFilter] = useState('');
   const [appFilter, setAppFilter] = useState('');
   const [identityFilter, setIdentityFilter] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('pipeline');
+  const [pipelineBoard, setPipelineBoard] = useState<CrmPipelineBoardData | null>(null);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [pipelineMovingId, setPipelineMovingId] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CrmInfluencerDetail | null>(null);
@@ -124,6 +135,7 @@ export default function InfluencerCrmPage() {
   const [editTerms, setEditTerms] = useState(false);
   const [editContactEmail, setEditContactEmail] = useState('');
   const [editNextAction, setEditNextAction] = useState('');
+  const [editPipelineStage, setEditPipelineStage] = useState('lead');
   const [identityAdminNote, setIdentityAdminNote] = useState('');
   const [identityReviewing, setIdentityReviewing] = useState(false);
 
@@ -161,10 +173,42 @@ export default function InfluencerCrmPage() {
     }
   }, [page, search, statusFilter, activationFilter, dataFilter, termsFilter, appFilter, identityFilter]);
 
+  const loadPipeline = useCallback(async () => {
+    setPipelineLoading(true);
+    try {
+      const board = await fetchCrmPipelineBoard(search.trim() || undefined);
+      setPipelineBoard(board);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar pipeline');
+      setPipelineBoard(null);
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [search]);
+
   useEffect(() => {
     if (!isSuperAdmin || !unlocked) return;
-    loadList();
-  }, [isSuperAdmin, unlocked, loadList]);
+    if (viewMode === 'list') loadList();
+    else loadPipeline();
+  }, [isSuperAdmin, unlocked, viewMode, loadList, loadPipeline]);
+
+  const handleMovePipelineCard = async (influencerId: string, pipelineStage: string) => {
+    setPipelineMovingId(influencerId);
+    setError(null);
+    try {
+      await moveCrmLeadStage(influencerId, pipelineStage);
+      await loadPipeline();
+      if (selectedId === influencerId) {
+        const d = await fetchCrmInfluencerDetail(influencerId);
+        setDetail(d);
+        setEditPipelineStage(d.outreach?.pipelineStage || pipelineStage);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al mover lead');
+    } finally {
+      setPipelineMovingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!selectedId || !unlocked) {
@@ -184,6 +228,7 @@ export default function InfluencerCrmPage() {
         setEditTerms(d.terms.accepted);
         setEditContactEmail(d.outreach?.contactEmail || d.user?.email || '');
         setEditNextAction(d.outreach?.nextAction || '');
+        setEditPipelineStage(d.outreach?.pipelineStage || 'lead');
         setIdentityAdminNote(d.verification?.adminDecisionNote || '');
       })
       .catch(() => {
@@ -222,7 +267,8 @@ export default function InfluencerCrmPage() {
         adminNote: identityAdminNote.trim() || undefined,
       });
       setDetail(updated);
-      await loadList();
+      if (viewMode === 'pipeline') await loadPipeline();
+      else await loadList();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al revisar identidad');
     } finally {
@@ -242,14 +288,14 @@ export default function InfluencerCrmPage() {
         terms: { accepted: editTerms },
         lastContactAt: new Date().toISOString(),
       });
-      if (detail?.outreach || editContactEmail || editNextAction) {
-        await patchCrmOutreach(selectedId, {
-          contactEmail: editContactEmail,
-          contactEmailStatus: editContactEmail ? 'received' : undefined,
-          nextAction: editNextAction,
-        });
-      }
-      await loadList();
+      await patchCrmOutreach(selectedId, {
+        pipelineStage: editPipelineStage,
+        contactEmail: editContactEmail,
+        contactEmailStatus: editContactEmail ? 'received' : undefined,
+        nextAction: editNextAction,
+      });
+      if (viewMode === 'pipeline') await loadPipeline();
+      else await loadList();
       const d = await fetchCrmInfluencerDetail(selectedId);
       setDetail(d);
     } catch (e) {
@@ -368,6 +414,41 @@ export default function InfluencerCrmPage() {
           </div>
         )}
 
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('pipeline')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
+                viewMode === 'pipeline' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Pipeline
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
+                viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              Lista
+            </button>
+          </div>
+          {viewMode === 'pipeline' && (
+            <button
+              type="button"
+              onClick={() => loadPipeline()}
+              disabled={pipelineLoading}
+              className="text-sm text-purple-700 hover:underline disabled:opacity-50"
+            >
+              Actualizar tablero
+            </button>
+          )}
+        </div>
+
         <div className="bg-white rounded-xl border shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -471,13 +552,27 @@ export default function InfluencerCrmPage() {
         )}
 
         <div className="flex gap-4">
-          <div className={`flex-1 min-w-0 ${selectedId ? 'lg:max-w-[58%]' : ''}`}>
-            {loading ? (
+          <div
+            className={`flex-1 min-w-0 ${
+              selectedId && viewMode === 'list' ? 'lg:max-w-[58%]' : viewMode === 'pipeline' && selectedId ? 'lg:max-w-[62%]' : ''
+            }`}
+          >
+            {viewMode === 'pipeline' ? (
+              <div className="bg-white rounded-xl border shadow-sm p-4">
+                <CrmPipelineBoard
+                  board={pipelineBoard}
+                  loading={pipelineLoading}
+                  movingId={pipelineMovingId}
+                  onSelectCard={(id) => setSelectedId(id)}
+                  onMoveCard={handleMovePipelineCard}
+                />
+              </div>
+            ) : loading ? (
               <div className="py-16 text-center text-gray-500">
                 <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
                 Cargando CRM…
               </div>
-            ) : (
+            ) : viewMode === 'list' ? (
               <div className="bg-white rounded-xl border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -592,7 +687,7 @@ export default function InfluencerCrmPage() {
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {selectedId && (
@@ -816,6 +911,18 @@ export default function InfluencerCrmPage() {
                       placeholder="correo@gmail.com"
                       className="w-full border rounded-lg px-3 py-2 text-sm"
                     />
+                    <label className="block text-xs font-medium text-gray-600">Etapa pipeline (lead)</label>
+                    <select
+                      value={editPipelineStage}
+                      onChange={(e) => setEditPipelineStage(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                    >
+                      {CRM_PIPELINE_STAGES.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
                     <label className="block text-xs font-medium text-gray-600">Siguiente acción outreach</label>
                     <input
                       value={editNextAction}

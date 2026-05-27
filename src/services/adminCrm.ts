@@ -134,6 +134,52 @@ export interface CrmStats {
   pendingIdentityVerification: number;
 }
 
+/** Columnas del tablero pipeline (orden fijo en servidor). */
+export const CRM_PIPELINE_STAGES: { id: string; label: string }[] = [
+  { id: 'lead', label: 'Lead' },
+  { id: 'contacted', label: 'Contactado' },
+  { id: 'awaiting_contact_email', label: 'Esperando correo Gmail' },
+  { id: 'profile_link_sent', label: 'Enlace perfil enviado' },
+  { id: 'profile_confirmed', label: 'Perfil confirmado' },
+  { id: 'in_database', label: 'En base de datos' },
+  { id: 'app_link_sent', label: 'App enviada' },
+  { id: 'terms_sent', label: 'Términos enviados' },
+  { id: 'materials_complete', label: 'Materiales completos' },
+  { id: 'onboarded', label: 'Onboarded' },
+  { id: 'stalled', label: 'Estancado' },
+  { id: 'inactive', label: 'Inactivo' },
+];
+
+export interface CrmPipelineCard {
+  influencerId: string;
+  name: string;
+  username: string;
+  avatar: string;
+  profileShortCode: string;
+  identityVerificationStatus: string;
+  pipelineStage: string;
+  pipelineStageLabel: string;
+  contactEmail: string;
+  contactPhone: string;
+  nextAction: string;
+  outreachPendingCount: number;
+  profilePublicUrl: string;
+  publicSlug: string;
+  updatedAt: string | null;
+}
+
+export interface CrmPipelineColumn {
+  stage: string;
+  label: string;
+  cards: CrmPipelineCard[];
+}
+
+export interface CrmPipelineBoardData {
+  columns: CrmPipelineColumn[];
+  stages: { id: string; label: string }[];
+  totalCards: number;
+}
+
 export interface CrmListParams {
   page?: number;
   limit?: number;
@@ -145,6 +191,22 @@ export interface CrmListParams {
   app?: 'damecodigo' | 'bizneai' | 'both' | 'none';
   identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
   hasVerificationScreenshot?: 'true';
+}
+
+export async function fetchCrmPipelineBoard(search?: string): Promise<CrmPipelineBoardData> {
+  const q = new URLSearchParams();
+  if (search?.trim()) q.set('search', search.trim());
+  const res = await fetch(apiUrl(`/api/admin/crm/pipeline/board?${q}`), { headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error al cargar tablero pipeline');
+  return data.data;
+}
+
+export async function moveCrmLeadStage(
+  influencerId: string,
+  pipelineStage: string,
+): Promise<CrmOutreach> {
+  return patchCrmOutreach(influencerId, { pipelineStage });
 }
 
 export async function fetchCrmStats(): Promise<CrmStats> {

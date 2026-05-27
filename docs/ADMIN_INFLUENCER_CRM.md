@@ -19,6 +19,7 @@ Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con 
 | Método | Ruta |
 |--------|------|
 | GET | `/api/admin/crm/stats` |
+| GET | `/api/admin/crm/pipeline/board?search` — tablero Kanban por `pipelineStage` |
 | GET | `/api/admin/crm/influencers?...&identityVerificationStatus&hasVerificationScreenshot` |
 | GET | `/api/admin/crm/influencers/:id` |
 | PATCH | `/api/admin/crm/influencers/:id` |
@@ -69,6 +70,20 @@ Stats: `pendingIdentityVerification` — pendientes con screenshot subido.
 ## Colección de eventos
 
 `influencer_crmevents`: historial install/open/terms/admin_update (últimos 80 en detalle CRM).
+
+## Tablero pipeline (columnas / leads)
+
+En **`/admin/crm`**, vista **Pipeline**: columnas según `influencer_crm_outreach.pipelineStage`.
+
+| Columna | Etapa |
+|---------|--------|
+| Lead | `lead` |
+| Contactado | `contacted` |
+| … | `awaiting_contact_email`, `profile_link_sent`, `profile_confirmed`, `in_database`, `app_link_sent`, `terms_sent`, `materials_complete`, `onboarded`, `stalled`, `inactive` |
+
+- **Arrastrar** una tarjeta entre columnas → `PATCH /api/admin/crm/influencers/:id/outreach` con `{ "pipelineStage": "..." }`.
+- **Clic** en tarjeta → ficha lateral con detalle, verificación de identidad y selector de etapa.
+- Influencers sin documento outreach aparecen en **Lead**.
 
 ## Modelo de outreach (envíos por influencer)
 

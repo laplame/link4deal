@@ -111,17 +111,25 @@ mkdir -p logs server/uploads server/uploads/promotions
 El repo incluye `ecosystem.config.cjs` (CommonJS; el raíz tiene `"type": "module"` y `.js` rompería PM2) con:
 
 - **name:** `link4deal-backend`
-- **cwd:** `/home/cto/project/link4deal`
-- **script:** `./server/index.js`
+- **cwd:** raíz del repo (detectada por `ecosystem.config.cjs`)
+- **script:** `server/index.js` (no usar `server/server.js`)
 - **PORT:** `5001`
 
 Desde la raíz del proyecto:
 
 ```bash
 cd ~/project/link4deal
+bash scripts/ensure-backend-running.sh --setup-boot --with-cron
+```
+
+Ese script arranca `server/index.js` con PM2, ejecuta `pm2 save`, comprueba `/health`, instala un cron cada 2 min con `server-watchdog.sh` y muestra el comando `pm2 startup` para que el backend vuelva tras reiniciar el VPS.
+
+Alternativa manual:
+
+```bash
 pm2 start ecosystem.config.cjs --env production
 pm2 save
-pm2 startup   # si quieres que arranque al reiniciar el servidor (te dirá el comando a ejecutar)
+pm2 startup
 ```
 
 ### 3.2 Comprobar
@@ -194,9 +202,8 @@ mkdir -p logs server/uploads server/uploads/promotions
 cp server/.env.example server/.env
 # Editar server/.env con tus valores
 
-# 5. PM2
-pm2 start ecosystem.config.cjs --env production
-pm2 save
+# 5. PM2 (backend siempre arriba)
+bash scripts/ensure-backend-running.sh --setup-boot --with-cron
 
 # 6. Nginx
 sudo cp ~/project/link4deal/nginx.conf /etc/nginx/sites-available/link4deal
@@ -204,6 +211,32 @@ sudo ln -sf /etc/nginx/sites-available/link4deal /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl start nginx && sudo systemctl reload nginx
 ```
+
+---
+
+## Espacio en disco (VPS)
+
+Auditoría y limpieza de temporales (logs PM2, caché npm, `server/server` duplicado, etc.):
+
+```bash
+cd ~/project/link4deal
+git pull
+bash scripts/vps-disk-audit.sh              # solo ver qué ocupa
+bash scripts/vps-disk-audit.sh --dry-run    # simular limpieza
+bash scripts/vps-disk-audit.sh --clean --yes  # limpiar sin preguntar
+```
+
+**No borra** `server/uploads` (fotos de promos/influencers). Si el disco sigue lleno, revisar:
+
+| Ruta | Suele pesar |
+|------|-------------|
+| `node_modules` + `server/node_modules` | ~300–600 MB c/u |
+| `dist/` + `public/assets/*.apk` | APK ~100 MB+ |
+| `logs/pm2-*.log` | Crece sin límite |
+| `~/.npm/_cacache` | Cientos de MB |
+| `/var/log/nginx`, `journalctl` | GB si no se rotan |
+
+En producción solo hace falta `dist/`, `server/`, `node_modules` (raíz y server) y `ecosystem.config.cjs`. No necesitas `.git` en el VPS si despliegas con artefactos.
 
 ---
 
