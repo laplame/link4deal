@@ -13,9 +13,11 @@ import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
-import { getPromotionImageUrl } from '../utils/promotionImage';
-import { normalizeChainBranchesFromApi } from '../utils/geo';
 import { masonryTierFromId } from '../utils/masonryVariant';
+import {
+    mapPromoDocsToProductCards,
+    type ProductCardItem as Product,
+} from '../utils/mapPromotionToProductCard';
 
 // Productos de ejemplo (fallback si no hay datos de la API)
 const fallbackProducts = [
@@ -375,140 +377,6 @@ const categories = [
 ];
 
 // Tipo para producto transformado
-interface Product {
-    id: string;
-    name: string;
-    price: number;
-    originalPrice?: number;
-    currency: string;
-    image: string;
-    offer: string;
-    category: string;
-    brand: string;
-    rating: number;
-    reviewCount: number;
-    stock: number;
-    location: string;
-    shipping: string;
-    warranty: string;
-    tags: string[];
-    description: string;
-    features: string[];
-    seller: {
-        name: string;
-        rating: number;
-        verified: boolean;
-    };
-    specifications: Record<string, string | undefined>;
-    smartContract: {
-        address: string;
-        network: string;
-        tokenStandard: string;
-        blockchainExplorer: string;
-    };
-    isHotOffer?: boolean;
-    hotness?: 'fire' | 'hot' | 'warm';
-    expiresIn?: number;
-    storeLocation?: {
-        latitude: number;
-        longitude: number;
-        address: string;
-        storeName: string;
-    };
-    distance?: number;
-    activateByGps?: boolean;
-    gpsRadiusMeters?: number;
-    isChainStore?: boolean;
-    chainLocations?: ReturnType<typeof normalizeChainBranchesFromApi>;
-}
-
-function mapPromoDocsToLandingProducts(docs: unknown[]): Product[] {
-    return (Array.isArray(docs) ? docs : []).map((promo: Record<string, any>) => {
-        const originalPrice = promo.originalPrice || 0;
-        const currentPrice = promo.currentPrice || 0;
-        const discountPercentage =
-            promo.discountPercentage ||
-            (originalPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
-
-        const validUntil = new Date(promo.validUntil || Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const now = new Date();
-        const diffTime = validUntil.getTime() - now.getTime();
-        const expiresIn = Math.ceil(diffTime / (1000 * 60 * 60));
-
-        const categoryMap: { [key: string]: string } = {
-            electronics: 'electronicos',
-            fashion: 'moda',
-            sports: 'deportes',
-            beauty: 'belleza',
-            home: 'hogar',
-            books: 'libros',
-            food: 'comida',
-            other: 'otros',
-        };
-
-        return {
-            id: String(promo._id ?? promo.id ?? ''),
-            name: promo.title || promo.productName || 'Sin título',
-            price: currentPrice,
-            originalPrice: originalPrice > 0 ? originalPrice : undefined,
-            currency: promo.currency || 'USD',
-            image: getPromotionImageUrl(promo.images),
-            offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
-            category: categoryMap[promo.category] || promo.category || 'otros',
-            brand: promo.brand || 'Sin marca',
-            rating: 4.5,
-            reviewCount: promo.views || 0,
-            stock:
-                promo.totalQuantity != null
-                    ? Math.max(0, (promo.totalQuantity || 0) - (promo.conversions || 0))
-                    : 999,
-            location: promo.storeLocation?.city || promo.storeLocation?.address || 'CDMX',
-            shipping: 'Envío disponible',
-            warranty: 'Garantía incluida',
-            tags: promo.tags?.slice(0, 4) || ['Oferta', 'Promoción'],
-            description: promo.description || 'Promoción especial disponible',
-            features: promo.tags?.slice(0, 5) || [],
-            seller: {
-                name: promo.storeName || promo.brand || 'Tienda',
-                rating: 4.5,
-                verified: true,
-            },
-            specifications: {
-                Categoría: promo.category,
-                Marca: promo.brand,
-                Descuento: `${discountPercentage}%`,
-            },
-            smartContract: {
-                address: '0x0000000000000000000000000000000000000000',
-                network: 'Ethereum',
-                tokenStandard: 'ERC-777',
-                blockchainExplorer: 'https://etherscan.io',
-            },
-            isHotOffer: promo.isHotOffer || promo.hotness === 'fire' || promo.hotness === 'hot',
-            hotness: promo.hotness || (promo.isHotOffer ? 'hot' : undefined),
-            expiresIn: expiresIn > 0 ? expiresIn : undefined,
-            storeLocation: promo.storeLocation?.coordinates
-                ? {
-                      latitude: promo.storeLocation.coordinates.latitude,
-                      longitude: promo.storeLocation.coordinates.longitude,
-                      address: promo.storeLocation.address || '',
-                      storeName: promo.storeName || '',
-                  }
-                : undefined,
-            distance: undefined,
-            activateByGps: !!(promo.activateByGps || promo.gpsActivationEnabled),
-            gpsRadiusMeters:
-                typeof promo.gpsRadiusMeters === 'number'
-                    ? promo.gpsRadiusMeters
-                    : typeof promo.locationRadiusMeters === 'number'
-                      ? promo.locationRadiusMeters
-                      : 500,
-            isChainStore: !!promo.isChainStore,
-            chainLocations: normalizeChainBranchesFromApi(promo.chainLocations),
-        };
-    });
-}
-
 function normalizeShortCodeInput(raw: string): string {
     const s = String(raw || '')
         .trim()
@@ -588,7 +456,7 @@ export default function LandingPage() {
 
                 const docs = Array.isArray(data?.data?.docs) ? data.data.docs : Array.isArray(data?.docs) ? data.docs : [];
                 if (data.success) {
-                    setProducts(mapPromoDocsToLandingProducts(docs));
+                    setProducts(mapPromoDocsToProductCards(docs));
                 } else {
                     setProducts([]);
                 }
@@ -704,7 +572,7 @@ export default function LandingPage() {
 
             const docs = Array.isArray(data?.data?.docs) ? data.data.docs : [];
             const meta = data.data?.shortCodeMeta;
-            setProducts(mapPromoDocsToLandingProducts(data.success ? docs : []));
+            setProducts(mapPromoDocsToProductCards(data.success ? docs : []));
             setCreatorCodeFilterNorm(norm);
             setShortCodeFilterLabel(
                 meta?.influencer?.username

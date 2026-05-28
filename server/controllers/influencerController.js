@@ -18,6 +18,7 @@ const {
     computePublicProfileFieldOverrides,
 } = require('../utils/influencerProfileEnrichment');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
+const { buildInfluencerAvailableProducts } = require('../utils/influencerAvailableProducts');
 const { ensureInfluencerHasProfileShortCode } = require('../utils/influencerPromoShortCodes');
 const {
     nameToSlug,
@@ -861,6 +862,37 @@ class InfluencerController {
             return res.status(500).json({
                 success: false,
                 message: 'Error al cargar resumen de promociones QR',
+                error: error.message,
+            });
+        }
+    }
+
+    /** GET /api/influencers/:id/available-products — promos/productos con solicitud aprobada por la marca. */
+    async getAvailableProducts(req, res) {
+        try {
+            const { id: influencerId } = req.params;
+            if (!this.isValidObjectId(influencerId)) {
+                return res.status(400).json({ success: false, message: 'ID de influencer inválido' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(200).json({ success: true, data: [], message: 'Sin conexión a BD' });
+            }
+            const exists = await Influencer.findById(influencerId).select('_id username').lean();
+            if (!exists || exists.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+            const data = await buildInfluencerAvailableProducts(influencerId);
+            return res.status(200).json({
+                success: true,
+                data,
+                message:
+                    'Productos y campañas disponibles tras aprobación de la marca (PromotionApplication approved)',
+            });
+        } catch (error) {
+            console.error('❌ Error productos disponibles influencer:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al cargar productos disponibles',
                 error: error.message,
             });
         }

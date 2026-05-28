@@ -59,6 +59,12 @@ import { apiUrl, mediaUrl } from '../utils/apiUrl';
 import { InfluencerUgcShowcase, type UgcProfilePublic } from '../components/influencer/InfluencerUgcShowcase';
 import { generateInfluencerProfilePdf } from '../utils/generateInfluencerProfilePdf';
 import { fetchInfluencerByPublicSlug } from '../utils/fetchInfluencerByPublicSlug';
+import ProductCard from '../components/ProductCard';
+import {
+  mapInfluencerAvailableRowToProductCard,
+  type InfluencerAvailableProductApiRow,
+} from '../utils/mapPromotionToProductCard';
+import { masonryTierFromId } from '../utils/masonryVariant';
 
 interface Influencer {
   id: string;
@@ -219,6 +225,13 @@ export default function InfluencerProfilePage() {
   const [contactSending, setContactSending] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
+  const [availableProductRows, setAvailableProductRows] = useState<InfluencerAvailableProductApiRow[]>([]);
+  const [availableProductsLoading, setAvailableProductsLoading] = useState(false);
+
+  const availableProducts = useMemo(
+    () => availableProductRows.map(mapInfluencerAvailableRowToProductCard),
+    [availableProductRows],
+  );
 
   const isOwnProfile =
     Boolean(viewerInfluencerId && influencer?.id && viewerInfluencerId === influencer.id);
@@ -441,6 +454,25 @@ export default function InfluencerProfilePage() {
       })
       .catch(() => setCouponsActivity({ open: [], redeemed: [], expiredUnused: [] }))
       .finally(() => setCouponsActivityLoading(false));
+  }, [influencer?.id]);
+
+  useEffect(() => {
+    if (!influencer?.id) {
+      setAvailableProductRows([]);
+      return;
+    }
+    setAvailableProductsLoading(true);
+    fetch(apiUrl(`/api/influencers/${influencer.id}/available-products`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setAvailableProductRows(data.data as InfluencerAvailableProductApiRow[]);
+        } else {
+          setAvailableProductRows([]);
+        }
+      })
+      .catch(() => setAvailableProductRows([]))
+      .finally(() => setAvailableProductsLoading(false));
   }, [influencer?.id]);
 
   useEffect(() => {
@@ -801,6 +833,14 @@ export default function InfluencerProfilePage() {
               >
                 <Ticket className="w-5 h-5 shrink-0" />
                 <span className="text-left leading-snug">Redenciones en vivo (solo tú)</span>
+              </Link>
+              <Link
+                to={`/influencer/${encodeURIComponent(influencerSlug || '')}/tienda`}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all min-w-0 shadow-sm"
+                title="Ver tienda con cupones disponibles (aprobados por la marca)"
+              >
+                <LayoutGrid className="w-5 h-5 shrink-0" aria-hidden />
+                <span className="text-left leading-snug">Ver tienda</span>
               </Link>
               {viewerInfluencerId === influencer.id ? (
                 <Link
@@ -1174,6 +1214,42 @@ export default function InfluencerProfilePage() {
           ugc={influencer.ugcProfile}
           ownerEditHref={viewerInfluencerId === influencer.id ? '/dashboard/influencer?hub=ugc' : undefined}
         />
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <LayoutGrid className="w-5 h-5 text-purple-500" aria-hidden />
+            Productos disponibles
+          </h2>
+          <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+            Ofertas y productos del catálogo vinculados a campañas donde la marca ya aprobó la colaboración con este
+            influencer. Solo se muestran promociones activas y vigentes.
+          </p>
+          {availableProductsLoading ? (
+            <div className="flex items-center gap-2 text-gray-600 py-8 justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-purple-600" aria-hidden />
+              Cargando productos…
+            </div>
+          ) : availableProducts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 py-10 px-4 text-center">
+              <p className="text-gray-700 mb-1">Aún no hay productos publicados en este perfil.</p>
+              <p className="text-sm text-gray-500">
+                Cuando una marca apruebe una solicitud de campaña, las tarjetas aparecerán aquí automáticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="columns-1 md:columns-2 xl:columns-3 gap-6 [column-fill:_balance]">
+              {availableProductRows.map((row, index) => {
+                const product = availableProducts[index];
+                if (!product) return null;
+                return (
+                  <div key={row.cardKey} className="break-inside-avoid mb-6">
+                    <ProductCard product={product} masonryTier={masonryTierFromId(product.id, index)} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Pujas - justo después del resumen */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

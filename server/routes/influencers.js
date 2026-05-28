@@ -97,6 +97,9 @@ router.get('/:id/coupons-activity', (req, res) => influencerController.getCoupon
 // GET /api/influencers/:id/qr-promotions-summary — cupones agrupados por promoción + campañas con puja vigente sin cupones
 router.get('/:id/qr-promotions-summary', (req, res) => influencerController.getQrPromotionsSummary(req, res));
 
+// GET /api/influencers/:id/available-products — productos/campañas con solicitud aprobada por la marca
+router.get('/:id/available-products', (req, res) => influencerController.getAvailableProducts(req, res));
+
 // GET /api/influencers/:id/promo-short-codes — códigos alfanuméricos cortos (app) por influencer
 router.get('/:id/promo-short-codes', (req, res) => influencerController.getPromoShortCodes(req, res));
 
