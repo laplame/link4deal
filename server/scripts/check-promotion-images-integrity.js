@@ -65,17 +65,24 @@ async function main() {
     [...currentFiles, ...legacyFiles].map((f) => path.basename(f))
   );
 
+  const { getUploadDir } = require('../middleware/upload');
+  console.log(`📁 UPLOAD_PATH / getUploadDir(): ${getUploadDir()}\n`);
+
   const promotions = await Promotion.find({}, { _id: 1, title: 1, images: 1 }).lean();
   const referenced = [];
   const missing = [];
+  let withCloudinary = 0;
+  let localOnly = 0;
 
   for (const promo of promotions) {
     const images = Array.isArray(promo.images) ? promo.images : [];
     for (const img of images) {
+      if (img?.cloudinaryUrl) withCloudinary += 1;
+      else localOnly += 1;
       const filename = filenameFromImage(img);
       if (!filename) continue;
       referenced.push({ promotionId: String(promo._id), title: promo.title, filename });
-      if (!diskFileSet.has(filename)) {
+      if (!img?.cloudinaryUrl && !diskFileSet.has(filename)) {
         missing.push({ promotionId: String(promo._id), title: promo.title, filename });
       }
     }
@@ -93,7 +100,9 @@ async function main() {
   console.log(`🖼️ Archivos en ${currentDir}: ${currentFiles.length}`);
   console.log(`🖼️ Archivos en ${legacyDir}: ${legacyFiles.length}`);
   console.log(`🔗 Referencias en DB: ${referenced.length}`);
-  console.log(`❌ Referencias faltantes en disco: ${missing.length}`);
+  console.log(`☁️ Con Cloudinary (OK tras git pull): ${withCloudinary}`);
+  console.log(`💾 Solo local (riesgo git pull): ${localOnly}`);
+  console.log(`❌ Sin Cloudinary y sin archivo en disco: ${missing.length}`);
   console.log(`🧹 Huérfanos en ruta actual: ${orphanCurrent.length}`);
   console.log(`🧹 Huérfanos en ruta legacy: ${orphanLegacy.length}\n`);
 

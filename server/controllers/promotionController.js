@@ -6,6 +6,7 @@ const ocrService = require('../services/ocrService');
 const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
 const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
+const { persistPromotionImage } = require('../utils/promotionImageStorage');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
 const { buildPromotionShopIdQuery } = require('../utils/promotionShopFilter');
@@ -70,43 +71,19 @@ async function processAppendPromotionImages(req) {
             } catch (optErr) {
                 console.warn(`⚠️ [update] optimizar imagen: ${optErr.message}`);
             }
-            const uploadDir = getPromotionUploadDir();
-            await fs.mkdir(uploadDir, { recursive: true });
-            const optimizedFormat = optimizedImage?.format || path.extname(file.originalname).slice(1) || 'jpg';
-            const fileExtension = optimizedFormat === 'webp' ? '.webp' :
-                optimizedFormat === 'png' ? '.png' : '.jpg';
-            const uniqueFilename = `promotion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExtension}`;
-            const localPath = path.join(uploadDir, uniqueFilename);
-            await fs.writeFile(localPath, file.buffer);
-            let cloudinaryUrl = null;
-            let cloudinaryPublicId = null;
-            if (cloudinaryConfig.isConfigured) {
-                try {
-                    const cloudinaryFile = {
-                        ...file,
-                        buffer: file.buffer,
-                        mimetype: optimizedImage?.format === 'webp' ? 'image/webp' :
-                            optimizedImage?.format === 'png' ? 'image/png' : 'image/jpeg'
-                    };
-                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile);
-                    if (cloudinaryResult.success) {
-                        cloudinaryUrl = cloudinaryResult.data.secure_url;
-                        cloudinaryPublicId = cloudinaryResult.data.public_id;
-                    }
-                } catch (cErr) {
-                    console.warn(`⚠️ [update] Cloudinary: ${cErr.message}`);
-                }
+            const stored = await persistPromotionImage(file, optimizedImage);
+            if (!stored.savedToCloudinary && cloudinaryConfig.isConfigured) {
+                console.warn(`⚠️ [update] Solo disco local para ${file.originalname} — configura Cloudinary o revisa cuota`);
             }
-            const publicUrl = `/uploads/promotions/${uniqueFilename}`;
             newEntries.push({
-                originalName: file.originalname,
-                filename: uniqueFilename,
-                path: localPath,
-                url: publicUrl,
-                cloudinaryUrl,
-                cloudinaryPublicId,
+                originalName: stored.originalName,
+                filename: stored.filename,
+                path: stored.path,
+                url: stored.url,
+                cloudinaryUrl: stored.cloudinaryUrl,
+                cloudinaryPublicId: stored.cloudinaryPublicId,
                 uploadedAt: new Date(),
-                imageRole: isTermsSlot ? 'terms' : 'promotional'
+                imageRole: isTermsSlot ? 'terms' : 'promotional',
             });
         } catch (err) {
             console.error('❌ [update] error procesando imagen:', err.message);
@@ -319,46 +296,21 @@ class PromotionController {
                         // Continuar con imagen original si falla la optimización
                     }
                     
-                    // Carpeta única para imágenes de promociones (servida en /uploads/promotions/)
-                    const uploadDir = getPromotionUploadDir();
-                    await fs.mkdir(uploadDir, { recursive: true });
-                    
-                    // Generar nombre único para el archivo (usar extensión del formato optimizado)
-                    const optimizedFormat = optimizedImage?.format || path.extname(file.originalname).slice(1) || 'jpg';
-                    const fileExtension = optimizedFormat === 'webp' ? '.webp' : 
-                                         optimizedFormat === 'png' ? '.png' : '.jpg';
-                    const uniqueFilename = `promotion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExtension}`;
-                    const localPath = path.join(uploadDir, uniqueFilename);
-                    
-                    // Guardar imagen optimizada localmente
-                    await fs.writeFile(localPath, file.buffer);
-                    console.log(`✅ Imagen optimizada guardada localmente: ${localPath}`);
-                    
-                    // Intentar subir a Cloudinary si está configurado (opcional)
-                    let cloudinaryUrl = null;
-                    let cloudinaryPublicId = null;
-                    
-                    if (cloudinaryConfig.isConfigured) {
-                        try {
-                            const cloudinaryFile = {
-                                ...file,
-                                buffer: file.buffer,
-                                mimetype: optimizedImage?.format === 'webp' ? 'image/webp' : 
-                                         optimizedImage?.format === 'png' ? 'image/png' : 'image/jpeg'
-                            };
-                            
-                            const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile);
-                            if (cloudinaryResult.success) {
-                                cloudinaryUrl = cloudinaryResult.data.secure_url;
-                                cloudinaryPublicId = cloudinaryResult.data.public_id;
-                                console.log(`✅ Imagen optimizada también subida a Cloudinary: ${cloudinaryUrl}`);
-                            }
-                        } catch (cloudinaryError) {
-                            console.log(`⚠️ Cloudinary no disponible, usando solo almacenamiento local: ${cloudinaryError.message}`);
-                        }
-                    } else {
-                        console.log(`ℹ️ Cloudinary no configurado, usando solo almacenamiento local`);
+                    const stored = await persistPromotionImage(file, optimizedImage);
+                    console.log(
+                        `✅ Imagen guardada: local=${stored.publicLocalUrl}${stored.cloudinaryUrl ? ` cloudinary=${stored.cloudinaryUrl}` : ''}`,
+                    );
+                    if (!stored.savedToCloudinary && cloudinaryConfig.isConfigured) {
+                        console.warn(
+                            `⚠️ Cloudinary falló para ${file.originalname}; la URL pública depende del disco del VPS`,
+                        );
+                    } else if (!cloudinaryConfig.isConfigured) {
+                        console.log(`ℹ️ Cloudinary no configurado — solo almacenamiento local`);
                     }
+                    const uniqueFilename = stored.filename;
+                    const localPath = stored.path;
+                    const cloudinaryUrl = stored.cloudinaryUrl;
+                    const cloudinaryPublicId = stored.cloudinaryPublicId;
 
                     // OCR en cada imagen; texto de `termsImages` alimenta términos legales
                     try {
@@ -414,14 +366,11 @@ class PromotionController {
                         console.warn(`⚠️ OCR omitido o falló para ${file.originalname}:`, ocrErr.message);
                     }
 
-                    // URL pública: única ruta para todas las imágenes de promociones
-                    const publicUrl = `/uploads/promotions/${uniqueFilename}`;
-                    
                     processedImages.push({
                         originalName: file.originalname,
                         filename: uniqueFilename,
                         path: localPath,
-                        url: publicUrl,
+                        url: stored.url,
                         cloudinaryUrl: cloudinaryUrl,
                         cloudinaryPublicId: cloudinaryPublicId,
                         uploadedAt: new Date(),

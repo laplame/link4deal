@@ -29,6 +29,14 @@ server_py/
 # Copia anidada accidental (no usar; el backend es server/index.js)
 server/server/
 
+# Imágenes subidas por usuarios (promociones, avatares, marcas…).
+# NO versionar: git pull/push puede borrar o sobrescribir el VPS.
+# En producción usar UPLOAD_PATH fuera del repo + Cloudinary como respaldo.
+server/uploads/*
+!server/uploads/.gitkeep
+server/uploads/*/*
+!server/uploads/*/.gitkeep
+
 .env
 
 # APK Android — superan el límite de 100 MB de GitHub; no versionar el binario.
