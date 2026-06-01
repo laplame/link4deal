@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiUrl } from '../utils/apiUrl';
 import { parseJsonBody } from '../utils/parseApiBody';
+import TermsAcceptModal, { TermsAcceptedBadge } from '../components/legal/TermsAcceptModal';
+import { hasAcceptedTerms } from '../utils/termsAcceptance';
 import { 
     ArrowLeft, 
     Star, 
@@ -14,7 +16,8 @@ import {
     Twitter,
     CheckCircle,
     Sparkles,
-    User
+    User,
+    ScrollText,
 } from 'lucide-react';
 
 interface SocialMediaAccount {
@@ -40,6 +43,9 @@ const InfluencerSetup: React.FC = () => {
     const [analyzeInfluencerError, setAnalyzeInfluencerError] = useState<string | null>(null);
     const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
     const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+    const [termsAccepted, setTermsAccepted] = useState(() => hasAcceptedTerms());
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [pendingSubmitAfterTerms, setPendingSubmitAfterTerms] = useState(false);
     
     // Form data
     const [formData, setFormData] = useState({
@@ -232,7 +238,7 @@ const InfluencerSetup: React.FC = () => {
         }
     };
 
-    const handleSubmit = async () => {
+    const createProfile = async () => {
         setIsLoading(true);
 
         try {
@@ -305,6 +311,15 @@ const InfluencerSetup: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleSubmit = () => {
+        if (!termsAccepted) {
+            setPendingSubmitAfterTerms(true);
+            setShowTermsModal(true);
+            return;
+        }
+        void createProfile();
     };
 
     const renderStep1 = () => (
@@ -617,6 +632,34 @@ const InfluencerSetup: React.FC = () => {
                     <li>• Una vez aprobado, tendrás acceso completo a la plataforma</li>
                 </ul>
             </div>
+
+            <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Términos y Condiciones</h3>
+                {termsAccepted ? (
+                    <TermsAcceptedBadge onReview={() => setShowTermsModal(true)} />
+                ) : (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                        <p className="text-sm text-amber-900">
+                            Debes leer y aceptar los Términos y Condiciones antes de crear tu perfil.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowTermsModal(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-500 text-white text-sm font-medium hover:bg-pink-600"
+                        >
+                            <ScrollText className="h-4 w-4" />
+                            Leer y aceptar términos
+                        </button>
+                        <p className="text-xs text-gray-600">
+                            También puedes consultarlos en{' '}
+                            <Link to="/terminos" target="_blank" rel="noopener noreferrer" className="text-pink-600 underline">
+                                pantalla completa
+                            </Link>
+                            .
+                        </p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 
@@ -770,9 +813,9 @@ const InfluencerSetup: React.FC = () => {
                     ) : (
                         <button
                             onClick={handleSubmit}
-                            disabled={isLoading || !canProceed()}
+                            disabled={isLoading || !canProceed() || !termsAccepted}
                             className={`px-8 py-3 rounded-lg font-medium transition-colors ${
-                                isLoading || !canProceed()
+                                isLoading || !canProceed() || !termsAccepted
                                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                     : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-600 hover:to-rose-600'
                             }`}
@@ -789,6 +832,22 @@ const InfluencerSetup: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            <TermsAcceptModal
+                open={showTermsModal}
+                onClose={() => {
+                    setShowTermsModal(false);
+                    setPendingSubmitAfterTerms(false);
+                }}
+                onAccept={() => {
+                    setTermsAccepted(true);
+                    setShowTermsModal(false);
+                    if (pendingSubmitAfterTerms) {
+                        setPendingSubmitAfterTerms(false);
+                        void createProfile();
+                    }
+                }}
+            />
         </div>
     );
 };

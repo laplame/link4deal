@@ -43,23 +43,17 @@ export function isStaffUser(user: AuthUser | null | undefined): boolean {
   );
 }
 
+/** Hub compartido por marca, influencer, agencia y usuario final. */
+export const SHARED_STORE_ROUTE = '/marketplace';
+
 export function defaultRouteAfterLogin(user: AuthUser): string {
   if (user.isSuperAdmin || user.isPlatformSuperuser) {
     return DASHBOARD_ROUTES.suite;
   }
-  switch (user.primaryRole) {
-    case 'influencer':
-      return DASHBOARD_ROUTES.role.influencer;
-    case 'brand':
-      return DASHBOARD_ROUTES.role.brand;
-    case 'agency':
-      return '/agency-setup';
-    case 'admin':
-    case 'moderator':
-      return DASHBOARD_ROUTES.admin.home;
-    default:
-      return DASHBOARD_ROUTES.home;
+  if (user.primaryRole === 'admin' || user.primaryRole === 'moderator') {
+    return DASHBOARD_ROUTES.admin.home;
   }
+  return SHARED_STORE_ROUTE;
 }
 
 export function canAccessAdminRoute(

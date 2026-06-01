@@ -150,6 +150,13 @@ export const CRM_PIPELINE_STAGES: { id: string; label: string }[] = [
   { id: 'inactive', label: 'Inactivo' },
 ];
 
+export interface CrmPendingPromotionApplication {
+  id: string;
+  promotionTitle: string;
+  redirectInsteadOfQr?: boolean;
+  createdAt?: string | null;
+}
+
 export interface CrmPipelineCard {
   influencerId: string;
   name: string;
@@ -173,6 +180,8 @@ export interface CrmPipelineCard {
   profilePublicUrl: string;
   publicSlug: string;
   updatedAt: string | null;
+  pendingApplications?: CrmPendingPromotionApplication[];
+  pendingApplicationCount?: number;
 }
 
 export interface CrmPipelineColumn {
@@ -273,6 +282,8 @@ export interface CrmMonetizationCard {
   publicSlug: string;
   profilePublicUrl: string;
   updatedAt: string | null;
+  pendingApplications?: CrmPendingPromotionApplication[];
+  pendingApplicationCount?: number;
 }
 
 export interface CrmMonetization {
@@ -428,6 +439,216 @@ export async function fetchCrmInfluencerDetail(id: string): Promise<CrmInfluence
   return data.data;
 }
 
+export type CrmRedirectPromotionApplication = {
+  id: string;
+  status: string;
+  createdAt: string | null;
+  promotion: {
+    id: string;
+    title: string;
+    brand: string;
+    status: string;
+    validFrom: string | null;
+    validUntil: string | null;
+    redirectInsteadOfQr: boolean;
+    redirectToUrl: string;
+  } | null;
+};
+
+export type CrmRedirectPromotionBrief = CrmRedirectPromotionApplication['promotion'];
+
+export type CrmRedirectApplicationsPack = {
+  pending: CrmRedirectPromotionApplication[];
+  approved: CrmRedirectPromotionApplication[];
+  assignable: NonNullable<CrmRedirectPromotionBrief>[];
+  /** @deprecated compat — igual que pending */
+  data: CrmRedirectPromotionApplication[];
+  count: number;
+};
+
+export async function fetchCrmRedirectApplications(influencerId: string): Promise<CrmRedirectApplicationsPack> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${influencerId}/redirect-applications`), {
+    headers: authHeaders(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'Error al cargar solicitudes de redirección');
+  const pending = (body.pending ?? body.data ?? []) as CrmRedirectPromotionApplication[];
+  const approved = (body.approved ?? []) as CrmRedirectPromotionApplication[];
+  const assignable = (body.assignable ?? []) as NonNullable<CrmRedirectPromotionBrief>[];
+  return {
+    pending,
+    approved,
+    assignable,
+    data: pending,
+    count: Number(body.count) || pending.length,
+  };
+}
+
+export async function assignCrmRedirectPromotion(
+  influencerId: string,
+  promotionId: string,
+): Promise<CrmRedirectPromotionApplication> {
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${influencerId}/redirect-promotions/assign`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ promotionId }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'No se pudo asignar la promoción');
+  return body.data as CrmRedirectPromotionApplication;
+}
+
+export type CrmPromotionApplicationRow = {
+  id: string;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  influencerApplicant: null | {
+    id: string;
+    name?: string;
+    username?: string;
+    avatar?: string;
+    totalFollowers?: number;
+  };
+  platforms: string[];
+  estimatedReach: number;
+  portfolio: { originalName?: string; urlPath?: string; mimeType?: string }[];
+  pricing?: { type?: string; amount?: number; currency?: string };
+  timeline?: { startDate?: string; endDate?: string; deliverables?: string[] };
+  additionalNotes?: string;
+  contentProposal?: string;
+  promotion: null | {
+    id: string;
+    title?: string;
+    brand?: string;
+    category?: string;
+    currentPrice?: number;
+    currency?: string;
+    discountPercentage?: number;
+    redirectInsteadOfQr?: boolean;
+    redirectToUrl?: string;
+  };
+};
+
+export type CrmApplicationsPagination = {
+  page: number;
+  limit: number;
+  totalDocs: number;
+  totalPages: number;
+};
+
+export async function fetchCrmPromotionApplications(params?: {
+  status?: string;
+  influencerId?: string;
+  search?: string;
+  unlinkedOnly?: boolean;
+  page?: number;
+  limit?: number;
+}): Promise<{
+  rows: CrmPromotionApplicationRow[];
+  pendingCount: number;
+  unlinkedCount: number;
+  pagination: CrmApplicationsPagination;
+}> {
+  const q = new URLSearchParams();
+  if (params?.status) q.set('status', params.status);
+  if (params?.influencerId?.trim()) q.set('influencerId', params.influencerId.trim());
+  if (params?.search?.trim()) q.set('search', params.search.trim());
+  if (params?.unlinkedOnly) q.set('unlinkedOnly', '1');
+  if (params?.page) q.set('page', String(params.page));
+  if (params?.limit) q.set('limit', String(params.limit));
+  const res = await fetch(apiUrl(`/api/admin/crm/promotion-applications?${q}`), {
+    headers: authHeaders(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'Error al cargar solicitudes');
+  return {
+    rows: (body.data || []) as CrmPromotionApplicationRow[],
+    pendingCount: Number(body.pendingCount) || 0,
+    unlinkedCount: Number(body.unlinkedCount) || 0,
+    pagination: (body.pagination as CrmApplicationsPagination) || {
+      page: 1,
+      limit: Number(params?.limit) || 25,
+      totalDocs: (body.data || []).length,
+      totalPages: 1,
+    },
+  };
+}
+
+export async function fetchCrmInfluencerCategories(): Promise<string[]> {
+  const res = await fetch(apiUrl('/api/admin/crm/promotion-applications/categories'), {
+    headers: authHeaders(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'Error al cargar categorías');
+  return (body.data || []) as string[];
+}
+
+export type BulkApplyResult = {
+  created: number;
+  skipped: number;
+  matched: number;
+  status: string;
+};
+
+export async function bulkApplyCrmPromotion(params: {
+  promotionId: string;
+  scope: 'all' | 'category';
+  category?: string;
+  approve?: boolean;
+}): Promise<BulkApplyResult> {
+  const res = await fetch(apiUrl('/api/admin/crm/promotion-applications/bulk-apply'), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(params),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'No se pudo aplicar la promoción');
+  return body.data as BulkApplyResult;
+}
+
+export type PromotionPickItem = { id: string; title: string; brand?: string; category?: string };
+
+export async function searchPromotionsForBulk(search: string): Promise<PromotionPickItem[]> {
+  const q = new URLSearchParams({ status: 'all', page: '1', limit: '20' });
+  if (search.trim()) q.set('search', search.trim());
+  const res = await fetch(apiUrl(`/api/promotions?${q}`), { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'Error al buscar promociones');
+  const docs = (body.data?.docs || []) as Array<Record<string, unknown>>;
+  return docs.map((d) => ({
+    id: String(d._id || d.id || ''),
+    title: String(d.title || 'Promoción'),
+    brand: d.brand ? String(d.brand) : undefined,
+    category: d.category ? String(d.category) : undefined,
+  }));
+}
+
+export async function approveCrmPromotionApplication(
+  applicationId: string,
+  opts?: { influencerProfileId?: string },
+): Promise<{ id: string; status: string }> {
+  const res = await fetch(apiUrl(`/api/admin/crm/promotion-applications/${applicationId}/approve`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(opts?.influencerProfileId ? { influencerProfileId: opts.influencerProfileId } : {}),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'No se pudo aprobar la solicitud');
+  return body.data as { id: string; status: string };
+}
+
+export async function rejectCrmPromotionApplication(applicationId: string): Promise<{ id: string; status: string }> {
+  const res = await fetch(apiUrl(`/api/admin/crm/promotion-applications/${applicationId}/reject`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'No se pudo rechazar la solicitud');
+  return body.data as { id: string; status: string };
+}
+
 export async function patchCrmOutreach(
   id: string,
   body: Record<string, unknown>,
@@ -456,9 +677,46 @@ export async function reviewCrmIdentityVerification(
   return data.data;
 }
 
+export type CrmInfluencerProfilePatch = {
+  name?: string;
+  username?: string;
+  bio?: string;
+  avatar?: string;
+  profileShortCode?: string;
+  location?: string;
+  status?: string;
+  identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
+  socialMedia?: Partial<Record<'instagram' | 'tiktok' | 'youtube' | 'twitter', string>>;
+  categories?: string[];
+  followers?: Partial<Record<'instagram' | 'tiktok' | 'youtube' | 'twitter', number>>;
+  activationStatus?: string;
+  dataSubmissionStatus?: string;
+  adminNotes?: string;
+  terms?: { accepted?: boolean };
+  lastContactAt?: string;
+};
+
+export async function uploadCrmInfluencerAvatar(influencerId: string, file: File): Promise<{
+  avatarUrl: string;
+  cloudinaryUrl?: string | null;
+  savedToCloudinary?: boolean;
+}> {
+  const token = localStorage.getItem('auth_token');
+  const fd = new FormData();
+  fd.append('avatar', file);
+  const res = await fetch(apiUrl(`/api/admin/crm/influencers/${influencerId}/avatar`), {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || 'Error al subir foto');
+  return data.data;
+}
+
 export async function patchCrmInfluencer(
   id: string,
-  body: Record<string, unknown>,
+  body: CrmInfluencerProfilePatch | Record<string, unknown>,
 ): Promise<CrmInfluencerRow> {
   const res = await fetch(apiUrl(`/api/admin/crm/influencers/${id}`), {
     method: 'PATCH',

@@ -26,7 +26,16 @@ export default defineConfig(({ mode }) => {
             if (!id.includes('node_modules')) return;
             if (id.includes('recharts') || id.includes('d3-')) return 'charts';
             if (id.includes('jspdf')) return 'pdf';
-            if (id.includes('react')) return 'react-vendor';
+            // IMPORTANT: avoid overly-broad `includes('react')` because it captures
+            // packages like `react-is`, `react-router`, etc. and can create circular
+            // chunk dependencies (and runtime undefined imports) in production builds.
+            if (
+              /node_modules\/(react|react-dom|scheduler)\//.test(id) ||
+              /node_modules\/react\/jsx-runtime/.test(id) ||
+              /node_modules\/react\/jsx-dev-runtime/.test(id)
+            ) {
+              return 'react-vendor';
+            }
             return 'vendor';
           },
         },

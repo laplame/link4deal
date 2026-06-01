@@ -65,6 +65,8 @@ interface ProductCardProps {
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
     onViewDetails?: (productId: string) => void;
+    /** Optional override for “Pedir Cupón” behavior (e.g. redirect flow). */
+    onRequestCoupon?: (productId: string) => void;
     /** When set, image height and padding vary for masonry-style grids */
     masonryTier?: MasonryTier;
 }
@@ -74,6 +76,7 @@ export default function ProductCard({
     onAddToCart, 
     onAddToWishlist, 
     onViewDetails,
+    onRequestCoupon,
     masonryTier,
 }: ProductCardProps) {
     const { isAuthenticated } = useAuth();
@@ -363,7 +366,13 @@ export default function ProductCard({
                 <div className="flex gap-2">
                     <button
                         type="button"
-                        onClick={() => setShowCouponForm(true)}
+                        onClick={() => {
+                            if (onRequestCoupon) {
+                                onRequestCoupon(product.id);
+                                return;
+                            }
+                            setShowCouponForm(true);
+                        }}
                         className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 shadow-lg"
                     >
                         <Tag className="w-4 h-4" />

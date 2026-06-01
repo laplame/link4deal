@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getInfluencerOwnerEditHref } from '../config/roleNavigation';
 import {
   SalesAndBidsRealtimeChart,
   buildSalesAndBidsChartData,
@@ -52,6 +53,7 @@ import {
   ImagePlus,
   Loader2,
   FileDown,
+  HelpCircle,
 } from 'lucide-react';
 import { getDisplayContractAddress, getPolygonscanAddressUrl, shortenAddress } from '../utils/polygonContract';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
@@ -65,6 +67,7 @@ import {
   type InfluencerAvailableProductApiRow,
 } from '../utils/mapPromotionToProductCard';
 import { masonryTierFromId } from '../utils/masonryVariant';
+import { buildInfluencerPromoPath, buildInfluencerPromoUrl } from '../utils/mobileWebApp';
 
 interface Influencer {
   id: string;
@@ -179,7 +182,7 @@ function getSavedIds(): string[] {
 
 export default function InfluencerProfilePage() {
   const { influencerSlug } = useParams();
-  const { hasRole, isAuthenticated } = useAuth();
+  const { hasRole, isAuthenticated, user } = useAuth();
   const isInfluencer = hasRole('influencer');
   const isSuperAdmin = hasRole('super_admin') || hasRole('admin');
   const [influencer, setInfluencer] = useState<Influencer | null>(null);
@@ -227,6 +230,18 @@ export default function InfluencerProfilePage() {
   const [contactError, setContactError] = useState<string | null>(null);
   const [availableProductRows, setAvailableProductRows] = useState<InfluencerAvailableProductApiRow[]>([]);
   const [availableProductsLoading, setAvailableProductsLoading] = useState(false);
+  const [copiedPromoId, setCopiedPromoId] = useState<string | null>(null);
+
+  const copyPromoLink = async (promotionId: string) => {
+    const url = buildInfluencerPromoUrl(influencerSlug || '', promotionId);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedPromoId(promotionId);
+      window.setTimeout(() => setCopiedPromoId((id) => (id === promotionId ? null : id)), 1800);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const availableProducts = useMemo(
     () => availableProductRows.map(mapInfluencerAvailableRowToProductCard),
@@ -235,6 +250,8 @@ export default function InfluencerProfilePage() {
 
   const isOwnProfile =
     Boolean(viewerInfluencerId && influencer?.id && viewerInfluencerId === influencer.id);
+
+  const ownerEditHref = isOwnProfile ? getInfluencerOwnerEditHref(user) : undefined;
 
   const canCreateStory = (isOwnProfile || isSuperAdmin) && isAuthenticated;
 
@@ -842,9 +859,27 @@ export default function InfluencerProfilePage() {
                 <LayoutGrid className="w-5 h-5 shrink-0" aria-hidden />
                 <span className="text-left leading-snug">Ver tienda</span>
               </Link>
-              {viewerInfluencerId === influencer.id ? (
+              <Link
+                to={`/influencer/${encodeURIComponent(influencerSlug || '')}/faq`}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
+                title="Preguntas frecuentes con tus enlaces personalizados"
+              >
+                <HelpCircle className="w-5 h-5 shrink-0" aria-hidden />
+                <span className="text-left leading-snug">FAQ y mis enlaces</span>
+              </Link>
+              {viewerInfluencerId === influencer.id || isSuperAdmin ? (
                 <Link
-                  to="/dashboard/influencer?hub=ugc"
+                  to={`/influencer/${encodeURIComponent(influencerSlug || '')}/edit`}
+                  className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-white text-purple-800 hover:bg-purple-50 transition-all min-w-0 shadow-sm"
+                  title="Editar foto, textos, redes y métricas del perfil"
+                >
+                  <ImagePlus className="w-5 h-5 shrink-0" aria-hidden />
+                  <span className="text-left leading-snug">Editar perfil</span>
+                </Link>
+              ) : null}
+              {viewerInfluencerId === influencer.id && ownerEditHref ? (
+                <Link
+                  to={ownerEditHref}
                   className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-amber-300 text-gray-900 hover:bg-amber-200 transition-all min-w-0 shadow-md ring-2 ring-white/30"
                   title="Editar vitrina UGC: enlaces a piezas y frases públicas"
                 >
@@ -1212,7 +1247,7 @@ export default function InfluencerProfilePage() {
         <InfluencerUgcShowcase
           influencerName={influencer.name}
           ugc={influencer.ugcProfile}
-          ownerEditHref={viewerInfluencerId === influencer.id ? '/dashboard/influencer?hub=ugc' : undefined}
+          ownerEditHref={ownerEditHref}
         />
 
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1223,6 +1258,14 @@ export default function InfluencerProfilePage() {
           <p className="text-gray-600 mb-6 text-sm leading-relaxed">
             Ofertas y productos del catálogo vinculados a campañas donde la marca ya aprobó la colaboración con este
             influencer. Solo se muestran promociones activas y vigentes.
+            {isOwnProfile ? (
+              <>
+                {' '}
+                <span className="text-purple-700 font-medium">
+                  Usa “Link único” para compartir una sola oferta en tu bio de TikTok o Instagram.
+                </span>
+              </>
+            ) : null}
           </p>
           {availableProductsLoading ? (
             <div className="flex items-center gap-2 text-gray-600 py-8 justify-center">
@@ -1241,9 +1284,34 @@ export default function InfluencerProfilePage() {
               {availableProductRows.map((row, index) => {
                 const product = availableProducts[index];
                 if (!product) return null;
+                const promoPath = buildInfluencerPromoPath(influencerSlug || '', row.promotionId);
+                const justCopied = copiedPromoId === row.promotionId;
                 return (
                   <div key={row.cardKey} className="break-inside-avoid mb-6">
                     <ProductCard product={product} masonryTier={masonryTierFromId(product.id, index)} />
+                    <div className="mt-2 flex items-center gap-2">
+                      <Link
+                        to={promoPath}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100"
+                        title="Ver esta oferta en una página optimizada para móvil"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                        Ver oferta
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => void copyPromoLink(row.promotionId)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        title="Copiar link único para compartir en TikTok / Instagram"
+                      >
+                        {justCopied ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        {justCopied ? 'Copiado' : 'Link único'}
+                      </button>
+                    </div>
                   </div>
                 );
               })}

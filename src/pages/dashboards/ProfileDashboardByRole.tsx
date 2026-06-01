@@ -1,15 +1,14 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { canAccessRoleDashboards, SHARED_STORE_ROUTE } from '../../config/roleNavigation';
+import { DASHBOARD_ROUTES } from '../../config/dashboardContexts';
+
 /**
- * Redirige al panel según el rol del usuario.
- * - brand → /dashboard/brand
- * - influencer → /dashboard/influencer
- * - admin/moderator pueden ver ambos desde el menú; aquí se muestra según primaryRole
- * - Otros roles → redirige a /dashboard
+ * Entrada legacy `/dashboard/panel`: superusuario → suite; staff → admin; resto → tienda.
  */
 export default function ProfileDashboardByRole() {
-    const { primaryRole, isAuthenticated, isLoading, user } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
 
     if (isLoading) {
         return (
@@ -23,21 +22,13 @@ export default function ProfileDashboardByRole() {
         return <Navigate to="/signin" replace />;
     }
 
-    if (user?.isSuperAdmin || user?.isPlatformSuperuser) {
+    if (canAccessRoleDashboards(user)) {
         return <Navigate to="/dashboard/suite" replace />;
     }
 
-    switch (primaryRole) {
-        case 'brand':
-            return <Navigate to="/dashboard/brand" replace />;
-        case 'influencer':
-            return <Navigate to="/dashboard/influencer" replace />;
-        case 'agency':
-            return <Navigate to="/dashboard/agency" replace />;
-        case 'admin':
-        case 'moderator':
-            return <Navigate to="/admin" replace />;
-        default:
-            return <Navigate to="/dashboard" replace />;
+    if (user?.primaryRole === 'admin' || user?.primaryRole === 'moderator') {
+        return <Navigate to={DASHBOARD_ROUTES.admin.home} replace />;
     }
+
+    return <Navigate to={SHARED_STORE_ROUTE} replace />;
 }

@@ -31,7 +31,12 @@ import BizneShopProfilePage from './pages/BizneShopProfilePage';
 import BizneStoresPage from './pages/BizneStoresPage';
 import InfluencersMarketplace from './pages/InfluencersMarketplace';
 import InfluencerProfilePage from './pages/InfluencerProfilePage';
+import InfluencerProfileEditPage from './pages/InfluencerProfileEditPage';
+import InfluencerAuthPage from './pages/InfluencerAuthPage';
+import FaqPage from './pages/FaqPage';
+import TermsPage from './pages/TermsPage';
 import InfluencerStorePage from './pages/InfluencerStorePage';
+import InfluencerPromoPage from './pages/InfluencerPromoPage';
 import InfluencerAuctionsLivePage from './pages/InfluencerAuctionsLivePage';
 import RedemptionsLivePage from './pages/RedemptionsLivePage';
 import InfluencerOCRProfile from './pages/InfluencerOCRProfile';
@@ -41,8 +46,10 @@ import CreateCoupon from './pages/CreateCoupon';
 import AdminPage from './pages/AdminPage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import PlatformSuperuserSuitePage from './pages/PlatformSuperuserSuitePage';
+import { SuperuserOnlyRoute } from './components/auth/SuperuserOnlyRoute';
 import CartPage from './pages/CartPage';
 import BusinessLanding from './pages/BusinessLanding';
 import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
@@ -60,7 +67,11 @@ import BrandApplicationsDashboardPage from './pages/BrandApplicationsDashboardPa
 import ProfileDashboardByRole from './pages/dashboards/ProfileDashboardByRole';
 import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
+import AdminCrmHubPage from './pages/admin/AdminCrmHubPage';
+import AdminPromotionApplicationsPage from './pages/admin/AdminPromotionApplicationsPage';
 import InfluencerCrmPage from './pages/admin/InfluencerCrmPage';
+import AdminInfluencerProfilesPage from './pages/admin/AdminInfluencerProfilesPage';
+import InstagramLeadsCrmPage from './pages/admin/InstagramLeadsCrmPage';
 import ApiDocsPage from './pages/ApiDocsPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import { useLocation, Link } from 'react-router-dom';
@@ -155,17 +166,54 @@ function App() {
                   <Route path="/brand/:brandId" element={<BrandProfilePage />} />
                   <Route path="/shop/bizne/:shopId" element={<BizneShopProfilePage />} />
                   <Route path="/influencers" element={<InfluencersMarketplace />} />
+                  <Route path="/faq" element={<FaqPage />} />
+                  <Route path="/terminos" element={<TermsPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/terminos-y-condiciones" element={<TermsPage />} />
+                  <Route path="/influencer/auth" element={<InfluencerAuthPage />} />
+                  <Route path="/app/influencer/auth" element={<InfluencerAuthPage />} />
                   <Route path="/subastas" element={<InfluencerAuctionsLivePage />} />
                   <Route path="/redenciones-en-vivo" element={<RedemptionsLivePage />} />
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
+                  <Route path="/influencer/:influencerSlug/edit" element={<InfluencerProfileEditPage />} />
+                  <Route path="/influencer/:influencerSlug/faq" element={<FaqPage />} />
                   <Route path="/influencer/:influencerSlug/tienda" element={<InfluencerStorePage />} />
+                  <Route
+                    path="/influencer/:influencerSlug/promo/:promotionId"
+                    element={<InfluencerPromoPage />}
+                  />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<SuperAdminDashboardPage />} />
-                  <Route path="/admin/crm" element={<InfluencerCrmPage />} />
+                  <Route path="/admin/crm" element={<AdminCrmHubPage />} />
+                  <Route path="/admin/crm/pipeline" element={<InfluencerCrmPage />} />
+                  <Route path="/admin/crm/applications" element={<AdminPromotionApplicationsPage />} />
+                  <Route path="/admin/crm/influencers" element={<AdminInfluencerProfilesPage />} />
+                  <Route path="/admin/crm/instagram-leads" element={<InstagramLeadsCrmPage />} />
                   <Route path="/dashboard/crm" element={<Navigate to="/admin/crm" replace />} />
-                  <Route path="/dashboard/influencer" element={<InfluencerDashboardPage />} />
-                  <Route path="/dashboard/brand" element={<BrandDashboardPage />} />
-                  <Route path="/dashboard/agency" element={<AgencyDashboardPage />} />
+                  <Route
+                    path="/dashboard/influencer"
+                    element={
+                      <SuperuserOnlyRoute>
+                        <InfluencerDashboardPage />
+                      </SuperuserOnlyRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/brand"
+                    element={
+                      <SuperuserOnlyRoute>
+                        <BrandDashboardPage />
+                      </SuperuserOnlyRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/agency"
+                    element={
+                      <SuperuserOnlyRoute>
+                        <AgencyDashboardPage />
+                      </SuperuserOnlyRoute>
+                    }
+                  />
                   <Route path="/admin/influencers" element={<AdminInfluencersPage />} />
                   <Route path="/admin/brands" element={<AdminBrandsPage />} />
                   <Route path="/admin/agencies" element={<AdminAgenciesPage />} />
@@ -178,8 +226,16 @@ function App() {
                   <Route path="/create-coupon" element={<CreateCoupon />} />
                   <Route path="/signin" element={<SignInPage />} />
                   <Route path="/login" element={<SignInPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/signup" element={<SignUpPage />} />
-                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <SuperuserOnlyRoute>
+                        <DashboardPage />
+                      </SuperuserOnlyRoute>
+                    }
+                  />
                   <Route path="/dashboard/suite" element={<PlatformSuperuserSuitePage />} />
                   <Route path="/dashboard/panel" element={<ProfileDashboardByRole />} />
                   <Route path="/cart" element={<CartPage />} />

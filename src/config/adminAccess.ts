@@ -31,3 +31,30 @@ export function clearAdminPinUnlockSession(): void {
     // ignore
   }
 }
+
+/** Usuario con JWT de super admin o superusuario de plataforma (email en lista servidor). */
+export function canAccessAdminCrm(user: {
+  isSuperAdmin?: boolean;
+  isPlatformSuperuser?: boolean;
+} | null | undefined): boolean {
+  return Boolean(user?.isSuperAdmin || user?.isPlatformSuperuser);
+}
+
+/**
+ * Acceso al CRM con sesión iniciada (no hace falta PIN adicional).
+ * El PIN solo aplica si en el futuro hubiera vistas sin JWT; las rutas /api/admin/crm exigen token.
+ */
+export function isCrmSessionGranted(
+  user: { isSuperAdmin?: boolean; isPlatformSuperuser?: boolean } | null | undefined,
+): boolean {
+  return canAccessAdminCrm(user) || isAdminPinUnlockSession();
+}
+
+/** Ruta interna segura tras login (?redirect=). */
+export function safeInternalRedirectPath(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const path = raw.trim();
+  if (!path.startsWith('/') || path.startsWith('//')) return null;
+  if (path.startsWith('/admin') || path.startsWith('/dashboard/suite')) return path;
+  return null;
+}

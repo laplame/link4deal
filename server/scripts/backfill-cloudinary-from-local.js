@@ -22,6 +22,7 @@ const {
 } = require('../utils/promotionImageStorage');
 
 const APPLY = process.argv.includes('--apply');
+const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
 
 function filenameFromImage(image) {
     if (image?.filename) return image.filename;
@@ -74,10 +75,15 @@ async function main() {
             const filename = filenameFromImage(img);
             if (!filename) continue;
 
-            const localPath = await firstExistingPath(resolveLocalPromotionFilePath(filename));
+            const candidates = resolveLocalPromotionFilePath(filename);
+            const localPath = await firstExistingPath(candidates);
             if (!localPath) {
                 missingFile += 1;
                 console.log(`❌ Sin archivo: ${filename} | promo ${promo._id} ${promo.title || ''}`);
+                if (VERBOSE) {
+                    console.log(`     url DB: ${img?.url || '—'}`);
+                    for (const c of candidates) console.log(`     probado: ${c}`);
+                }
                 continue;
             }
 

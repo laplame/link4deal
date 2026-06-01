@@ -1,5 +1,6 @@
 /**
  * Limpia referencias de imágenes locales inexistentes en promociones.
+ * NO ejecutar tras un git pull sin antes correr backfill-cloudinary-from-local.js
  *
  * Uso:
  *   node server/scripts/cleanup-missing-promotion-images.js

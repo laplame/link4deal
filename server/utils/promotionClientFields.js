@@ -96,6 +96,17 @@ function enrichPromotionClientFields(promo, opts = {}) {
         }
     }
 
+    if (Array.isArray(o.images) && o.images.length > 1) {
+        const promo = o.images.filter((img) => img && img.imageRole !== 'terms');
+        const terms = o.images.filter((img) => img && img.imageRole === 'terms');
+        const sortNewest = (a, b) => {
+            const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return tb - ta;
+        };
+        o.images = [...promo.sort(sortNewest), ...terms.sort(sortNewest)];
+    }
+
     o.localizedStrings = {
         es: {
             activationByLocationTitle: 'Activación por ubicación',

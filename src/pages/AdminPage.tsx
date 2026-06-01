@@ -97,10 +97,16 @@ export default function AdminPage() {
                     icon: <Lock className="w-5 h-5" />
                 },
                 {
-                    name: "CRM Influencers",
+                    name: "CRM Super Admin",
                     path: "/admin/crm",
-                    description: "Activación, términos, apps DameCodigo/BizneAI e instalaciones",
+                    description: "Hub central: pipeline, perfiles/fotos, leads Instagram",
                     icon: <Users className="w-5 h-5" />
+                },
+                {
+                    name: "Perfiles influencers (fotos)",
+                    path: "/admin/crm/influencers",
+                    description: "Subir avatar y editar bio, redes y estado",
+                    icon: <Camera className="w-5 h-5" />
                 }
             ]
         },

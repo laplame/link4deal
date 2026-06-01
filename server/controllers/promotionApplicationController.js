@@ -65,6 +65,13 @@ class PromotionApplicationController {
                 if (inf) influencerApplicant = rawInfId;
             }
 
+            // Auto-vinculación: si no se envió un ID válido pero hay sesión (JWT),
+            // recupera el perfil de influencer del usuario logueado.
+            if (!influencerApplicant && req.user && req.user._id) {
+                const owned = await Influencer.findOne({ userId: req.user._id }).select('_id').lean();
+                if (owned) influencerApplicant = String(owned._id);
+            }
+
             const doc = await PromotionApplication.create({
                 promotion: promotionId,
                 influencerApplicant,

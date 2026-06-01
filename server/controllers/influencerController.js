@@ -7,6 +7,7 @@ const DiscountQrToken = require('../models/DiscountQrToken');
 const database = require('../config/database');
 const mongoose = require('mongoose');
 const { getInfluencerUploadDir } = require('../middleware/upload');
+const { persistInfluencerImage } = require('../utils/influencerImageStorage');
 const cloudinaryConfig = require('../config/cloudinary');
 const { partitionDiscountQrDocsToActivity } = require('../utils/couponActivityRow');
 const { buildInfluencerQrPromotionSummary } = require('../utils/influencerQrPromotionSummary');
@@ -20,12 +21,15 @@ const {
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
 const { buildInfluencerAvailableProducts } = require('../utils/influencerAvailableProducts');
 const { ensureInfluencerHasProfileShortCode } = require('../utils/influencerPromoShortCodes');
+const InfluencerOutboundClick = require('../models/InfluencerOutboundClick');
 const {
     nameToSlug,
     resolveCanonicalPublicSlug,
     docMatchesPublicSlug,
     normalizeSlugInput,
 } = require('../utils/influencerSlug');
+const { collectHandlesFromBody, findUnclaimedInfluencer, linkInfluencerToUser } = require('../utils/influencerUserLink');
+const { isPlatformSuperuserEmail } = require('../utils/platformSuperuser');
 
 /** Usuario de sistema: no se muestra en listados públicos. Ver docs/INFLUENCER_GENERAL.md */
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
@@ -241,6 +245,45 @@ class InfluencerController {
             } else if (!username && socialMedia?.tiktok) {
                 username = String(socialMedia.tiktok).trim().replace(/^@/, '');
             }
+            const bio = (body.bio || '').trim();
+
+            if (userId) {
+                const existingLinked = await Influencer.findOne({ userId });
+                if (existingLinked) {
+                    return res.status(409).json({
+                        success: false,
+                        message: 'Ya tienes un perfil de influencer vinculado a esta cuenta',
+                        data: this.toFrontendFormat({ toObject: () => existingLinked.toObject() }),
+                    });
+                }
+                const unclaimed = await findUnclaimedInfluencer({
+                    handles: collectHandlesFromBody({ username, socialMedia }),
+                    slug: username,
+                });
+                if (unclaimed) {
+                    const linked = await linkInfluencerToUser(unclaimed, userId);
+                    if (linked) {
+                        if (name) linked.name = name;
+                        if (bio) linked.bio = (body.bio || '').trim();
+                        if (body.location) linked.location = String(body.location).trim();
+                        if (categories.length) linked.categories = categories;
+                        if (Array.isArray(body.languages)) linked.languages = body.languages;
+                        linked.socialMedia = socialMedia;
+                        linked.followers = followers;
+                        linked.totalFollowers = totalFollowers;
+                        if (body.avatar) linked.avatar = body.avatar;
+                        await linked.save();
+                        await ensureInfluencerHasProfileShortCode(String(linked._id));
+                        const docFresh = await Influencer.findById(linked._id).lean();
+                        return res.status(200).json({
+                            success: true,
+                            data: this.toFrontendFormat({ toObject: () => docFresh || linked.toObject() }),
+                            message: 'Perfil vinculado a tu cuenta',
+                        });
+                    }
+                }
+            }
+
             const influencer = new Influencer({
                 name,
                 username,
@@ -298,40 +341,18 @@ class InfluencerController {
                 });
             }
 
-            let avatarUrl = '';
-
-            if (cloudinaryConfig.isConfigured) {
-                try {
-                    const cloudinaryFile = {
-                        buffer: req.file.buffer,
-                        originalname: req.file.originalname,
-                        mimetype: req.file.mimetype
-                    };
-                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile, {
-                        folder: 'link4deal/influencers'
-                    });
-                    if (cloudinaryResult?.success && cloudinaryResult.data?.secure_url) {
-                        avatarUrl = cloudinaryResult.data.secure_url;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Cloudinary avatar no disponible, usando disco local:', e.message);
-                }
-            }
-
-            if (!avatarUrl) {
-                const dir = getInfluencerUploadDir();
-                await fs.mkdir(dir, { recursive: true });
-                const ext = path.extname(req.file.originalname) || '.jpg';
-                const filename = `influencer-avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-                const fullPath = path.join(dir, filename);
-                await fs.writeFile(fullPath, req.file.buffer);
-                avatarUrl = `/uploads/influencers/${filename}`;
+            const stored = await persistInfluencerImage(req.file, {
+                cloudinaryFolder: 'link4deal/influencers',
+                filenamePrefix: 'influencer-avatar',
+            });
+            if (!stored.savedToCloudinary && cloudinaryConfig.isConfigured) {
+                console.warn('⚠️ Avatar guardado solo en disco; configura Cloudinary para no perderlo con git pull');
             }
 
             return res.status(200).json({
                 success: true,
-                data: { avatarUrl },
-                message: 'Avatar subido correctamente'
+                data: { avatarUrl: stored.url, cloudinaryUrl: stored.cloudinaryUrl },
+                message: 'Avatar subido correctamente',
             });
         } catch (err) {
             console.error('Error subiendo avatar de influencer:', err);
@@ -375,34 +396,11 @@ class InfluencerController {
                 });
             }
 
-            let screenshotUrl = '';
-            if (cloudinaryConfig.isConfigured) {
-                try {
-                    const cloudinaryFile = {
-                        buffer: req.file.buffer,
-                        originalname: req.file.originalname,
-                        mimetype: req.file.mimetype,
-                    };
-                    const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile, {
-                        folder: 'link4deal/influencers-verification',
-                    });
-                    if (cloudinaryResult?.success && cloudinaryResult.data?.secure_url) {
-                        screenshotUrl = cloudinaryResult.data.secure_url;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Cloudinary verification no disponible, usando disco local:', e.message);
-                }
-            }
-
-            if (!screenshotUrl) {
-                const dir = getInfluencerUploadDir();
-                await fs.mkdir(dir, { recursive: true });
-                const ext = path.extname(req.file.originalname) || '.jpg';
-                const filename = `influencer-verification-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-                const fullPath = path.join(dir, filename);
-                await fs.writeFile(fullPath, req.file.buffer);
-                screenshotUrl = `/uploads/influencers/${filename}`;
-            }
+            const stored = await persistInfluencerImage(req.file, {
+                cloudinaryFolder: 'link4deal/influencers-verification',
+                filenamePrefix: 'influencer-verification',
+            });
+            const screenshotUrl = stored.url;
 
             if (!doc.crm) doc.crm = {};
             doc.crm.verification = doc.crm.verification || {};
@@ -664,6 +662,275 @@ class InfluencerController {
         }
     }
 
+    /** Resuelve documento influencer por slug público (uso interno). */
+    async resolveInfluencerDocBySlug(slugInput) {
+        const slug = normalizeSlugInput(slugInput);
+        if (!slug || !this.isMongoConnected()) return null;
+        const slugCompact = slug.replace(/-/g, '');
+        let doc = await Influencer.findOne({
+            username: { $ne: INFLUENCER_GENERAL_USERNAME },
+            $or: [
+                { username: { $in: [slug, slugCompact, `@${slug}`] } },
+                { 'socialMedia.instagram': { $in: [slug, slugCompact, `@${slug}`] } },
+                { 'socialMedia.tiktok': { $in: [slug, slugCompact, `@${slug}`] } },
+            ],
+        }).lean();
+        if (!doc) {
+            const docs = await Influencer.find({ username: { $ne: INFLUENCER_GENERAL_USERNAME } }).lean();
+            doc = docs.find((d) => docMatchesPublicSlug(d, slug)) || null;
+        }
+        return doc;
+    }
+
+    /**
+     * GET /api/influencers/me/edit-access?slug=...
+     * Indica si el usuario puede editar el perfil, vincularlo o debe usar otra cuenta.
+     */
+    async getEditAccess(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({ success: false, message: 'Debes iniciar sesión' });
+            }
+            const slug = normalizeSlugInput(req.query.slug || '');
+            if (!slug) {
+                return res.status(400).json({ success: false, message: 'Parámetro slug requerido' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({ success: false, message: 'Servicio no disponible' });
+            }
+
+            const doc = await this.resolveInfluencerDocBySlug(slug);
+            if (!doc) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const targetId = String(doc._id);
+            const isAdmin = user.isSuperAdmin === true || isPlatformSuperuserEmail(user.email);
+            const mine = await Influencer.findOne({ userId: user._id }).lean();
+
+            if (isAdmin) {
+                return res.json({
+                    success: true,
+                    data: { allowed: true, mode: 'admin', targetId },
+                });
+            }
+
+            if (mine && String(mine._id) === targetId) {
+                return res.json({
+                    success: true,
+                    data: { allowed: true, mode: 'me', targetId },
+                });
+            }
+
+            if (mine && String(mine._id) !== targetId) {
+                return res.json({
+                    success: true,
+                    data: {
+                        allowed: false,
+                        mode: 'denied',
+                        reason: 'linked_other_profile',
+                        message:
+                            'Tu cuenta ya está vinculada a otro perfil de influencer. Cierra sesión e inicia con la cuenta correcta.',
+                        linkedProfileSlug: resolveCanonicalPublicSlug(mine) || String(mine._id),
+                        targetId,
+                    },
+                });
+            }
+
+            if (!doc.userId) {
+                return res.json({
+                    success: true,
+                    data: {
+                        allowed: false,
+                        mode: 'claim',
+                        canClaim: true,
+                        message:
+                            'Este perfil aún no está vinculado a ninguna cuenta. Puedes vincularlo a la tuya para editarlo.',
+                        targetId,
+                    },
+                });
+            }
+
+            return res.json({
+                success: true,
+                data: {
+                    allowed: false,
+                    mode: 'denied',
+                    reason: 'not_owner',
+                    message: 'Este perfil pertenece a otra cuenta. Inicia sesión con el email o teléfono del dueño.',
+                    targetId,
+                },
+            });
+        } catch (error) {
+            console.error('❌ getEditAccess:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'No se pudo verificar el acceso',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * POST /api/influencers/me/claim — Vincula un perfil sin userId a la cuenta logueada.
+     * Body: { slug: "valentinapazofficial" }
+     */
+    async claimMyProfile(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({ success: false, message: 'Debes iniciar sesión' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({ success: false, message: 'Servicio no disponible' });
+            }
+
+            const slug = normalizeSlugInput(req.body?.slug || req.query?.slug || '');
+            if (!slug) {
+                return res.status(400).json({ success: false, message: 'Indica el slug del perfil' });
+            }
+
+            const existing = await Influencer.findOne({ userId: user._id });
+            if (existing) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Tu cuenta ya tiene un perfil de influencer vinculado',
+                    data: { linkedProfileSlug: resolveCanonicalPublicSlug(existing.toObject()) || String(existing._id) },
+                });
+            }
+
+            const doc = await this.resolveInfluencerDocBySlug(slug);
+            if (!doc) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+            if (doc.userId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Este perfil ya está vinculado a otra cuenta',
+                });
+            }
+
+            const linked = await linkInfluencerToUser(doc, user._id);
+            if (!linked) {
+                return res.status(500).json({ success: false, message: 'No se pudo vincular el perfil' });
+            }
+
+            await ensureInfluencerHasProfileShortCode(String(linked._id)).catch(() => {});
+
+            if (!Array.isArray(user.profileTypes) || !user.profileTypes.includes('influencer')) {
+                user.profileTypes = [...new Set([...(user.profileTypes || []), 'influencer'])];
+                user.primaryRole = user.primaryRole || 'influencer';
+                await user.save();
+            }
+
+            const fresh = await Influencer.findById(linked._id)
+                .populate('userId', 'firstName lastName email')
+                .lean();
+            let data = this.toFrontendFormat({ toObject: () => fresh || linked.toObject() });
+
+            return res.json({
+                success: true,
+                data,
+                message: 'Perfil vinculado a tu cuenta. Ya puedes editarlo.',
+            });
+        } catch (error) {
+            console.error('❌ claimMyProfile:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'No se pudo vincular el perfil',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * PATCH /api/influencers/me — Actualiza los datos del perfil del influencer del usuario logueado.
+     * Campos: name, bio, location, avatar, categories, languages, experience, socialMedia, followers.
+     */
+    async updateMe(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({ success: false, message: 'Debes iniciar sesión' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({ success: false, message: 'Servicio no disponible' });
+            }
+            const influencer = await Influencer.findOne({ userId: user._id });
+            if (!influencer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No tienes perfil de influencer vinculado',
+                });
+            }
+
+            const body = req.body || {};
+            if (body.name != null) influencer.name = String(body.name).trim().slice(0, 200);
+            if (body.bio != null) influencer.bio = String(body.bio).trim().slice(0, 8000);
+            if (body.location != null) influencer.location = String(body.location).trim().slice(0, 300);
+            if (body.avatar != null) influencer.avatar = String(body.avatar).trim().slice(0, 2048);
+            if (Array.isArray(body.categories)) {
+                influencer.categories = body.categories
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                    .slice(0, 30);
+            }
+            if (Array.isArray(body.languages)) {
+                influencer.languages = body.languages
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                    .slice(0, 30);
+            }
+            if (body.experience != null && Number.isFinite(Number(body.experience))) {
+                influencer.experience = Math.max(0, Number(body.experience));
+            }
+            if (body.socialMedia && typeof body.socialMedia === 'object') {
+                influencer.socialMedia = influencer.socialMedia || {};
+                for (const key of ['instagram', 'tiktok', 'youtube', 'twitter']) {
+                    if (body.socialMedia[key] != null) {
+                        influencer.socialMedia[key] = String(body.socialMedia[key]).trim().slice(0, 500);
+                    }
+                }
+                influencer.markModified('socialMedia');
+            }
+            if (body.followers && typeof body.followers === 'object') {
+                influencer.followers = influencer.followers || {};
+                for (const key of ['instagram', 'tiktok', 'youtube', 'twitter']) {
+                    const n = Number(body.followers[key]);
+                    if (Number.isFinite(n) && n >= 0) influencer.followers[key] = Math.round(n);
+                }
+                influencer.markModified('followers');
+                influencer.totalFollowers =
+                    (Number(influencer.followers.instagram) || 0) +
+                    (Number(influencer.followers.tiktok) || 0) +
+                    (Number(influencer.followers.youtube) || 0) +
+                    (Number(influencer.followers.twitter) || 0);
+            }
+
+            influencer.updatedAt = new Date();
+            await influencer.save();
+
+            const docFresh =
+                (await Influencer.findById(influencer._id)
+                    .populate('userId', 'firstName lastName email')
+                    .lean()) || influencer.toObject();
+
+            return res.json({
+                success: true,
+                data: this.toFrontendFormat({ toObject: () => docFresh }),
+                message: 'Perfil actualizado',
+            });
+        } catch (error) {
+            console.error('❌ Error actualizando perfil me:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al actualizar el perfil',
+                error: error.message,
+            });
+        }
+    }
+
     /** PATCH /api/influencers/me/ugc-profile — Guardar vitrina UGC (enlaces + frases). Solo influencer con userId vinculado. */
     async updateMeUgcProfile(req, res) {
         try {
@@ -895,6 +1162,61 @@ class InfluencerController {
                 message: 'Error al cargar productos disponibles',
                 error: error.message,
             });
+        }
+    }
+
+    /** POST /api/influencers/:id/outbound-click — tracking de click para quick promotion (redirect). */
+    async trackOutboundClick(req, res) {
+        try {
+            const influencerId = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(influencerId)) {
+                return res.status(400).json({ success: false, message: 'ID de influencer inválido' });
+            }
+            if (!this.isMongoConnected()) {
+                return res.status(200).json({ success: true, data: null, message: 'Sin conexión a BD' });
+            }
+            const exists = await Influencer.findById(influencerId).select('_id username').lean();
+            if (!exists || exists.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const promotionId = req.body?.promotionId != null ? String(req.body.promotionId).trim() : '';
+            if (!this.isValidObjectId(promotionId)) {
+                return res.status(400).json({ success: false, message: 'promotionId inválido' });
+            }
+            const targetUrl = req.body?.targetUrl != null ? String(req.body.targetUrl).trim() : '';
+            if (!targetUrl) {
+                return res.status(400).json({ success: false, message: 'targetUrl requerido' });
+            }
+
+            const catalogProductId =
+                req.body?.catalogProductId != null ? String(req.body.catalogProductId).trim() : null;
+            const page = req.body?.page != null ? String(req.body.page).trim() : 'influencer_store';
+            const referrer = req.body?.referrer != null ? String(req.body.referrer).trim() : null;
+
+            const clickId = `clk_${new mongoose.Types.ObjectId().toString()}`;
+            const ip =
+                (req.headers['x-forwarded-for'] && String(req.headers['x-forwarded-for']).split(',')[0].trim()) ||
+                req.socket?.remoteAddress ||
+                null;
+            const userAgent = req.get('user-agent') || null;
+
+            await InfluencerOutboundClick.create({
+                clickId,
+                influencer: new mongoose.Types.ObjectId(influencerId),
+                promotion: new mongoose.Types.ObjectId(promotionId),
+                catalogProductId: catalogProductId || null,
+                targetUrl,
+                page: page || 'influencer_store',
+                referrer,
+                userAgent,
+                ip,
+            });
+
+            return res.status(201).json({ success: true, data: { clickId } });
+        } catch (error) {
+            console.error('❌ Error tracking outbound click:', error);
+            return res.status(500).json({ success: false, message: 'Error registrando click', error: error.message });
         }
     }
 

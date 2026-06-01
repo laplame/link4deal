@@ -10,9 +10,14 @@
     "test": "jest",
     "seed": "node seeders/initialData.js",
     "seed:promotions": "node seeders/promotionsSeeder.js",
+    "seed:demo-users": "node scripts/seed-demo-dashboard-users.js",
     "test:connection": "node scripts/testConnection.js",
     "verify:sharp": "node scripts/verifySharp.js",
-    "delete:test-promotions": "node scripts/deleteTestPromotions.js"
+    "delete:test-promotions": "node scripts/deleteTestPromotions.js",
+    "uploads:check": "node scripts/check-promotion-images-integrity.js",
+    "uploads:diagnose": "node scripts/diagnose-promotion-images.js",
+    "uploads:cloudinary-backfill": "node scripts/backfill-cloudinary-from-local.js",
+    "uploads:cloudinary-backfill:apply": "node scripts/backfill-cloudinary-from-local.js --apply"
   },
   "keywords": [
     "link4deal",

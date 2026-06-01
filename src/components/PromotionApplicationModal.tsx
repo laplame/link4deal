@@ -201,9 +201,29 @@ export default function PromotionApplicationModal({
       additionalNotes: '',
     });
 
-    if (!/^[a-f0-9]{24}$/i.test(stored)) return;
+    if (/^[a-f0-9]{24}$/i.test(stored)) {
+      void loadProfileById(stored, { preserveProposal: false });
+      return;
+    }
 
-    void loadProfileById(stored, { preserveProposal: false });
+    // Sin ID copiado: si hay sesión, recupera el perfil de influencer del usuario.
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/api/influencers/me'), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        const meId = res.ok && data?.success && data?.data?.id ? String(data.data.id) : '';
+        if (/^[a-f0-9]{24}$/i.test(meId)) {
+          setInfluencerIdInput(meId);
+          void loadProfileById(meId, { preserveProposal: false });
+        }
+      } catch {
+        /* sin perfil vinculado: el usuario puede pegar su ID manualmente */
+      }
+    })();
   }, [isOpen, promotion?.id, loadProfileById]);
 
   const platforms = ['Instagram', 'TikTok', 'YouTube', 'Twitter', 'Facebook', 'LinkedIn'];

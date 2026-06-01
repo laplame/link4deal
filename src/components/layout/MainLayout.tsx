@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { NavigationHeader } from '../navigation/NavigationHeader';
 import { useAuth } from '../../context/AuthContext';
+import { getMobileWebAppContext, isInfluencerStorePath } from '../../utils/mobileWebApp';
 
 const pathTitles: Record<string, string> = {
   '/': 'Inicio',
@@ -57,11 +58,15 @@ export function MainLayout() {
   const location = useLocation();
   const { primaryRole, user } = useAuth();
   const pathname = location.pathname;
+  const mobileWebApp = useMemo(() => getMobileWebAppContext(), []);
   const isPlatformSuper = Boolean(user?.isPlatformSuperuser);
+  const hideGlobalNavForInAppStore =
+    isInfluencerStorePath(pathname) && mobileWebApp.isMobileInApp;
   const hideGlobalNav =
     ROUTES_WITH_OWN_NAV.includes(pathname) ||
     pathname === DEMO_INFLUENCER_HUB_PATH ||
     pathname === '/dashboard/suite' ||
+    hideGlobalNavForInAppStore ||
     (INFLUENCER_HUB_PATHS_HIDE_NAV.includes(pathname) &&
       (primaryRole === 'influencer' || isPlatformSuper));
   const title = getTitle(pathname);

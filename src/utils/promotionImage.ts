@@ -56,31 +56,59 @@ function absoluteUploadsUrlInBrowser(relativeUploadsPath: string): string {
   return relativeUploadsPath;
 }
 
+export type PromotionImageEntry = {
+  cloudinaryUrl?: string;
+  url?: string;
+  filename?: string;
+  path?: string;
+  imageRole?: string;
+  uploadedAt?: string | Date;
+};
+
+function uploadedAtMs(entry: PromotionImageEntry): number {
+  const t = entry.uploadedAt;
+  if (!t) return 0;
+  const ms = new Date(t).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/** Imagen de portada: promocional más reciente (no T&C), no la primera del array si quedó obsoleta. */
+export function pickPromotionCoverImage(
+  images: PromotionImageEntry[] | undefined | null,
+): PromotionImageEntry | null {
+  if (!images?.length) return null;
+  const promotional = images.filter((img) => img.imageRole !== 'terms');
+  const pool = promotional.length > 0 ? promotional : images;
+  const sorted = [...pool].sort((a, b) => uploadedAtMs(b) - uploadedAtMs(a));
+  const withCloudinary = sorted.find((img) => img.cloudinaryUrl);
+  if (withCloudinary) return withCloudinary;
+  return sorted[0] ?? null;
+}
+
+function resolveRelativeUrl(img: PromotionImageEntry): string | null {
+  if (img.cloudinaryUrl) return img.cloudinaryUrl;
+  if (img.url) {
+    const normalized = img.url.startsWith('/uploads/') && !img.url.includes('/uploads/promotions/')
+      ? toPromotionsUrl(img.url)
+      : img.url;
+    return uploadsPathOnlyIfAbsolute(normalized);
+  }
+  if (img.filename) return `/uploads/promotions/${img.filename}`;
+  return null;
+}
+
 export function getPromotionImageUrl(
-  images: Array<{ cloudinaryUrl?: string; url?: string; filename?: string; path?: string }> | undefined | null,
+  images: PromotionImageEntry[] | undefined | null,
   placeholder = DEFAULT_PLACEHOLDER
 ): string {
-  if (!images || images.length === 0) return placeholder;
-  const img = images[0];
-  if (img.cloudinaryUrl) return img.cloudinaryUrl;
+  const img = pickPromotionCoverImage(images);
+  if (!img) return placeholder;
 
-  let relativeUrl: string | null = img.url
-    ? uploadsPathOnlyIfAbsolute(
-        img.url.startsWith('/uploads/') && !img.url.includes('/uploads/promotions/')
-          ? toPromotionsUrl(img.url)
-          : img.url
-      )
-    : img.filename
-      ? `/uploads/promotions/${img.filename}`
-      : null;
+  const relativeUrl = resolveRelativeUrl(img);
+  if (!relativeUrl) return placeholder;
 
-  if (relativeUrl) {
-    relativeUrl = uploadsPathOnlyIfAbsolute(relativeUrl);
-    if (relativeUrl.startsWith('http')) return relativeUrl;
-    // Mismo host que Nginx (/api, /uploads): relativo. SPA en otro origen que VITE_API_URL: prefijo al API (como antes).
-    if (typeof window !== 'undefined') return absoluteUploadsUrlInBrowser(relativeUrl);
-    const b = getApiBase().trim();
-    return b ? `${b}${relativeUrl}` : relativeUrl;
-  }
-  return placeholder;
+  if (relativeUrl.startsWith('http')) return relativeUrl;
+  if (typeof window !== 'undefined') return absoluteUploadsUrlInBrowser(relativeUrl);
+  const b = getApiBase().trim();
+  return b ? `${b}${relativeUrl}` : relativeUrl;
 }

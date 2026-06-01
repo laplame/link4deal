@@ -47,7 +47,7 @@ export default function PlatformSuperuserSuitePage() {
   }
 
   if (!user?.isPlatformSuperuser && !user?.isSuperAdmin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/marketplace" replace />;
   }
 
   const setPanel = (p: DashboardPersona) => {

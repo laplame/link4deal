@@ -1,6 +1,13 @@
 # CRM Influencers (super_admin)
 
-Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con `User.isSuperAdmin === true`.
+Hub en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con `User.isSuperAdmin === true`.
+
+| Ruta | Uso |
+|------|-----|
+| `/admin/crm` | Hub central super admin |
+| `/admin/crm/pipeline` | Pipeline activación / monetización (antes `/admin/crm`) |
+| `/admin/crm/influencers` | **Perfiles y fotos** — subir avatar, editar bio y redes |
+| `/admin/crm/instagram-leads` | Leads Instagram |
 
 ## Qué muestra
 
@@ -25,7 +32,8 @@ Panel en **`/admin/crm`** (PIN igual que `/admin/dashboard`). Solo usuarios con 
 | GET | `/api/admin/crm/pipeline/board?page&limit&...` — tablero activación (default `limit=50`) |
 | GET | `/api/admin/crm/monetization/board?page&limit&...` — tablero monetización |
 | GET | `/api/admin/crm/influencers/:id` |
-| PATCH | `/api/admin/crm/influencers/:id` |
+| PATCH | `/api/admin/crm/influencers/:id` — incluye perfil: `name`, `username`, `bio`, `avatar`, `socialMedia`, `categories`, `followers`, `profileShortCode`, `identityVerificationStatus` |
+| POST | `/api/admin/crm/influencers/:id/avatar` — multipart campo `avatar` (Cloudinary + disco) |
 | POST | `/api/admin/crm/influencers/:id/identity-verification` |
 
 Filtro `app`: `damecodigo` | `bizneai` | `both` | `none`.
@@ -46,6 +54,18 @@ POST /api/admin/crm/influencers/:id/identity-verification
 ```
 
 Stats: `pendingIdentityVerification` — pendientes con screenshot subido.
+
+### Promociones de redirección (URL / Amazon)
+
+En la ficha del influencer, bloque **Promociones de redirección**:
+
+| Acción | API |
+|--------|-----|
+| Listar pendientes, aprobadas y asignables | `GET /api/admin/crm/influencers/:id/redirect-applications` |
+| Aprobar solicitud del influencer | `POST /api/admin/crm/promotion-applications/:applicationId/approve` |
+| **Asignar unilateralmente** (sin solicitud previa) | `POST /api/admin/crm/influencers/:id/redirect-promotions/assign` `{ "promotionId": "..." }` |
+
+Solo promociones con `redirectInsteadOfQr: true` y `status: active`. Tras aprobar/asignar se encolan códigos cortos (`ensureInfluencerPromoShortCodes`) y la promo aparece en la tienda del influencer.
 
 ## Tracking desde apps
 

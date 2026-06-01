@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Users, User, LogOut, Home, ShoppingCart, Info, Gavel, Ticket } from 'lucide-react';
+import { Users, User, LogOut, Home, ShoppingCart, Info, Gavel, Ticket, Store } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { MobileMenu } from './MobileMenu';
 import { NavDropdown } from './NavDropdown';
 import { SITE_CONFIG } from '../../config/site';
 import { useAuth } from '../../context/AuthContext';
+import {
+  getAccountHref,
+  getAccountLabel,
+  getPublishNavItems,
+  getRoleWorkspaceItems,
+  SHARED_STORE_ROUTE,
+  shouldShowJoinNav,
+} from '../../config/roleNavigation';
 
 interface Props {
   title?: string;
@@ -17,21 +25,16 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 export function NavigationHeader({ title }: Props) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<'explore' | 'directory' | 'publish' | 'join' | null>(null);
-  const { user, isAuthenticated, logout, primaryRole } = useAuth();
+  const [openDropdown, setOpenDropdown] = useState<
+    'explore' | 'directory' | 'publish' | 'join' | 'account' | null
+  >(null);
+  const { user, isAuthenticated, logout } = useAuth();
 
-  const accountHref =
-    user?.isSuperAdmin === true || user?.isPlatformSuperuser === true
-      ? '/dashboard/suite'
-      : primaryRole === 'influencer'
-        ? '/dashboard/influencer'
-        : primaryRole === 'brand'
-          ? '/dashboard/brand'
-          : primaryRole === 'agency'
-            ? '/dashboard/agency'
-            : primaryRole === 'admin' || primaryRole === 'moderator'
-              ? '/admin'
-              : '/dashboard';
+  const accountHref = getAccountHref(user);
+  const accountLabel = getAccountLabel(user);
+  const workspaceItems = user ? getRoleWorkspaceItems(user) : [];
+  const publishItems = getPublishNavItems(user, isAuthenticated);
+  const showJoin = shouldShowJoinNav(isAuthenticated);
   const location = useLocation();
   const desktopNavRef = useRef<HTMLDivElement>(null);
 
@@ -70,14 +73,21 @@ export function NavigationHeader({ title }: Props) {
               </span>
             </NavLink>
 
+            <NavLink to={SHARED_STORE_ROUTE} className={navLinkClass}>
+              <span className="flex items-center gap-1.5">
+                <Store className="h-4 w-4 shrink-0" />
+                Tienda
+              </span>
+            </NavLink>
+
             <NavDropdown
               label="Explorar"
               isOpen={openDropdown === 'explore'}
               onToggle={() => setOpenDropdown(openDropdown === 'explore' ? null : 'explore')}
               onItemClick={closeDropdowns}
               items={[
-                { to: '/marketplace', label: 'Ofertas', hint: 'Promociones y cupones' },
                 { to: '/categories', label: 'Categorías', hint: 'Explora por categoría' },
+                { to: '/marketplace', label: 'Todas las ofertas', hint: 'Promociones y cupones' },
               ]}
             />
 
@@ -108,29 +118,30 @@ export function NavigationHeader({ title }: Props) {
               ]}
             />
 
-            <NavDropdown
-              label="Publicar"
-              isOpen={openDropdown === 'publish'}
-              onToggle={() => setOpenDropdown(openDropdown === 'publish' ? null : 'publish')}
-              align="right"
-              onItemClick={closeDropdowns}
-              items={[
-                { to: '/create-promotion', label: 'Crear promoción', hint: 'Asistente completo' },
-                { to: '/quick-promotion', label: 'Oferta rápida', hint: 'Publicación exprés' },
-              ]}
-            />
+            {publishItems.length > 0 ? (
+              <NavDropdown
+                label="Publicar"
+                isOpen={openDropdown === 'publish'}
+                onToggle={() => setOpenDropdown(openDropdown === 'publish' ? null : 'publish')}
+                align="right"
+                onItemClick={closeDropdowns}
+                items={publishItems}
+              />
+            ) : null}
 
-            <NavDropdown
-              label="Únete"
-              isOpen={openDropdown === 'join'}
-              onToggle={() => setOpenDropdown(openDropdown === 'join' ? null : 'join')}
-              align="right"
-              onItemClick={closeDropdowns}
-              items={[
-                { to: '/brand-setup', label: 'Registrar marca', hint: 'Negocios y marcas' },
-                { to: '/influencer-setup', label: 'Ser influencer', hint: 'Crear perfil' },
-              ]}
-            />
+            {showJoin ? (
+              <NavDropdown
+                label="Únete"
+                isOpen={openDropdown === 'join'}
+                onToggle={() => setOpenDropdown(openDropdown === 'join' ? null : 'join')}
+                align="right"
+                onItemClick={closeDropdowns}
+                items={[
+                  { to: '/brand-setup', label: 'Registrar marca', hint: 'Negocios y marcas' },
+                  { to: '/influencer-setup', label: 'Ser influencer', hint: 'Crear perfil' },
+                ]}
+              />
+            ) : null}
 
             <NavLink to="/about" className={navLinkClass}>
               <span className="flex items-center gap-1.5">
@@ -152,13 +163,25 @@ export function NavigationHeader({ title }: Props) {
             {isAuthenticated && user ? (
               <div className="hidden lg:flex lg:items-center lg:gap-2">
                 <span className="text-gray-400 text-sm max-w-[10rem] truncate">Hola, {user.firstName}</span>
-                <Link
-                  to={accountHref}
-                  className="flex items-center gap-1.5 text-white/90 hover:text-white px-3 py-1.5 rounded-lg bg-white/10 transition-colors text-sm"
-                >
-                  <User className="h-4 w-4" />
-                  Mi cuenta
-                </Link>
+                {workspaceItems.length > 0 ? (
+                  <NavDropdown
+                    label={accountLabel}
+                    isOpen={openDropdown === 'account'}
+                    onToggle={() => setOpenDropdown(openDropdown === 'account' ? null : 'account')}
+                    align="right"
+                    onItemClick={closeDropdowns}
+                    items={workspaceItems}
+                    variant="account"
+                  />
+                ) : (
+                  <Link
+                    to={accountHref}
+                    className="flex items-center gap-1.5 text-white/90 hover:text-white px-3 py-1.5 rounded-lg bg-white/10 transition-colors text-sm"
+                  >
+                    <User className="h-4 w-4" />
+                    {accountLabel}
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => logout()}

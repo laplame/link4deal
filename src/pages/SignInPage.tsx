@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SITE_CONFIG } from '../config/site';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { defaultRouteAfterLogin } from '../config/dashboardContexts';
+import { safeInternalRedirectPath } from '../config/adminAccess';
 
 export default function SignInPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { login } = useAuth();
+    const redirectAfterLogin = safeInternalRedirectPath(searchParams.get('redirect'));
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         login: '',
@@ -33,7 +36,8 @@ export default function SignInPage() {
         try {
             const data = await login({ login: formData.login, password: formData.password });
             const u = data?.user;
-            const dest = u ? defaultRouteAfterLogin(u) : '/dashboard';
+            const dest =
+              redirectAfterLogin || (u ? defaultRouteAfterLogin(u) : '/dashboard');
             navigate(dest, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
@@ -140,9 +144,9 @@ export default function SignInPage() {
                             </label>
                         </div>
                         <div className="text-sm">
-                            <a href="#" className="text-blue-600 hover:text-blue-500 font-medium">
+                            <Link to="/forgot-password" className="text-blue-600 hover:text-blue-500 font-medium">
                                 ¿Olvidaste tu contraseña?
-                            </a>
+                            </Link>
                         </div>
                     </div>
 

@@ -4,6 +4,7 @@ Sistema para registrar y pagar al **influencer** la comisión por cada **canje d
 
 Relacionado con:
 
+- [APP_INFLUENCER_AUTH.md](./APP_INFLUENCER_AUTH.md) — login/JWT que habilita estos endpoints
 - [APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md](./APP_INFLUENCER_IDENTITY_AND_STORY_CARDS.md) — wallet + campañas en app
 - [POS_BIZNEAI_CUPONES_Y_TRANSFERENCIA_TOKENS.md](./POS_BIZNEAI_CUPONES_Y_TRANSFERENCIA_TOKENS.md) — canje POS (`POST /api/discount-qr/redeem`)
 

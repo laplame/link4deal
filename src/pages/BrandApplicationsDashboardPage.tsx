@@ -16,8 +16,24 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
-import { BRAND_APPLICATIONS_PASSWORD_STORAGE_KEY } from '../config/brandApplicationsDashboard';
+import { useAuth } from '../context/AuthContext';
+import { canAccessAdminCrm } from '../config/adminAccess';
+import {
+  BRAND_APPLICATIONS_PASSWORD_STORAGE_KEY,
+  getBrandApplicationsMasterPassword,
+} from '../config/brandApplicationsDashboard';
 import { apiUrl } from '../utils/apiUrl';
+
+function brandApplicationsAuthHeaders(masterPassword?: string): HeadersInit {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = localStorage.getItem('auth_token');
+  if (masterPassword) {
+    headers['X-Brand-Dashboard-Password'] = masterPassword;
+  } else if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 type AppStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
@@ -88,6 +104,9 @@ function statusClass(s: AppStatus): string {
 }
 
 export default function BrandApplicationsDashboardPage() {
+  const { user, isAuthenticated } = useAuth();
+  const staffJwtAccess = isAuthenticated && canAccessAdminCrm(user);
+
   const [passwordInput, setPasswordInput] = useState('');
   const [storedPw, setStoredPw] = useState(() => {
     try {
@@ -104,11 +123,11 @@ export default function BrandApplicationsDashboardPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [copiedApplicantObjectId, setCopiedApplicantObjectId] = useState<string | null>(null);
 
-  const effectivePassword = storedPw;
+  const hasAccess = Boolean(staffJwtAccess || storedPw);
 
-  const loadList = useCallback(async (pw: string) => {
+  const loadList = useCallback(async (opts: { password?: string; jwt?: boolean } = {}) => {
     const res = await fetch(apiUrl('/api/promotion-applications/brand'), {
-      headers: { 'X-Brand-Dashboard-Password': pw },
+      headers: brandApplicationsAuthHeaders(opts.jwt ? undefined : opts.password || storedPw),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -116,7 +135,7 @@ export default function BrandApplicationsDashboardPage() {
       throw new Error(msg);
     }
     setRows(Array.isArray(json.data) ? json.data : []);
-  }, []);
+  }, [storedPw]);
 
   const copyApplicantObjectId = useCallback(async (mongoId: string) => {
     try {
@@ -136,23 +155,25 @@ export default function BrandApplicationsDashboardPage() {
   }, [rows, filterStatus]);
 
   useEffect(() => {
-    if (!effectivePassword) return;
+    if (!hasAccess) return;
     let cancel = false;
     (async () => {
       setLoading(true);
       setLoginError('');
       try {
-        await loadList(effectivePassword);
+        await loadList(staffJwtAccess ? { jwt: true } : { password: storedPw });
       } catch (e) {
         if (!cancel) {
           const message = e instanceof Error ? e.message : 'Error de red';
           setLoginError(message);
-          try {
-            sessionStorage.removeItem(BRAND_APPLICATIONS_PASSWORD_STORAGE_KEY);
-          } catch {
-            /* ignore */
+          if (!staffJwtAccess) {
+            try {
+              sessionStorage.removeItem(BRAND_APPLICATIONS_PASSWORD_STORAGE_KEY);
+            } catch {
+              /* ignore */
+            }
+            setStoredPw('');
           }
-          setStoredPw('');
           setRows([]);
         }
       } finally {
@@ -162,7 +183,7 @@ export default function BrandApplicationsDashboardPage() {
     return () => {
       cancel = true;
     };
-  }, [effectivePassword, loadList]);
+  }, [hasAccess, staffJwtAccess, storedPw, loadList]);
 
   const counts = useMemo(() => {
     const c = { pending: 0, approved: 0, rejected: 0, withdrawn: 0 };
@@ -184,7 +205,7 @@ export default function BrandApplicationsDashboardPage() {
     }
     setLoading(true);
     try {
-      await loadList(pw);
+      await loadList({ password: pw });
       try {
         sessionStorage.setItem(BRAND_APPLICATIONS_PASSWORD_STORAGE_KEY, pw);
       } catch {
@@ -211,14 +232,14 @@ export default function BrandApplicationsDashboardPage() {
   };
 
   const patchStatus = async (id: string, status: AppStatus) => {
-    if (!effectivePassword) return;
+    if (!hasAccess) return;
     setActionId(id);
     try {
       const res = await fetch(apiUrl(`/api/promotion-applications/${id}/status`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Brand-Dashboard-Password': effectivePassword,
+          ...brandApplicationsAuthHeaders(staffJwtAccess ? undefined : storedPw),
         },
         body: JSON.stringify({ status }),
       });
@@ -226,7 +247,7 @@ export default function BrandApplicationsDashboardPage() {
       if (!res.ok) {
         throw new Error(json?.message || 'No se pudo actualizar');
       }
-      await loadList(effectivePassword);
+      await loadList(staffJwtAccess ? { jwt: true } : { password: storedPw });
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : 'Error al actualizar');
     } finally {
@@ -234,7 +255,7 @@ export default function BrandApplicationsDashboardPage() {
     }
   };
 
-  if (!effectivePassword) {
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
@@ -248,7 +269,8 @@ export default function BrandApplicationsDashboardPage() {
             </div>
           </div>
           <p className="text-sm text-slate-600 mb-6">
-            Acceso restringido. Introduce la contraseña maestra para ver y gestionar solicitudes.
+            Usa el mismo PIN de super admin (CRM / landing) o inicia sesión como super admin para entrar sin
+            contraseña.
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -262,7 +284,7 @@ export default function BrandApplicationsDashboardPage() {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="••••••••"
+                placeholder={`PIN super admin (${getBrandApplicationsMasterPassword().length} caracteres)`}
               />
             </div>
             {loginError ? (

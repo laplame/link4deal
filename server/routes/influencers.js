@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const influencerController = require('../controllers/influencerController');
 const influencerAppController = require('../controllers/influencerAppController');
+const influencerAuthController = require('../controllers/influencerAuthController');
 const influencerSettlementController = require('../controllers/influencerSettlementController');
 const { authenticateToken, optionalAuth } = require('../middleware/jwtAuth');
 const { memoryUpload, handleUploadError } = require('../middleware/upload');
@@ -40,6 +41,18 @@ router.get('/by-slug/:slug', (req, res) => influencerController.getInfluencerByS
 // Bandeja de mensajes del influencer (debe ir antes de /:id)
 router.get('/messages/inbox', authenticateToken, (req, res) => influencerController.getInbox(req, res));
 router.patch('/messages/:messageId/read', authenticateToken, (req, res) => influencerController.markMessageRead(req, res));
+
+// App móvil: auth dedicada de influencers (registro / login / acceso directo) — antes de /:id
+router.post('/app/auth/register', influencerAppLimiter, (req, res) =>
+    influencerAuthController.register(req, res),
+);
+router.post('/app/auth/login', influencerAppLimiter, (req, res) =>
+    influencerAuthController.login(req, res),
+);
+// Acceso directo: inicia sesión si existe; si no, da de alta como influencer en un paso.
+router.post('/app/auth/enter', influencerAppLimiter, (req, res) =>
+    influencerAuthController.enter(req, res),
+);
 
 // App móvil: identidad, wallet y campañas (antes de /:id)
 router.post('/app/verify-session', influencerAppLimiter, authenticateToken, (req, res) =>
@@ -80,6 +93,9 @@ router.post(
 
 // Perfil del influencer logueado (debe ir antes de /:id)
 router.get('/me', authenticateToken, (req, res) => influencerController.getMe(req, res));
+router.get('/me/edit-access', authenticateToken, (req, res) => influencerController.getEditAccess(req, res));
+router.post('/me/claim', authenticateToken, (req, res) => influencerController.claimMyProfile(req, res));
+router.patch('/me', authenticateToken, (req, res) => influencerController.updateMe(req, res));
 router.patch('/me/ugc-profile', authenticateToken, (req, res) => influencerController.updateMeUgcProfile(req, res));
 
 // POST /api/influencers/:influencerId/contact - Enviar mensaje (opcional: con sesión para nombre/email)
@@ -99,6 +115,9 @@ router.get('/:id/qr-promotions-summary', (req, res) => influencerController.getQ
 
 // GET /api/influencers/:id/available-products — productos/campañas con solicitud aprobada por la marca
 router.get('/:id/available-products', (req, res) => influencerController.getAvailableProducts(req, res));
+
+// POST /api/influencers/:id/outbound-click — tracking de clicks outbound (quick promotion redirect)
+router.post('/:id/outbound-click', optionalAuth, (req, res) => influencerController.trackOutboundClick(req, res));
 
 // GET /api/influencers/:id/promo-short-codes — códigos alfanuméricos cortos (app) por influencer
 router.get('/:id/promo-short-codes', (req, res) => influencerController.getPromoShortCodes(req, res));

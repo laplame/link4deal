@@ -3,9 +3,14 @@ const router = express.Router();
 const controller = require('../controllers/promotionApplicationController');
 const { verifyBrandDashboardPassword } = require('../middleware/brandDashboardAuth');
 const { applicationPortfolioUpload, handleUploadError } = require('../middleware/upload');
+const { optionalAuth } = require('../middleware/jwtAuth');
 
-/** POST /api/promotion-applications — Crear aplicación (público; multipart) */
-router.post('/', (req, res) => {
+/**
+ * POST /api/promotion-applications — Crear aplicación (público; multipart).
+ * `optionalAuth`: si llega un JWT válido, vincula automáticamente el perfil
+ * de influencer del usuario aunque no se haya pegado el ID manualmente.
+ */
+router.post('/', optionalAuth, (req, res) => {
     applicationPortfolioUpload(req, res, (err) => {
         if (err) {
             return handleUploadError(err, res);

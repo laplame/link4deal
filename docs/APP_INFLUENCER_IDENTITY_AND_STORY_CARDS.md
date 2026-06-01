@@ -10,6 +10,7 @@ Documento para implementar en la **app móvil** el flujo de:
 Base URL: `{API_ORIGIN}/api/influencers`
 
 Autenticación: **Bearer JWT** (mismo token que `POST /api/auth/login` / sesión web).
+Cómo obtener y renovar ese token: [APP_INFLUENCER_AUTH.md](./APP_INFLUENCER_AUTH.md).
 
 ---
 

@@ -79,6 +79,12 @@ git commit -m "Dejar de versionar uploads; usar UPLOAD_PATH y Cloudinary"
 
 Los archivos **siguen en disco**; solo dejan de subirse al remoto.
 
+## Avatares de influencers
+
+- Carpeta local: `server/uploads/influencers/` (o bajo `UPLOAD_PATH`)
+- Cloudinary: carpeta `link4deal/influencers`
+- El campo `Influencer.avatar` guarda la URL de Cloudinary cuando la subida funciona (prioridad sobre `/uploads/...`)
+
 ## Health check
 
 `GET /health` incluye `services.uploads.uploadDir` para confirmar la ruta activa del proceso PM2.

@@ -6,6 +6,9 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const { authUserDashboardFields } = require('../utils/platformSuperuser');
 const { buildEmailCandidates } = require('../utils/emailCandidates');
+const crypto = require('crypto');
+const PasswordResetOtp = require('../models/PasswordResetOtp');
+const { sendSms, twilioConfigured } = require('../utils/twilioSms');
 const {
     allowDuplicatePhonesForTesting,
     normalizePhone,
@@ -15,6 +18,26 @@ const {
 } = require('../utils/phoneTesting');
 const router = express.Router();
 const SESSION_EXPIRES_IN = '24h';
+
+function otpPepper() {
+    return String(process.env.PASSWORD_RESET_OTP_PEPPER || process.env.JWT_SECRET || 'otp').trim() || 'otp';
+}
+
+function hashOtp(phone, otp) {
+    return crypto
+        .createHash('sha256')
+        .update(`${phone}:${otp}:${otpPepper()}`)
+        .digest('hex');
+}
+
+function generateOtp6() {
+    const n = Math.floor(Math.random() * 1000000);
+    return String(n).padStart(6, '0');
+}
+
+function phoneResetLookup(phoneNorm) {
+    return phoneLookupFilter(phoneNorm);
+}
 
 /** Asegura que exista el rol 'user' en la BD (para registro sin ejecutar seeder). */
 async function ensureUserRole() {
@@ -573,6 +596,189 @@ router.post('/change-password', authenticateToken, [
         res.status(500).json({
             message: 'Error interno del servidor'
         });
+    }
+});
+
+/**
+ * POST /api/auth/password-reset/request
+ * Body: { phone }
+ * Env: TWILIO_* optional (stub mode without keys).
+ */
+router.post('/password-reset/request', async (req, res) => {
+    try {
+        const phoneRaw = req.body?.phone != null ? String(req.body.phone) : '';
+        const phoneNorm = normalizePhone(phoneRaw);
+        if (!phoneNorm || phoneNorm.length < 10) {
+            return res.status(400).json({ success: false, message: 'Teléfono/WhatsApp inválido' });
+        }
+
+        const user = await User.findOne(phoneResetLookup(phoneNorm)).select('_id phone').lean();
+        // Do not reveal whether user exists
+        if (!user) {
+            return res.json({ success: true, message: 'Si el número existe, enviaremos un código por SMS.' });
+        }
+
+        const now = new Date();
+        const existing = await PasswordResetOtp.findOne({
+            user: user._id,
+            phone: user.phone,
+            expiresAt: { $gt: now },
+            consumedAt: null,
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (existing?.lastSentAt) {
+            const diffMs = now.getTime() - new Date(existing.lastSentAt).getTime();
+            if (diffMs < 60_000) {
+                return res.json({ success: true, message: 'Si el número existe, enviaremos un código por SMS.' });
+            }
+        }
+
+        const otp = generateOtp6();
+        const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+        const otpHash = hashOtp(user.phone, otp);
+
+        const doc = await PasswordResetOtp.create({
+            phone: user.phone,
+            user: user._id,
+            otpHash,
+            expiresAt,
+            attempts: 0,
+            verifiedAt: null,
+            consumedAt: null,
+            lastSentAt: now,
+            sendCount: 1,
+        });
+
+        const smsBody = `Tu código de recuperación de DameCódigo es: ${otp}. Vence en 10 minutos.`;
+        await sendSms(user.phone, smsBody).catch(() => {});
+
+        // In dev/stub mode, return code to unblock QA
+        const includeOtp = process.env.NODE_ENV === 'development' || !twilioConfigured();
+        return res.json({
+            success: true,
+            message: 'Si el número existe, enviaremos un código por SMS.',
+            ...(includeOtp ? { debugOtp: otp, debugOtpId: String(doc._id) } : {}),
+        });
+    } catch (error) {
+        console.error('password-reset/request:', error);
+        return res.status(500).json({ success: false, message: 'No se pudo enviar el código' });
+    }
+});
+
+/**
+ * POST /api/auth/password-reset/verify
+ * Body: { phone, otp }
+ * Returns: { resetToken }
+ */
+router.post('/password-reset/verify', async (req, res) => {
+    try {
+        const phoneRaw = req.body?.phone != null ? String(req.body.phone) : '';
+        const otpRaw = req.body?.otp != null ? String(req.body.otp) : '';
+        const phoneNorm = normalizePhone(phoneRaw);
+        const otp = otpRaw.trim();
+        if (!phoneNorm || phoneNorm.length < 10) {
+            return res.status(400).json({ success: false, message: 'Teléfono/WhatsApp inválido' });
+        }
+        if (!/^\d{6}$/.test(otp)) {
+            return res.status(400).json({ success: false, message: 'Código inválido' });
+        }
+
+        const user = await User.findOne(phoneResetLookup(phoneNorm)).select('_id phone').lean();
+        if (!user) {
+            return res.status(400).json({ success: false, message: 'Código inválido' });
+        }
+
+        const now = new Date();
+        const doc = await PasswordResetOtp.findOne({
+            user: user._id,
+            phone: user.phone,
+            expiresAt: { $gt: now },
+            consumedAt: null,
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (!doc) {
+            return res.status(400).json({ success: false, message: 'Código expirado o inválido' });
+        }
+        if ((doc.attempts || 0) >= 8) {
+            return res.status(429).json({ success: false, message: 'Demasiados intentos. Solicita un nuevo código.' });
+        }
+
+        const expected = hashOtp(user.phone, otp);
+        const match = expected === doc.otpHash;
+        await PasswordResetOtp.updateOne(
+            { _id: doc._id },
+            match
+                ? { $set: { verifiedAt: now }, $inc: { attempts: 1 } }
+                : { $inc: { attempts: 1 } },
+        );
+
+        if (!match) {
+            return res.status(400).json({ success: false, message: 'Código inválido' });
+        }
+
+        const resetToken = jwt.sign(
+            { userId: String(user._id), phone: user.phone, type: 'pwd_reset', otpId: String(doc._id) },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' },
+        );
+
+        return res.json({ success: true, resetToken });
+    } catch (error) {
+        console.error('password-reset/verify:', error);
+        return res.status(500).json({ success: false, message: 'No se pudo verificar el código' });
+    }
+});
+
+/**
+ * POST /api/auth/password-reset/confirm
+ * Body: { resetToken, newPassword }
+ */
+router.post('/password-reset/confirm', async (req, res) => {
+    try {
+        const token = req.body?.resetToken != null ? String(req.body.resetToken) : '';
+        const newPassword = req.body?.newPassword != null ? String(req.body.newPassword) : '';
+        if (!token) return res.status(400).json({ success: false, message: 'resetToken requerido' });
+        if (
+            newPassword.length < 8 ||
+            !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número',
+            });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!decoded || decoded.type !== 'pwd_reset' || !decoded.userId || !decoded.otpId) {
+            return res.status(403).json({ success: false, message: 'Token inválido' });
+        }
+
+        const otpDoc = await PasswordResetOtp.findById(decoded.otpId).lean();
+        if (!otpDoc || !otpDoc.verifiedAt || otpDoc.consumedAt) {
+            return res.status(403).json({ success: false, message: 'Código no verificado o ya usado' });
+        }
+
+        await PasswordResetOtp.updateOne({ _id: otpDoc._id }, { $set: { consumedAt: new Date() } });
+
+        const user = await User.findById(decoded.userId).select('+password').populate('roles');
+        if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+
+        user.password = newPassword;
+        user.loginAttempts = 0;
+        user.lockUntil = undefined;
+        await user.save();
+
+        return res.json({ success: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+    } catch (error) {
+        console.error('password-reset/confirm:', error);
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ success: false, message: 'Token expirado. Repite el proceso.' });
+        }
+        return res.status(500).json({ success: false, message: 'No se pudo actualizar la contraseña' });
     }
 });
 

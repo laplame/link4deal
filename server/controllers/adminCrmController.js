@@ -31,11 +31,51 @@ const {
     serializeMonetization,
 } = require('../utils/influencerCrmMonetization');
 const { aggregateSettlementSummariesForInfluencers } = require('../utils/influencerTokenSettlement');
+const PromotionApplication = require('../models/PromotionApplication');
+const Promotion = require('../models/Promotion');
+const { persistInfluencerImage } = require('../utils/influencerImageStorage');
+const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
+
+function promotionRedirectLive(pr, now = new Date()) {
+    if (!pr || pr.status !== 'active') return false;
+    const vu = pr.validUntil != null ? new Date(pr.validUntil).getTime() : NaN;
+    if (!Number.isFinite(vu) || vu < now.getTime()) return false;
+    const vf = pr.validFrom != null ? new Date(pr.validFrom).getTime() : 0;
+    return vf <= now.getTime();
+}
+
+function serializeRedirectPromotion(pr) {
+    if (!pr) return null;
+    return {
+        id: String(pr._id),
+        title: pr.title || '',
+        brand: pr.brand || '',
+        status: pr.status || '',
+        validFrom: pr.validFrom ? new Date(pr.validFrom).toISOString() : null,
+        validUntil: pr.validUntil ? new Date(pr.validUntil).toISOString() : null,
+        redirectInsteadOfQr: !!pr.redirectInsteadOfQr,
+        redirectToUrl: pr.redirectToUrl || '',
+    };
+}
+
+function serializeRedirectApplication(a) {
+    return {
+        id: String(a._id),
+        status: a.status,
+        createdAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
+        updatedAt: a.updatedAt ? new Date(a.updatedAt).toISOString() : null,
+        promotion: serializeRedirectPromotion(a.promotion),
+    };
+}
 const {
     buildLiveActivityBatch,
     buildLiveActivityForInfluencer,
     enrichLiveActivityWithCrmRow,
 } = require('../utils/influencerCrmLiveActivity');
+const {
+    buildPendingApplicationsMap,
+    pendingFieldsForCard,
+} = require('../utils/influencerCrmPendingApplications');
 const {
     IDENTITY_VERIFICATION_STATUSES,
     IDENTITY_LABELS_ES,
@@ -423,6 +463,501 @@ class AdminCrmController {
         }
     }
 
+    /**
+     * GET /api/admin/crm/influencers/:id/redirect-applications
+     * pending, approved y promos redirect activas asignables (sin aplicación aprobada aún).
+     */
+    async getRedirectApplications(req, res) {
+        try {
+            const influencerId = String(req.params.id || '').trim();
+            if (!mongoose.Types.ObjectId.isValid(influencerId)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const exists = await Influencer.findById(influencerId).select('_id username').lean();
+            if (!exists || exists.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const oid = new mongoose.Types.ObjectId(influencerId);
+            const now = new Date();
+
+            const [apps, activeRedirectPromos] = await Promise.all([
+                PromotionApplication.find({ influencerApplicant: oid })
+                    .populate('promotion', 'title brand status validFrom validUntil redirectInsteadOfQr redirectToUrl')
+                    .sort({ updatedAt: -1 })
+                    .limit(300)
+                    .lean(),
+                Promotion.find({
+                    redirectInsteadOfQr: true,
+                    status: 'active',
+                    $or: [{ validUntil: { $gte: now } }, { validUntil: null }],
+                })
+                    .select('title brand status validFrom validUntil redirectInsteadOfQr redirectToUrl')
+                    .sort({ validUntil: 1, createdAt: -1 })
+                    .limit(200)
+                    .lean(),
+            ]);
+
+            const withPromotion = apps.filter((a) => a.promotion);
+            const redirectApps = withPromotion.filter((a) => a.promotion.redirectInsteadOfQr);
+            const approvedPromotionIds = new Set(
+                redirectApps.filter((a) => a.status === 'approved').map((a) => String(a.promotion._id)),
+            );
+
+            const pending = withPromotion
+                .filter((a) => a.status === 'pending')
+                .map(serializeRedirectApplication);
+            const approved = withPromotion
+                .filter((a) => a.status === 'approved')
+                .map(serializeRedirectApplication);
+
+            const assignable = activeRedirectPromos
+                .filter((p) => promotionRedirectLive(p, now) && !approvedPromotionIds.has(String(p._id)))
+                .map(serializeRedirectPromotion);
+
+            const legacyData = pending;
+
+            return res.json({
+                success: true,
+                data: legacyData,
+                count: legacyData.length,
+                pending,
+                approved,
+                assignable,
+            });
+        } catch (error) {
+            console.error('❌ CRM redirect applications:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** POST /api/admin/crm/influencers/:id/redirect-promotions/assign — asignación unilateral (aprobada) */
+    async assignRedirectPromotion(req, res) {
+        try {
+            const influencerId = String(req.params.id || '').trim();
+            const promotionId = String(req.body?.promotionId || '').trim();
+
+            if (!mongoose.Types.ObjectId.isValid(influencerId) || !mongoose.Types.ObjectId.isValid(promotionId)) {
+                return res.status(400).json({ success: false, message: 'influencerId o promotionId inválido' });
+            }
+
+            const inf = await Influencer.findById(influencerId).select('_id username').lean();
+            if (!inf || inf.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const promo = await Promotion.findById(promotionId)
+                .select('title redirectInsteadOfQr status validFrom validUntil')
+                .lean();
+            if (!promo) {
+                return res.status(404).json({ success: false, message: 'Promoción no encontrada' });
+            }
+            if (!promo.redirectInsteadOfQr) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'La promoción no es de tipo redirección (URL).',
+                });
+            }
+
+            let app = await PromotionApplication.findOne({
+                promotion: promotionId,
+                influencerApplicant: influencerId,
+            });
+
+            if (app) {
+                if (app.status !== 'approved') {
+                    app.status = 'approved';
+                    app.additionalNotes = `${app.additionalNotes || ''}\n[CRM] Asignación unilateral redirect`.trim();
+                    await app.save();
+                }
+            } else {
+                app = await PromotionApplication.create({
+                    promotion: promotionId,
+                    influencerApplicant: influencerId,
+                    status: 'approved',
+                    contentProposal: 'Asignación unilateral CRM — promoción de redirección',
+                    platforms: ['instagram'],
+                    additionalNotes: '[CRM] Asignación unilateral redirect',
+                });
+            }
+
+            queueEnsurePromoShortCodesForInfluencer(influencerId, {
+                extraPromotionIds: [promotionId],
+                includeEnvDefaults: false,
+            });
+
+            const populated = await PromotionApplication.findById(app._id)
+                .populate('promotion', 'title brand status validFrom validUntil redirectInsteadOfQr redirectToUrl')
+                .lean();
+
+            return res.json({
+                success: true,
+                message: 'Promoción de redirección asignada y aprobada',
+                data: serializeRedirectApplication(populated),
+            });
+        } catch (error) {
+            console.error('❌ CRM assign redirect:', error);
+            return res.status(500).json({ success: false, message: error.message || 'No se pudo asignar' });
+        }
+    }
+
+    /** POST /api/admin/crm/influencers/:id/avatar — foto de perfil (super admin, Cloudinary + disco) */
+    async uploadInfluencerAvatar(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            if (!req.file || !req.file.buffer) {
+                return res.status(400).json({ success: false, message: 'Campo avatar (imagen) requerido' });
+            }
+
+            const doc = await Influencer.findById(id);
+            if (!doc || doc.username === INFLUENCER_GENERAL_USERNAME) {
+                return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
+            }
+
+            const stored = await persistInfluencerImage(req.file, {
+                cloudinaryFolder: 'link4deal/influencers',
+                filenamePrefix: 'influencer-avatar',
+            });
+
+            doc.avatar = stored.url;
+            if (!doc.crm) doc.crm = defaultCrm();
+            doc.crm.profileCompleteness = computeProfileCompleteness(doc);
+            doc.crm.dataSubmissionStatus = deriveDataSubmissionStatus(doc, doc.crm.profileCompleteness);
+            doc.crm.updatedByAdminAt = new Date();
+            doc.markModified('crm');
+            await doc.save();
+
+            await InfluencerCrmEvent.create({
+                influencerId: doc._id,
+                userId: doc.userId || undefined,
+                appKey: 'web',
+                eventType: 'admin_avatar_upload',
+                metadata: {
+                    adminUserId: String(req.user._id),
+                    cloudinary: Boolean(stored.savedToCloudinary),
+                },
+            });
+
+            return res.json({
+                success: true,
+                data: {
+                    avatarUrl: stored.url,
+                    cloudinaryUrl: stored.cloudinaryUrl,
+                    savedToCloudinary: stored.savedToCloudinary,
+                },
+                message: 'Avatar actualizado',
+            });
+        } catch (error) {
+            console.error('❌ CRM upload avatar:', error);
+            return res.status(500).json({ success: false, message: error.message || 'Error al subir avatar' });
+        }
+    }
+
+    /** Serializa fila de PromotionApplication para panel admin / marcas. */
+    serializePromotionApplicationRow(row) {
+        const pr = row.promotion;
+        const inf = row.influencerApplicant;
+        return {
+            id: String(row._id),
+            status: row.status,
+            createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+            updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+            influencerApplicant: inf
+                ? {
+                      id: String(inf._id),
+                      name: inf.name,
+                      username: inf.username,
+                      avatar: inf.avatar,
+                      totalFollowers: inf.totalFollowers,
+                  }
+                : null,
+            platforms: row.platforms || [],
+            estimatedReach: row.estimatedReach,
+            portfolio: row.portfolio || [],
+            pricing: row.pricing,
+            timeline: row.timeline,
+            additionalNotes: row.additionalNotes,
+            contentProposal: row.contentProposal,
+            promotion: pr
+                ? {
+                      id: String(pr._id),
+                      title: pr.title,
+                      brand: pr.brand,
+                      category: pr.category,
+                      currentPrice: pr.currentPrice,
+                      currency: pr.currency,
+                      discountPercentage: pr.discountPercentage,
+                      redirectInsteadOfQr: !!pr.redirectInsteadOfQr,
+                      redirectToUrl: pr.redirectToUrl || '',
+                  }
+                : null,
+        };
+    }
+
+    /** GET /api/admin/crm/promotion-applications — todas las solicitudes (super admin, paginado + búsqueda) */
+    async listPromotionApplications(req, res) {
+        try {
+            const statusFilter = String(req.query.status || 'pending').trim();
+            const influencerId = String(req.query.influencerId || '').trim();
+            const search = String(req.query.search || '').trim();
+            const unlinkedOnly = ['1', 'true', 'yes'].includes(
+                String(req.query.unlinkedOnly || '').toLowerCase(),
+            );
+            const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+            const limit = Math.min(100, Math.max(5, parseInt(req.query.limit, 10) || 25));
+
+            const filter = {};
+            if (statusFilter && statusFilter !== 'all') {
+                if (['pending', 'approved', 'rejected', 'withdrawn'].includes(statusFilter)) {
+                    filter.status = statusFilter;
+                }
+            }
+            if (influencerId && mongoose.Types.ObjectId.isValid(influencerId)) {
+                filter.influencerApplicant = new mongoose.Types.ObjectId(influencerId);
+            }
+            if (unlinkedOnly) {
+                filter.influencerApplicant = null;
+            }
+
+            // Búsqueda avanzada: por título/marca de promoción o por nombre/usuario del influencer.
+            if (search) {
+                const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                const [promoIds, infIds] = await Promise.all([
+                    Promotion.find({ $or: [{ title: rx }, { brand: rx }] })
+                        .select('_id')
+                        .limit(500)
+                        .lean(),
+                    Influencer.find({ $or: [{ name: rx }, { username: rx }] })
+                        .select('_id')
+                        .limit(500)
+                        .lean(),
+                ]);
+                filter.$or = [
+                    { promotion: { $in: promoIds.map((p) => p._id) } },
+                    { influencerApplicant: { $in: infIds.map((i) => i._id) } },
+                ];
+            }
+
+            const totalDocs = await PromotionApplication.countDocuments(filter);
+            const totalPages = Math.max(1, Math.ceil(totalDocs / limit));
+            const safePage = Math.min(page, totalPages);
+
+            const items = await PromotionApplication.find(filter)
+                .populate(
+                    'promotion',
+                    'title brand category currentPrice currency discountPercentage redirectInsteadOfQr redirectToUrl status',
+                )
+                .populate('influencerApplicant', 'name username avatar totalFollowers')
+                .sort({ createdAt: -1 })
+                .skip((safePage - 1) * limit)
+                .limit(limit)
+                .lean();
+
+            const data = items.map((row) => this.serializePromotionApplicationRow(row));
+            const [pendingCount, unlinkedCount] = await Promise.all([
+                PromotionApplication.countDocuments({ status: 'pending' }),
+                PromotionApplication.countDocuments({ status: 'pending', influencerApplicant: null }),
+            ]);
+
+            return res.json({
+                success: true,
+                data,
+                count: data.length,
+                pendingCount,
+                unlinkedCount,
+                pagination: { page: safePage, limit, totalDocs, totalPages },
+            });
+        } catch (error) {
+            console.error('❌ CRM list promotion applications:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * POST /api/admin/crm/promotion-applications/bulk-apply — atajo para aplicar una
+     * promoción a muchos influencers de golpe (todos o filtrados por categoría).
+     * Crea solicitudes ya aprobadas (o pendientes) sin duplicar las existentes.
+     */
+    async bulkApplyPromotion(req, res) {
+        try {
+            const body = req.body || {};
+            const promotionId = String(body.promotionId || '').trim();
+            const scope = String(body.scope || 'all').trim();
+            const category = String(body.category || '').trim();
+            const approve = body.approve !== false; // por defecto aprueba
+            const limitInfluencers = Math.min(2000, Math.max(1, parseInt(body.limit, 10) || 1000));
+
+            if (!mongoose.Types.ObjectId.isValid(promotionId)) {
+                return res.status(400).json({ success: false, message: 'promotionId inválido.' });
+            }
+            const promotion = await Promotion.findById(promotionId).select('_id title').lean();
+            if (!promotion) {
+                return res.status(404).json({ success: false, message: 'Promoción no encontrada.' });
+            }
+
+            const infQuery = { username: { $ne: INFLUENCER_GENERAL_USERNAME } };
+            if (scope === 'category') {
+                if (!category) {
+                    return res.status(400).json({ success: false, message: 'Falta la categoría.' });
+                }
+                infQuery.categories = category;
+            }
+
+            const influencers = await Influencer.find(infQuery)
+                .select('_id')
+                .limit(limitInfluencers)
+                .lean();
+            if (!influencers.length) {
+                return res.json({
+                    success: true,
+                    data: { created: 0, skipped: 0, matched: 0 },
+                    message: 'No hay influencers que coincidan con el filtro.',
+                });
+            }
+
+            const infIds = influencers.map((i) => i._id);
+            const existing = await PromotionApplication.find({
+                promotion: promotion._id,
+                influencerApplicant: { $in: infIds },
+            })
+                .select('influencerApplicant')
+                .lean();
+            const already = new Set(existing.map((e) => String(e.influencerApplicant)));
+
+            const toCreate = infIds.filter((id) => !already.has(String(id)));
+            const status = approve ? 'approved' : 'pending';
+            if (toCreate.length) {
+                await PromotionApplication.insertMany(
+                    toCreate.map((id) => ({
+                        promotion: promotion._id,
+                        influencerApplicant: id,
+                        status,
+                        contentProposal: 'Asignación masiva desde CRM',
+                        platforms: [],
+                        estimatedReach: 0,
+                        portfolio: [],
+                    })),
+                    { ordered: false },
+                );
+                if (approve) {
+                    for (const id of toCreate) {
+                        queueEnsurePromoShortCodesForInfluencer(String(id), {
+                            extraPromotionIds: [String(promotion._id)],
+                            includeEnvDefaults: false,
+                        });
+                    }
+                }
+            }
+
+            return res.json({
+                success: true,
+                data: {
+                    created: toCreate.length,
+                    skipped: already.size,
+                    matched: infIds.length,
+                    status,
+                },
+                message: `Aplicada a ${toCreate.length} influencer(es) (${already.size} ya la tenían).`,
+            });
+        } catch (error) {
+            console.error('❌ CRM bulk apply promotion:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/promotion-applications/categories — categorías de influencers disponibles */
+    async listInfluencerCategories(req, res) {
+        try {
+            const cats = await Influencer.distinct('categories', {
+                username: { $ne: INFLUENCER_GENERAL_USERNAME },
+            });
+            const cleaned = Array.from(
+                new Set((cats || []).map((c) => String(c || '').trim()).filter(Boolean)),
+            ).sort((a, b) => a.localeCompare(b, 'es'));
+            return res.json({ success: true, data: cleaned });
+        } catch (error) {
+            console.error('❌ CRM list influencer categories:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** POST /api/admin/crm/promotion-applications/:id/approve — aprueba solicitud (super admin) */
+    async approvePromotionApplication(req, res) {
+        try {
+            const applicationId = String(req.params.id || '').trim();
+            if (!mongoose.Types.ObjectId.isValid(applicationId)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const updateFields = { status: 'approved' };
+            const rawAssign =
+                req.body && req.body.influencerProfileId != null
+                    ? String(req.body.influencerProfileId).trim()
+                    : '';
+            if (rawAssign && mongoose.Types.ObjectId.isValid(rawAssign)) {
+                const inf = await Influencer.findById(rawAssign).select('_id username').lean();
+                if (inf && inf.username !== INFLUENCER_GENERAL_USERNAME) {
+                    updateFields.influencerApplicant = inf._id;
+                }
+            }
+
+            const updated = await PromotionApplication.findByIdAndUpdate(
+                applicationId,
+                { $set: updateFields },
+                { new: true },
+            )
+                .select('_id status influencerApplicant promotion')
+                .lean();
+
+            if (!updated) {
+                return res.status(404).json({ success: false, message: 'Aplicación no encontrada.' });
+            }
+
+            if (updated.influencerApplicant && updated.promotion) {
+                queueEnsurePromoShortCodesForInfluencer(String(updated.influencerApplicant), {
+                    extraPromotionIds: [String(updated.promotion)],
+                    includeEnvDefaults: false,
+                });
+            }
+
+            return res.json({ success: true, data: { id: String(updated._id), status: updated.status } });
+        } catch (error) {
+            console.error('❌ CRM approve application:', error);
+            return res.status(500).json({ success: false, message: 'No se pudo aprobar la aplicación.' });
+        }
+    }
+
+    /** POST /api/admin/crm/promotion-applications/:id/reject */
+    async rejectPromotionApplication(req, res) {
+        try {
+            const applicationId = String(req.params.id || '').trim();
+            if (!mongoose.Types.ObjectId.isValid(applicationId)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const updated = await PromotionApplication.findByIdAndUpdate(
+                applicationId,
+                { $set: { status: 'rejected' } },
+                { new: true },
+            )
+                .select('_id status')
+                .lean();
+
+            if (!updated) {
+                return res.status(404).json({ success: false, message: 'Aplicación no encontrada.' });
+            }
+
+            return res.json({ success: true, data: { id: String(updated._id), status: updated.status } });
+        } catch (error) {
+            console.error('❌ CRM reject application:', error);
+            return res.status(500).json({ success: false, message: 'No se pudo rechazar la aplicación.' });
+        }
+    }
+
     /** PATCH /api/admin/crm/influencers/:id */
     async patchInfluencerCrm(req, res) {
         try {
@@ -439,8 +974,61 @@ class AdminCrmController {
             const body = req.body || {};
             if (!doc.crm) doc.crm = defaultCrm();
 
+            if (body.name != null) doc.name = String(body.name).trim().slice(0, 200);
+            if (body.username != null) {
+                const u = String(body.username).trim().replace(/^@/, '').slice(0, 80);
+                if (u) doc.username = u;
+            }
+            if (body.bio != null) doc.bio = String(body.bio).trim().slice(0, 8000);
+            if (body.avatar != null) doc.avatar = String(body.avatar).trim().slice(0, 2048);
+            if (body.profileShortCode != null) {
+                const code = String(body.profileShortCode).trim().toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 16);
+                if (code) doc.profileShortCode = code;
+            }
+            if (body.location != null) doc.location = String(body.location).trim().slice(0, 300);
+            if (body.socialMedia && typeof body.socialMedia === 'object') {
+                doc.socialMedia = doc.socialMedia || {};
+                for (const key of ['instagram', 'tiktok', 'youtube', 'twitter']) {
+                    if (body.socialMedia[key] != null) {
+                        doc.socialMedia[key] = String(body.socialMedia[key]).trim().slice(0, 500);
+                    }
+                }
+                doc.markModified('socialMedia');
+            }
+            if (Array.isArray(body.categories)) {
+                doc.categories = body.categories
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                    .slice(0, 30);
+            }
+            if (Array.isArray(body.languages)) {
+                doc.languages = body.languages
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                    .slice(0, 30);
+            }
+            if (body.followers && typeof body.followers === 'object') {
+                doc.followers = doc.followers || {};
+                for (const key of ['instagram', 'tiktok', 'youtube', 'twitter']) {
+                    const n = Number(body.followers[key]);
+                    if (Number.isFinite(n) && n >= 0) doc.followers[key] = Math.round(n);
+                }
+                doc.markModified('followers');
+                doc.totalFollowers =
+                    (Number(doc.followers.instagram) || 0) +
+                    (Number(doc.followers.tiktok) || 0) +
+                    (Number(doc.followers.youtube) || 0) +
+                    (Number(doc.followers.twitter) || 0);
+            }
+
             if (body.status && ['active', 'pending', 'verified', 'suspended'].includes(body.status)) {
                 doc.status = body.status;
+            }
+            if (
+                body.identityVerificationStatus &&
+                ['pending', 'approved', 'rejected'].includes(body.identityVerificationStatus)
+            ) {
+                doc.identityVerificationStatus = body.identityVerificationStatus;
             }
 
             if (body.activationStatus && ACTIVATION_STATUSES.includes(body.activationStatus)) {
@@ -649,10 +1237,11 @@ class AdminCrmController {
 
             const ids = influencers.map((d) => String(d._id));
             const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
-            const [enrichmentMap, installAgg, outreachDocs] = await Promise.all([
+            const [enrichmentMap, installAgg, outreachDocs, pendingAppsMap] = await Promise.all([
                 buildMarketplaceListEnrichmentMap(ids),
                 aggregateInstallCountsByInfluencer(ids),
                 InfluencerCrmOutreach.find({ influencerId: { $in: oids } }).lean(),
+                buildPendingApplicationsMap(ids),
             ]);
             const outreachMap = new Map(
                 outreachDocs.map((o) => [String(o.influencerId), serializeOutreach(o)]),
@@ -708,6 +1297,7 @@ class AdminCrmController {
                     profilePublicUrl: outreach?.profilePublicUrl || '',
                     publicSlug: outreach?.publicSlug || slug,
                     updatedAt: inf.updatedAt ? new Date(inf.updatedAt).toISOString() : null,
+                    ...pendingFieldsForCard(pendingAppsMap, infId),
                 });
             }
 
@@ -894,13 +1484,14 @@ class AdminCrmController {
             const filteredIds = influencers.map((d) => String(d._id));
             const filteredOids = filteredIds.map((id) => new mongoose.Types.ObjectId(id));
 
-            const [enrichmentMap, installAgg, outreachDocs, monetizationDocs, liveActivityMap] =
+            const [enrichmentMap, installAgg, outreachDocs, monetizationDocs, liveActivityMap, pendingAppsMap] =
                 await Promise.all([
                     buildMarketplaceListEnrichmentMap(filteredIds),
                     aggregateInstallCountsByInfluencer(filteredIds),
                     InfluencerCrmOutreach.find({ influencerId: { $in: filteredOids } }).lean(),
                     InfluencerCrmMonetization.find({ influencerId: { $in: filteredOids } }).lean(),
                     buildLiveActivityBatch(filteredIds, { recentPerInfluencer: 3 }),
+                    buildPendingApplicationsMap(filteredIds),
                 ]);
 
             const outreachMap = new Map(
@@ -981,6 +1572,7 @@ class AdminCrmController {
                     publicSlug: outreach?.publicSlug || slug,
                     profilePublicUrl: outreach?.profilePublicUrl || '',
                     updatedAt: inf.updatedAt ? new Date(inf.updatedAt).toISOString() : null,
+                    ...pendingFieldsForCard(pendingAppsMap, infId),
                 });
             }
 

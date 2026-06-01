@@ -350,7 +350,10 @@ export default function PromotionsMarketplace() {
   const handleApplicationSubmit = async (applicationData: ApplicationData) => {
     try {
       await submitPromotionApplication(applicationData);
-      setApplicationFeedback({ ok: true, text: 'Tu aplicación fue enviada. La marca podrá revisarla en su panel.' });
+      setApplicationFeedback({
+        ok: true,
+        text: 'Tu aplicación fue enviada. La marca la revisa en su panel; el equipo puede aceptarla en el CRM → Solicitudes de promoción.',
+      });
     } catch (e) {
       setApplicationFeedback({
         ok: false,

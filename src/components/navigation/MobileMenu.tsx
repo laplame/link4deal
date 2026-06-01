@@ -18,6 +18,14 @@ import {
 } from 'lucide-react';
 import { MobileMenuButton } from './MobileMenuButton';
 import { useAuth } from '../../context/AuthContext';
+import {
+  getAccountHref,
+  getAccountLabel,
+  getPublishNavItems,
+  getRoleWorkspaceItems,
+  SHARED_STORE_ROUTE,
+  shouldShowJoinNav,
+} from '../../config/roleNavigation';
 
 interface Props {
   isOpen: boolean;
@@ -30,20 +38,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function MobileMenu({ isOpen, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, logout, primaryRole } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
 
-  const accountHref =
-    user?.isSuperAdmin === true || user?.isPlatformSuperuser === true
-      ? '/dashboard/suite'
-      : primaryRole === 'influencer'
-        ? '/dashboard/influencer'
-        : primaryRole === 'brand'
-          ? '/dashboard/brand'
-          : primaryRole === 'agency'
-            ? '/dashboard/agency'
-            : primaryRole === 'admin' || primaryRole === 'moderator'
-              ? '/admin'
-              : '/dashboard';
+  const accountHref = getAccountHref(user);
+  const accountLabel = getAccountLabel(user);
+  const workspaceItems = user ? getRoleWorkspaceItems(user) : [];
+  const publishItems = getPublishNavItems(user, isAuthenticated);
+  const showJoin = shouldShowJoinNav(isAuthenticated);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -97,11 +98,19 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             {isAuthenticated && user ? (
               <>
                 <div className="text-gray-300 text-sm mb-3 px-1">Hola, {user.firstName}</div>
-                <MobileMenuButton to={accountHref} onClick={onClose}>
-                  <span className="flex items-center gap-2">
-                    <User className="h-4 w-4" /> Mi cuenta
-                  </span>
-                </MobileMenuButton>
+                <SectionLabel>{accountLabel}</SectionLabel>
+                {workspaceItems.map((item) => (
+                  <MobileMenuButton key={`${item.to}-${item.label}`} to={item.to} onClick={onClose}>
+                    {item.label}
+                  </MobileMenuButton>
+                ))}
+                {workspaceItems.length === 0 ? (
+                  <MobileMenuButton to={accountHref} onClick={onClose}>
+                    <span className="flex items-center gap-2">
+                      <User className="h-4 w-4" /> {accountLabel}
+                    </span>
+                  </MobileMenuButton>
+                ) : null}
                 <MobileMenuButton to="/cart" onClick={onClose}>
                   <span className="flex items-center gap-2">
                     <ShoppingCart className="h-4 w-4" /> Carrito
@@ -151,9 +160,9 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             </MobileMenuButton>
 
             <SectionLabel>Explorar</SectionLabel>
-            <MobileMenuButton to="/marketplace" onClick={onClose}>
+            <MobileMenuButton to={SHARED_STORE_ROUTE} onClick={onClose}>
               <span className="flex items-center gap-2">
-                <Tag className="h-4 w-4" /> Ofertas
+                <Store className="h-4 w-4" /> Tienda
               </span>
             </MobileMenuButton>
             <MobileMenuButton to="/categories" onClick={onClose}>
@@ -194,21 +203,28 @@ export function MobileMenu({ isOpen, onClose }: Props) {
               </span>
             </MobileMenuButton>
 
-            <SectionLabel>Publicar</SectionLabel>
-            <MobileMenuButton to="/create-promotion" onClick={onClose}>
-              Crear promoción
-            </MobileMenuButton>
-            <MobileMenuButton to="/quick-promotion" onClick={onClose}>
-              Oferta rápida
-            </MobileMenuButton>
+            {publishItems.length > 0 ? (
+              <>
+                <SectionLabel>Publicar</SectionLabel>
+                {publishItems.map((item) => (
+                  <MobileMenuButton key={item.to} to={item.to} onClick={onClose}>
+                    {item.label}
+                  </MobileMenuButton>
+                ))}
+              </>
+            ) : null}
 
-            <SectionLabel>Únete</SectionLabel>
-            <MobileMenuButton to="/brand-setup" onClick={onClose}>
-              Registrar marca
-            </MobileMenuButton>
-            <MobileMenuButton to="/influencer-setup" onClick={onClose}>
-              Ser influencer
-            </MobileMenuButton>
+            {showJoin ? (
+              <>
+                <SectionLabel>Únete</SectionLabel>
+                <MobileMenuButton to="/brand-setup" onClick={onClose}>
+                  Registrar marca
+                </MobileMenuButton>
+                <MobileMenuButton to="/influencer-setup" onClick={onClose}>
+                  Ser influencer
+                </MobileMenuButton>
+              </>
+            ) : null}
           </nav>
         </div>
       </div>

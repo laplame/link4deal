@@ -1376,7 +1376,12 @@ class PromotionController {
             if (appendedImages.length > 0) {
                 const prevImages = Array.isArray(existingPromotion.images) ? existingPromotion.images : [];
                 const asPlain = prevImages.map((img) => (img && img.toObject ? img.toObject() : { ...img }));
-                updatePayload.images = [...asPlain, ...appendedImages];
+                const newPromo = appendedImages.filter((img) => img.imageRole !== 'terms');
+                const newTerms = appendedImages.filter((img) => img.imageRole === 'terms');
+                const prevPromo = asPlain.filter((img) => img.imageRole !== 'terms');
+                const prevTerms = asPlain.filter((img) => img.imageRole === 'terms');
+                // Nuevas fotos promocionales al inicio (portada al editar); T&C al final.
+                updatePayload.images = [...newPromo, ...prevPromo, ...prevTerms, ...newTerms];
             }
 
             const updatedPromotion = await Promotion.findByIdAndUpdate(

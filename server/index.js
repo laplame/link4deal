@@ -102,8 +102,9 @@ const generalLimiter = rateLimit({
     legacyHeaders: false,
     /** Listado público/cron de redenciones: va por polling (~cada pocos s); no debe compartir el mismo cubo ni agotarlo. */
     skip: (req) => {
-        if (req.method !== 'GET') return false;
         const base = (req.originalUrl || req.url || '').split('?')[0];
+        if (base === '/api/instagram/webhook' || base.endsWith('/instagram/webhook')) return true;
+        if (req.method !== 'GET') return false;
         if (base === '/api/discount-qr/redemptions/recent' || base.endsWith('/discount-qr/redemptions/recent')) return true;
         if (base === '/api/discount-qr/coupons/dashboard' || base.endsWith('/discount-qr/coupons/dashboard')) return true;
         if (base === '/api/discount-qr/stats/luxae-usd' || base.endsWith('/discount-qr/stats/luxae-usd')) return true;
@@ -199,6 +200,9 @@ if (fsSync.existsSync(legacyPromotionsDir)) {
 }
 app.use('/uploads', express.static(uploadsPath));
 
+console.log(`📁 Uploads estáticos: ${uploadsPath} → /uploads/`);
+console.log(`📁 Promociones: ${promotionsPath} → /uploads/promotions/`);
+
 // Servir archivos públicos (/public/...) y alias /assets (APK y estáticos en public/assets/)
 app.use('/public', express.static(path.join(__dirname, '../public')));
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
@@ -226,6 +230,11 @@ app.get('/health', async (req, res) => {
                     host: dbStatus.host || 'N/A'
                 },
                 cloudinary: cloudinaryStatus,
+                uploads: {
+                    uploadDir: uploadsPath,
+                    promotionsDir: promotionsPath,
+                    hint: 'No versionar server/uploads en git; usar UPLOAD_PATH fuera del repo en VPS',
+                },
                 server: {
                     uptime: process.uptime(),
                     memory: {
@@ -297,6 +306,10 @@ app.use('/api/bids', bidRoutes);
 // Discount QR: límite estricto aplicado dentro del router solo a creación / verify / redeem (no al listado "en vivo")
 app.use('/api/discount-qr', discountQrRoutes);
 app.use('/api/analyze-profile-image', analyzeProfileRoutes);
+
+const promoFlyersRoutes = require('./routes/promoFlyers');
+app.use('/api/promo-flyers', promoFlyersRoutes);
+
 app.use('/api/kyc/whatsapp', strictLimiter, kycWhatsappRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
 
@@ -307,6 +320,15 @@ app.use('/api/app-downloads', appDownloadsRoutes);
 
 const adminCrmRoutes = require('./routes/adminCrm');
 app.use('/api/admin/crm', adminCrmRoutes);
+
+const adminOutboundRoutes = require('./routes/adminOutbound');
+app.use('/api/admin/outbound', adminOutboundRoutes);
+
+const instagramRoutes = require('./routes/instagram');
+app.use('/api/instagram', instagramRoutes);
+
+const adminInstagramRoutes = require('./routes/adminInstagram');
+app.use('/api/admin/instagram', adminInstagramRoutes);
 
 const crmTrackRoutes = require('./routes/crmTrack');
 app.use('/api/crm', crmTrackRoutes);

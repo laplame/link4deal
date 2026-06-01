@@ -8,8 +8,11 @@ export async function submitPromotionApplication(data: ApplicationData): Promise
   for (const file of portfolio) {
     fd.append('portfolio', file);
   }
+  // Si hay sesión, el backend vincula el perfil de influencer automáticamente.
+  const token = localStorage.getItem('auth_token');
   const res = await fetch(apiUrl('/api/promotion-applications'), {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: fd,
   });
   const text = await res.text();

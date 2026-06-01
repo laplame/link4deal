@@ -2,9 +2,10 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { isPlatformSuperuserEmail } = require('../utils/platformSuperuser');
 
 /**
- * JWT + User.isSuperAdmin (panel CRM / contadores restringidos).
+ * JWT + super admin (flag o email en PLATFORM_SUPERUSER_EMAILS).
  */
 async function requireSuperAdmin(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -18,7 +19,8 @@ async function requireSuperAdmin(req, res, next) {
         if (!user) {
             return res.status(401).json({ success: false, message: 'Usuario no encontrado' });
         }
-        if (!user.isSuperAdmin) {
+        const allowed = user.isSuperAdmin === true || isPlatformSuperuserEmail(user.email);
+        if (!allowed) {
             return res.status(403).json({ success: false, message: 'Acceso denegado. Solo super admin.' });
         }
         req.user = user;

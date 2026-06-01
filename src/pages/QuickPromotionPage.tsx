@@ -27,6 +27,7 @@ import PromotionOptionalAttributionSection, {
 } from '../components/PromotionOptionalAttributionSection';
 import type { BizneShop } from '../components/BizneShopCard';
 import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
+import PromoFlyerStudio from '../components/promo/PromoFlyerStudio';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
@@ -224,6 +225,8 @@ export default function QuickPromotionPage() {
         redemptionLocations: []
     });
 
+    /** Tab activo: crear promoción o generar flyer con IA. */
+    const [activeTab, setActiveTab] = useState<'promotion' | 'flyer'>('promotion');
     const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [termsImagePreviews, setTermsImagePreviews] = useState<string[]>([]);
@@ -834,10 +837,39 @@ export default function QuickPromotionPage() {
                             Modo Avanzado →
                         </Link>
                     </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('promotion')}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                                activeTab === 'promotion'
+                                    ? 'bg-violet-600 text-white border-violet-400/40 shadow-lg shadow-violet-900/30'
+                                    : 'bg-gray-900/60 text-gray-300 border-white/10 hover:bg-gray-800/60'
+                            }`}
+                        >
+                            Crear promoción
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('flyer')}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border inline-flex items-center gap-1.5 ${
+                                activeTab === 'flyer'
+                                    ? 'bg-fuchsia-600 text-white border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/30'
+                                    : 'bg-gray-900/60 text-gray-300 border-white/10 hover:bg-gray-800/60'
+                            }`}
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            Flyer con IA
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div className="max-w-4xl mx-auto px-4 py-8">
+                {activeTab === 'flyer' ? (
+                    <PromoFlyerStudio />
+                ) : (
+                <>
                 <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 mb-6 shadow-lg shadow-black/20">
                     <div className="flex items-center gap-2 mb-4">
                         <Sparkles className="h-5 w-5 text-amber-400 shrink-0" />
@@ -1896,6 +1928,8 @@ export default function QuickPromotionPage() {
                         </div>
                     </div>
                 </form>
+                </>
+                )}
             </div>
         </div>
     );

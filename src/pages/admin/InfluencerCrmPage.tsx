@@ -20,6 +20,12 @@ import {
   DollarSign,
   RefreshCw,
   Radio,
+  Instagram,
+  Inbox,
+  CheckCircle,
+  XCircle,
+  Zap,
+  Link2,
 } from 'lucide-react';
 import CrmPipelineBoard from '../../components/admin/CrmPipelineBoard';
 import CrmPagination from '../../components/admin/CrmPagination';
@@ -36,6 +42,18 @@ import {
   fetchCrmStats,
   fetchCrmInfluencers,
   fetchCrmInfluencerDetail,
+  fetchCrmRedirectApplications,
+  fetchCrmPromotionApplications,
+  fetchCrmInfluencerCategories,
+  bulkApplyCrmPromotion,
+  searchPromotionsForBulk,
+  approveCrmPromotionApplication,
+  rejectCrmPromotionApplication,
+  assignCrmRedirectPromotion,
+  type CrmRedirectApplicationsPack,
+  type CrmPromotionApplicationRow,
+  type CrmApplicationsPagination,
+  type PromotionPickItem,
   patchCrmInfluencer,
   patchCrmOutreach,
   reviewCrmIdentityVerification,
@@ -50,6 +68,7 @@ import {
   CRM_MONETIZATION_STAGES,
   type CrmInfluencerRow,
   type CrmInfluencerDetail,
+  type CrmRedirectPromotionApplication,
   type CrmStats,
   type CrmPipelineBoardData,
   type CrmInfluencerLiveActivity,
@@ -135,16 +154,16 @@ export default function InfluencerCrmPage() {
   const [termsFilter, setTermsFilter] = useState('');
   const [appFilter, setAppFilter] = useState('');
   const [identityFilter, setIdentityFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>(() => {
+  const [viewMode, setViewMode] = useState<'list' | 'pipeline' | 'applications'>(() => {
     try {
       const saved = localStorage.getItem('crm-influencer-view');
-      return saved === 'list' || saved === 'pipeline' ? saved : 'pipeline';
+      return saved === 'list' || saved === 'pipeline' || saved === 'applications' ? saved : 'pipeline';
     } catch {
       return 'pipeline';
     }
   });
 
-  const setViewModePersisted = (mode: 'list' | 'pipeline') => {
+  const setViewModePersisted = (mode: 'list' | 'pipeline' | 'applications') => {
     setViewMode(mode);
     try {
       localStorage.setItem('crm-influencer-view', mode);
@@ -185,6 +204,64 @@ export default function InfluencerCrmPage() {
   const [liveActivityLoading, setLiveActivityLoading] = useState(false);
   const [liveAutoRefresh, setLiveAutoRefresh] = useState(true);
   const [boardLastRefreshedAt, setBoardLastRefreshedAt] = useState<Date | null>(null);
+
+  const [redirectPack, setRedirectPack] = useState<CrmRedirectApplicationsPack | null>(null);
+  const [redirectAppsLoading, setRedirectAppsLoading] = useState(false);
+  const [redirectAppsApprovingId, setRedirectAppsApprovingId] = useState<string | null>(null);
+  const [redirectAssigningId, setRedirectAssigningId] = useState<string | null>(null);
+  const [redirectAssignPromotionId, setRedirectAssignPromotionId] = useState('');
+
+  const [appsRows, setAppsRows] = useState<CrmPromotionApplicationRow[]>([]);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [appsPendingCount, setAppsPendingCount] = useState(0);
+  const [appsUnlinkedCount, setAppsUnlinkedCount] = useState(0);
+  const [appsStatusFilter, setAppsStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>(
+    'pending',
+  );
+  const [appsUnlinkedOnly, setAppsUnlinkedOnly] = useState(false);
+  const [appsSearch, setAppsSearch] = useState('');
+  const [appsSearchInput, setAppsSearchInput] = useState('');
+  const [appsPage, setAppsPage] = useState(1);
+  const [appsLimit, setAppsLimit] = useState(25);
+  const [appsPagination, setAppsPagination] = useState<CrmApplicationsPagination | null>(null);
+  const [appsActionId, setAppsActionId] = useState<string | null>(null);
+  const [appsAssignInfluencerId, setAppsAssignInfluencerId] = useState<Record<string, string>>({});
+
+  // Atajos de aplicación masiva
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkPromoSearch, setBulkPromoSearch] = useState('');
+  const [bulkPromoResults, setBulkPromoResults] = useState<PromotionPickItem[]>([]);
+  const [bulkPromoSearching, setBulkPromoSearching] = useState(false);
+  const [bulkPromo, setBulkPromo] = useState<PromotionPickItem | null>(null);
+  const [bulkScope, setBulkScope] = useState<'all' | 'category'>('all');
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkCategories, setBulkCategories] = useState<string[]>([]);
+  const [bulkApprove, setBulkApprove] = useState(true);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+
+  const loadApplications = useCallback(async () => {
+    setAppsLoading(true);
+    setError(null);
+    try {
+      const { rows, pendingCount, unlinkedCount, pagination } = await fetchCrmPromotionApplications({
+        status: appsStatusFilter,
+        search: appsSearch,
+        unlinkedOnly: appsUnlinkedOnly,
+        page: appsPage,
+        limit: appsLimit,
+      });
+      setAppsRows(rows);
+      setAppsPendingCount(pendingCount);
+      setAppsUnlinkedCount(unlinkedCount);
+      setAppsPagination(pagination);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar solicitudes');
+      setAppsRows([]);
+    } finally {
+      setAppsLoading(false);
+    }
+  }, [appsStatusFilter, appsSearch, appsUnlinkedOnly, appsPage, appsLimit]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -300,10 +377,30 @@ export default function InfluencerCrmPage() {
 
   useEffect(() => {
     if (!isSuperAdmin || !unlocked) return;
-    if (viewMode === 'list') loadList();
+    if (viewMode === 'applications') loadApplications();
+    else if (viewMode === 'list') loadList();
     else if (pipelineTab === 'monetization') loadMonetizationBoard();
     else loadPipeline();
-  }, [isSuperAdmin, unlocked, viewMode, pipelineTab, page, listLimit, boardPage, boardLimit, loadList, loadPipeline, loadMonetizationBoard]);
+  }, [isSuperAdmin, unlocked, viewMode, pipelineTab, page, listLimit, boardPage, boardLimit, loadList, loadPipeline, loadMonetizationBoard, loadApplications]);
+
+  // Contador de solicitudes pendientes para el badge (independiente de la vista activa).
+  useEffect(() => {
+    if (!isSuperAdmin || !unlocked) return;
+    let cancelled = false;
+    fetchCrmPromotionApplications({ status: 'pending', limit: 5 })
+      .then(({ pendingCount, unlinkedCount }) => {
+        if (!cancelled) {
+          setAppsPendingCount(pendingCount);
+          setAppsUnlinkedCount(unlinkedCount);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin, unlocked]);
 
   const handleMovePipelineCard = async (influencerId: string, pipelineStage: string) => {
     setPipelineMovingId(influencerId);
@@ -372,10 +469,14 @@ export default function InfluencerCrmPage() {
     if (!selectedId || !unlocked) {
       setDetail(null);
       setLiveActivity(null);
+      setRedirectPack(null);
+      setRedirectAppsLoading(false);
       return;
     }
     let cancelled = false;
     setDetailLoading(true);
+    setRedirectAppsLoading(true);
+    setRedirectPack(null);
     void refreshLiveActivity(selectedId);
     Promise.all([fetchCrmInfluencerDetail(selectedId), fetchCrmMonetization(selectedId)])
       .then(([d, m]) => {
@@ -400,10 +501,171 @@ export default function InfluencerCrmPage() {
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
       });
+
+    fetchCrmRedirectApplications(selectedId)
+      .then((pack) => {
+        if (cancelled) return;
+        setRedirectPack(pack);
+        setRedirectAssignPromotionId(pack.assignable[0]?.id || '');
+      })
+      .catch(() => {
+        if (!cancelled) setRedirectPack(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRedirectAppsLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, [selectedId, unlocked, refreshLiveActivity]);
+
+  const reloadRedirectPack = async (influencerId: string) => {
+    const pack = await fetchCrmRedirectApplications(influencerId);
+    setRedirectPack(pack);
+    setRedirectAssignPromotionId((prev) => {
+      if (prev && pack.assignable.some((p) => p.id === prev)) return prev;
+      return pack.assignable[0]?.id || '';
+    });
+  };
+
+  const handleApprovePromotionApplication = async (influencerId: string, appId: string) => {
+    if (!influencerId || !appId) return;
+    setRedirectAppsApprovingId(appId);
+    setError(null);
+    try {
+      await approveCrmPromotionApplication(appId);
+      await reloadActiveBoard();
+      if (selectedId === influencerId) {
+        await reloadRedirectPack(influencerId);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aceptar la solicitud');
+    } finally {
+      setRedirectAppsApprovingId(null);
+    }
+  };
+
+  const handleApproveRedirectApp = async (appId: string) => {
+    if (!selectedId) return;
+    if (!window.confirm('¿Aceptar esta solicitud de promoción para el influencer?')) return;
+    await handleApprovePromotionApplication(selectedId, appId);
+  };
+
+  const handleAcceptApplicationRow = async (row: CrmPromotionApplicationRow) => {
+    const extraId = (appsAssignInfluencerId[row.id] || '').trim();
+    if (!row.influencerApplicant && !/^[a-f0-9]{24}$/i.test(extraId)) {
+      setError('Esta solicitud no tiene influencer vinculado. Pega el ID (24 caracteres) antes de aceptar.');
+      return;
+    }
+    if (!window.confirm(`¿Aceptar la solicitud para «${row.promotion?.title || 'promoción'}»?`)) return;
+    setAppsActionId(row.id);
+    setError(null);
+    try {
+      await approveCrmPromotionApplication(row.id, extraId ? { influencerProfileId: extraId } : undefined);
+      await loadApplications();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aceptar');
+    } finally {
+      setAppsActionId(null);
+    }
+  };
+
+  const handleRejectApplicationRow = async (row: CrmPromotionApplicationRow) => {
+    if (!window.confirm('¿Rechazar esta solicitud?')) return;
+    setAppsActionId(row.id);
+    setError(null);
+    try {
+      await rejectCrmPromotionApplication(row.id);
+      await loadApplications();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo rechazar');
+    } finally {
+      setAppsActionId(null);
+    }
+  };
+
+  const submitAppsSearch = () => {
+    setAppsPage(1);
+    setAppsSearch(appsSearchInput.trim());
+  };
+
+  const openBulkPanel = async () => {
+    setBulkOpen((prev) => !prev);
+    setBulkResult(null);
+    if (bulkCategories.length === 0) {
+      try {
+        const cats = await fetchCrmInfluencerCategories();
+        setBulkCategories(cats);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const runBulkPromoSearch = async () => {
+    setBulkPromoSearching(true);
+    try {
+      const results = await searchPromotionsForBulk(bulkPromoSearch);
+      setBulkPromoResults(results);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo buscar promociones');
+    } finally {
+      setBulkPromoSearching(false);
+    }
+  };
+
+  const handleRunBulkApply = async () => {
+    if (!bulkPromo) {
+      setError('Selecciona una promoción primero.');
+      return;
+    }
+    if (bulkScope === 'category' && !bulkCategory) {
+      setError('Selecciona una categoría.');
+      return;
+    }
+    const scopeLabel = bulkScope === 'all' ? 'TODOS los influencers' : `la categoría «${bulkCategory}»`;
+    if (
+      !window.confirm(
+        `¿Aplicar «${bulkPromo.title}» a ${scopeLabel}? Se crearán solicitudes ${
+          bulkApprove ? 'ya aprobadas' : 'pendientes'
+        }.`,
+      )
+    )
+      return;
+    setBulkRunning(true);
+    setBulkResult(null);
+    setError(null);
+    try {
+      const res = await bulkApplyCrmPromotion({
+        promotionId: bulkPromo.id,
+        scope: bulkScope,
+        category: bulkScope === 'category' ? bulkCategory : undefined,
+        approve: bulkApprove,
+      });
+      setBulkResult(
+        `Listo: ${res.created} creada(s), ${res.skipped} ya existían (de ${res.matched} influencers).`,
+      );
+      await loadApplications();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aplicar masivamente');
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleAssignRedirectPromotion = async () => {
+    if (!selectedId || !redirectAssignPromotionId) return;
+    if (!window.confirm('¿Asignar y aprobar esta promoción de redirección sin solicitud del influencer?')) return;
+    setRedirectAssigningId(redirectAssignPromotionId);
+    try {
+      await assignCrmRedirectPromotion(selectedId, redirectAssignPromotionId);
+      await reloadRedirectPack(selectedId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo asignar');
+    } finally {
+      setRedirectAssigningId(null);
+    }
+  };
 
   useEffect(() => {
     if (!unlocked || viewMode !== 'pipeline' || pipelineTab !== 'monetization' || !liveAutoRefresh) {
@@ -540,24 +802,48 @@ export default function InfluencerCrmPage() {
       <header className="bg-slate-900 text-white border-b border-slate-800">
         <div className="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/admin" className="p-2 rounded-lg hover:bg-slate-800">
+            <Link to="/admin/crm" className="p-2 rounded-lg hover:bg-slate-800">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold">CRM Influencers</h1>
+              <h1 className="text-xl font-bold">CRM · Pipeline</h1>
               <p className="text-xs text-slate-400">Activación, datos, términos y apps (DameCodigo + BizneAI)</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              clearAdminPinUnlockSession();
-              setUnlocked(false);
-            }}
-            className="text-xs text-slate-400 hover:text-white"
-          >
-            Cerrar sesión PIN
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href="/admin/crm/applications?status=pending"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 hidden sm:inline-flex items-center gap-1"
+            >
+              <FileCheck className="w-3.5 h-3.5" />
+              Solicitudes promo
+            </a>
+            <Link
+              to="/admin/crm/influencers"
+              className="text-xs px-3 py-1.5 rounded-lg bg-violet-600/90 hover:bg-violet-500 hidden sm:inline-flex"
+            >
+              Perfiles y fotos
+            </Link>
+            <Link
+              to="/admin/crm/instagram-leads"
+              className="text-xs px-3 py-1.5 rounded-lg bg-pink-600/90 hover:bg-pink-500 flex items-center gap-1"
+            >
+              <Instagram className="w-3.5 h-3.5" />
+              Leads Instagram
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                clearAdminPinUnlockSession();
+                setUnlocked(false);
+              }}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Cerrar sesión PIN
+            </button>
+          </div>
         </div>
       </header>
 
@@ -624,13 +910,34 @@ export default function InfluencerCrmPage() {
                 <List className="w-4 h-4" />
                 Lista detallada
               </button>
+              <button
+                type="button"
+                onClick={() => setViewModePersisted('applications')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium ${
+                  viewMode === 'applications' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Inbox className="w-4 h-4" />
+                Aplicaciones
+                {appsPendingCount > 0 && (
+                  <span
+                    className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      viewMode === 'applications' ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {appsPendingCount}
+                  </span>
+                )}
+              </button>
             </div>
             <p className="text-xs text-gray-500 mt-1.5 max-w-xl">
               {viewMode === 'pipeline'
                 ? pipelineTab === 'monetization'
                   ? 'Post-onboarding: campañas, canjes y abonos — solo cuentas con activación completada.'
                   : 'Activación inicial: outreach, datos, app y términos — arrastra fichas entre columnas.'
-                : 'Tabla con todas las columnas — clic en fila para abrir la ficha lateral.'}
+                : viewMode === 'applications'
+                  ? 'Solicitudes de promoción enviadas desde la tienda — acéptalas o recházalas aquí mismo.'
+                  : 'Tabla con todas las columnas — clic en fila para abrir la ficha lateral.'}
             </p>
             {viewMode === 'pipeline' && (
               <div className="inline-flex rounded-lg border border-emerald-200 bg-emerald-50/50 p-1 mt-2">
@@ -665,6 +972,16 @@ export default function InfluencerCrmPage() {
               className="text-sm text-purple-700 hover:underline disabled:opacity-50 shrink-0"
             >
               Actualizar tablero
+            </button>
+          )}
+          {viewMode === 'applications' && (
+            <button
+              type="button"
+              onClick={() => loadApplications()}
+              disabled={appsLoading}
+              className="text-sm text-emerald-700 hover:underline disabled:opacity-50 shrink-0"
+            >
+              Actualizar solicitudes
             </button>
           )}
         </div>
@@ -822,6 +1139,8 @@ export default function InfluencerCrmPage() {
                   onApplySuggestedStage={
                     pipelineTab === 'monetization' ? handleApplySuggestedStage : undefined
                   }
+                  onApproveApplication={handleApprovePromotionApplication}
+                  approvingApplicationId={redirectAppsApprovingId}
                 />
                 {boardPagination && (
                   <CrmPagination
@@ -945,6 +1264,367 @@ export default function InfluencerCrmPage() {
                     setPage(1);
                   }}
                 />
+              </div>
+            ) : viewMode === 'applications' ? (
+              <div className="bg-white rounded-xl border shadow-sm p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    Solicitudes de promoción
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex rounded-lg border border-slate-200 p-1 text-xs">
+                      {(['pending', 'approved', 'rejected', 'all'] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            setAppsPage(1);
+                            setAppsStatusFilter(s);
+                          }}
+                          className={`px-2.5 py-1 rounded-md font-medium capitalize ${
+                            appsStatusFilter === s ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {s === 'pending'
+                            ? 'Pendientes'
+                            : s === 'approved'
+                              ? 'Aceptadas'
+                              : s === 'rejected'
+                                ? 'Rechazadas'
+                                : 'Todas'}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openBulkPanel}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      Aplicar a varios
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={appsSearchInput}
+                      onChange={(e) => setAppsSearchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') submitAppsSearch();
+                      }}
+                      placeholder="Buscar por promoción, marca o influencer…"
+                      className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={submitAppsSearch}
+                    className="px-3 py-2 rounded-lg border text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Buscar
+                  </button>
+                  {appsSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppsSearchInput('');
+                        setAppsSearch('');
+                        setAppsPage(1);
+                      }}
+                      className="px-3 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppsPage(1);
+                      setAppsUnlinkedOnly((v) => !v);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium ${
+                      appsUnlinkedOnly
+                        ? 'bg-amber-500 text-white border-amber-500'
+                        : 'text-amber-700 border-amber-300 hover:bg-amber-50'
+                    }`}
+                    title="Mostrar solo solicitudes sin influencer vinculado"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    Sin vincular
+                    {appsUnlinkedCount > 0 && (
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          appsUnlinkedOnly ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {appsUnlinkedCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {bulkOpen && (
+                  <div className="mb-4 rounded-xl border-2 border-purple-200 bg-purple-50/50 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-purple-700" />
+                      <p className="text-sm font-semibold text-purple-900">
+                        Aplicar una promoción a varios influencers
+                      </p>
+                    </div>
+
+                    {!bulkPromo ? (
+                      <div>
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={bulkPromoSearch}
+                            onChange={(e) => setBulkPromoSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') runBulkPromoSearch();
+                            }}
+                            placeholder="Buscar promoción por título o marca…"
+                            className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={runBulkPromoSearch}
+                            disabled={bulkPromoSearching}
+                            className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm disabled:opacity-50"
+                          >
+                            {bulkPromoSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
+                          </button>
+                        </div>
+                        {bulkPromoResults.length > 0 && (
+                          <ul className="max-h-48 overflow-y-auto rounded-lg border bg-white divide-y">
+                            {bulkPromoResults.map((p) => (
+                              <li key={p.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => setBulkPromo(p)}
+                                  className="w-full text-left px-3 py-2 hover:bg-purple-50 text-sm"
+                                >
+                                  <span className="font-medium text-gray-900">{p.title}</span>
+                                  {p.brand && <span className="text-gray-500"> · {p.brand}</span>}
+                                  {p.category && (
+                                    <span className="text-[11px] text-gray-400"> ({p.category})</span>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2 bg-white rounded-lg border px-3 py-2">
+                          <span className="text-sm text-gray-800">
+                            <span className="font-medium">{bulkPromo.title}</span>
+                            {bulkPromo.brand && <span className="text-gray-500"> · {bulkPromo.brand}</span>}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setBulkPromo(null)}
+                            className="text-xs text-purple-700 hover:underline"
+                          >
+                            Cambiar
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="inline-flex items-center gap-1.5 text-sm">
+                            <input
+                              type="radio"
+                              name="bulkScope"
+                              checked={bulkScope === 'all'}
+                              onChange={() => setBulkScope('all')}
+                            />
+                            Todos los influencers
+                          </label>
+                          <label className="inline-flex items-center gap-1.5 text-sm">
+                            <input
+                              type="radio"
+                              name="bulkScope"
+                              checked={bulkScope === 'category'}
+                              onChange={() => setBulkScope('category')}
+                            />
+                            Por categoría
+                          </label>
+                          {bulkScope === 'category' && (
+                            <select
+                              value={bulkCategory}
+                              onChange={(e) => setBulkCategory(e.target.value)}
+                              className="border rounded-lg px-2 py-1.5 text-sm bg-white"
+                            >
+                              <option value="">Selecciona…</option>
+                              {bulkCategories.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        <label className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={bulkApprove}
+                            onChange={(e) => setBulkApprove(e.target.checked)}
+                            className="rounded border-gray-300 text-emerald-600"
+                          />
+                          Crear ya aprobadas (genera códigos). Si lo desmarcas, quedan pendientes.
+                        </label>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRunBulkApply}
+                            disabled={bulkRunning}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium disabled:opacity-50"
+                          >
+                            {bulkRunning ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Zap className="w-4 h-4" />
+                            )}
+                            Aplicar ahora
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBulkOpen(false)}
+                            className="px-3 py-2 rounded-lg border text-sm text-gray-600"
+                          >
+                            Cerrar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {bulkResult && (
+                      <p className="mt-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                        {bulkResult}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {appsLoading ? (
+                  <div className="py-16 text-center text-gray-500">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                    Cargando solicitudes…
+                  </div>
+                ) : appsRows.length === 0 ? (
+                  <div className="py-16 text-center text-gray-400">
+                    <Inbox className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                    No hay solicitudes {appsStatusFilter === 'all' ? '' : 'en este estado'}.
+                  </div>
+                ) : (
+                  <ul className="divide-y">
+                    {appsRows.map((row) => {
+                      const busy = appsActionId === row.id;
+                      const needsId = !row.influencerApplicant;
+                      return (
+                        <li key={row.id} className="py-3 flex flex-col gap-2">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-900 truncate">
+                                {row.promotion?.title || 'Promoción'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {row.influencerApplicant
+                                  ? row.influencerApplicant.name ||
+                                    row.influencerApplicant.username ||
+                                    'Influencer'
+                                  : 'Solicitante sin perfil vinculado'}
+                                {row.promotion?.brand && (
+                                  <span className="text-gray-400"> · {row.promotion.brand}</span>
+                                )}
+                              </p>
+                              {row.createdAt && (
+                                <p className="text-[11px] text-gray-400 mt-0.5">
+                                  {new Date(row.createdAt).toLocaleString('es')}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded font-semibold capitalize ${
+                                  row.status === 'pending'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : row.status === 'approved'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-red-100 text-red-700'
+                                }`}
+                              >
+                                {row.status}
+                              </span>
+                              {row.status === 'pending' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => handleAcceptApplicationRow(row)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium disabled:opacity-50"
+                                  >
+                                    {busy ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                    )}
+                                    Aceptar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => handleRejectApplicationRow(row)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-300 text-red-700 text-xs font-medium disabled:opacity-50"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    Rechazar
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {row.status === 'pending' && needsId && (
+                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                              <span className="text-[11px] text-amber-800 shrink-0">
+                                Sin influencer vinculado — pega ID:
+                              </span>
+                              <input
+                                type="text"
+                                value={appsAssignInfluencerId[row.id] || ''}
+                                onChange={(e) =>
+                                  setAppsAssignInfluencerId((prev) => ({ ...prev, [row.id]: e.target.value }))
+                                }
+                                placeholder="ID del perfil de influencer (24 car.)"
+                                className="flex-1 text-xs border rounded px-2 py-1 bg-white"
+                              />
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {appsPagination && appsPagination.totalDocs > 0 && (
+                  <CrmPagination
+                    page={appsPagination.page}
+                    totalPages={appsPagination.totalPages}
+                    totalDocs={appsPagination.totalDocs}
+                    limit={appsPagination.limit}
+                    onPageChange={setAppsPage}
+                    onLimitChange={(n) => {
+                      setAppsLimit(n);
+                      setAppsPage(1);
+                    }}
+                    className="rounded-b-xl border -mx-4 -mb-4 mt-3"
+                  />
+                )}
               </div>
             ) : null}
           </div>
@@ -1110,6 +1790,167 @@ export default function InfluencerCrmPage() {
                       <span className="text-gray-500">Canjes / comisión:</span> {detail.redeemedCoupons} · $
                       {detail.totalEarnings?.toFixed?.(2) ?? detail.totalEarnings}
                     </p>
+                  </div>
+
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold text-gray-700 uppercase">
+                        Solicitudes de promoción (aplicar / aceptar)
+                      </p>
+                      <a
+                        href={
+                          selectedId
+                            ? `/admin/crm/applications?status=pending&influencerId=${encodeURIComponent(selectedId)}`
+                            : '/admin/crm/applications?status=pending'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-950 underline"
+                      >
+                        <FileCheck className="w-3.5 h-3.5" />
+                        Abrir panel completo (nueva pestaña)
+                      </a>
+                    </div>
+                    {redirectAppsLoading ? (
+                      <p className="text-xs text-gray-600 flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                        Cargando…
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-purple-200 bg-white p-3">
+                          <p className="text-[11px] font-semibold text-purple-900 uppercase mb-2">
+                            Asignar unilateralmente
+                          </p>
+                          {redirectPack && redirectPack.assignable.length > 0 ? (
+                            <div className="flex flex-wrap items-end gap-2">
+                              <label className="flex-1 min-w-[180px] text-xs">
+                                <span className="text-gray-600 block mb-1">Promoción activa (redirect)</span>
+                                <select
+                                  value={redirectAssignPromotionId}
+                                  onChange={(e) => setRedirectAssignPromotionId(e.target.value)}
+                                  className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                                >
+                                  {redirectPack.assignable.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.title || p.brand || p.id}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => void handleAssignRedirectPromotion()}
+                                disabled={
+                                  !redirectAssignPromotionId ||
+                                  redirectAssigningId === redirectAssignPromotionId
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+                              >
+                                {redirectAssigningId ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                                ) : (
+                                  <FileCheck className="w-3.5 h-3.5" aria-hidden />
+                                )}
+                                Asignar y aprobar
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-600">
+                              No hay promos redirect activas sin asignar (o ya están todas aprobadas para este
+                              influencer).
+                            </p>
+                          )}
+                        </div>
+
+                        {redirectPack && redirectPack.pending.length > 0 ? (
+                          <div>
+                            <p className="text-[11px] font-medium text-gray-700 mb-1">
+                              Pendientes (cupón o redirección URL)
+                            </p>
+                            <ul className="space-y-2">
+                              {redirectPack.pending.map((app) => (
+                                <li
+                                  key={app.id}
+                                  className="rounded-lg border border-amber-200 bg-white px-3 py-2"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-gray-900 truncate">
+                                        {app.promotion?.title || 'Promoción'}
+                                      </p>
+                                      {app.promotion?.redirectToUrl ? (
+                                        <a
+                                          href={app.promotion.redirectToUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[11px] text-purple-700 underline break-all mt-1 inline-block"
+                                        >
+                                          {app.promotion.redirectToUrl}
+                                        </a>
+                                      ) : null}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApproveRedirectApp(app.id)}
+                                      disabled={redirectAppsApprovingId === app.id}
+                                      className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                    >
+                                      {redirectAppsApprovingId === app.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                                      ) : (
+                                        <FileCheck className="w-3.5 h-3.5" aria-hidden />
+                                      )}
+                                      Aceptar
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {redirectPack && redirectPack.approved.length > 0 ? (
+                          <div>
+                            <p className="text-[11px] font-medium text-gray-700 mb-1">Ya asignadas (aprobadas)</p>
+                            <ul className="space-y-1">
+                              {redirectPack.approved.map((app) => (
+                                <li
+                                  key={app.id}
+                                  className="text-xs text-gray-700 rounded border border-emerald-100 bg-emerald-50/80 px-2 py-1.5"
+                                >
+                                  ✓ {app.promotion?.title || 'Promoción'}
+                                  {app.promotion?.brand ? ` · ${app.promotion.brand}` : ''}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {redirectPack &&
+                        redirectPack.pending.length === 0 &&
+                        redirectPack.approved.length === 0 &&
+                        redirectPack.assignable.length === 0 ? (
+                          <p className="text-xs text-gray-600">
+                            No hay solicitudes redirect en esta ficha. Si el influencer aplicó desde el marketplace
+                            (cupón normal), revísalas en el{' '}
+                            <a
+                              href={
+                                selectedId
+                                  ? `/admin/crm/applications?status=pending&influencerId=${encodeURIComponent(selectedId)}`
+                                  : '/admin/crm/applications?status=pending'
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold text-emerald-800 underline"
+                            >
+                              panel de solicitudes
+                            </a>
+                            .
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
                   {detail.outreach && (

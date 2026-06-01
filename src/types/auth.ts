@@ -1,15 +1,11 @@
 /**
  * Tipos de usuario y auth alineados con la API /api/auth
  *
- * Paneles de producto (según primaryRole o suite multi-rol):
- * - user: Mi cuenta / marketplace (usuario final).
- * - influencer: panel creador (`/dashboard/influencer`).
- * - brand: panel marca (`/dashboard/brand`).
- * - agency: panel agencia (`/dashboard/agency`).
- * - admin | moderator: `AdminPage` / rutas `/admin/*`.
+ * Hub compartido: tienda `/marketplace` (marca, influencer, agencia, usuario).
+ * Menú «Mi espacio» varía por `primaryRole` (ver `config/roleNavigation.ts`).
  *
- * Superusuario de plataforma (`isPlatformSuperuser`, email en lista servidor):
- * acceso al suite `/dashboard/suite` con las tres vistas creador + marca + agencia.
+ * Paneles completos `/dashboard/*`: solo superusuario (`isPlatformSuperuser` / `isSuperAdmin`)
+ * vía `/dashboard/suite`. Staff admin/moderator: `/admin/*`.
  */
 
 export type PrimaryRole = 'user' | 'influencer' | 'brand' | 'agency' | 'admin' | 'moderator' | 'support' | 'analyst';

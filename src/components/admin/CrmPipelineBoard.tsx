@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Eye, ExternalLink, GripVertical, Loader2, Pencil } from 'lucide-react';
+import { Eye, ExternalLink, FileCheck, GripVertical, Loader2, Pencil } from 'lucide-react';
+import type { CrmPendingPromotionApplication } from '../../services/adminCrm';
 import { mediaUrl } from '../../utils/apiUrl';
 import type {
   CrmMonetizationCard,
@@ -132,6 +133,8 @@ type Props = {
   onSelectCard: (influencerId: string) => void;
   onMoveCard: (influencerId: string, stage: string) => Promise<void>;
   onApplySuggestedStage?: (influencerId: string, stage: string) => Promise<void>;
+  onApproveApplication?: (influencerId: string, applicationId: string) => Promise<void>;
+  approvingApplicationId?: string | null;
 };
 
 export default function CrmPipelineBoard({
@@ -142,6 +145,8 @@ export default function CrmPipelineBoard({
   onSelectCard,
   onMoveCard,
   onApplySuggestedStage,
+  onApproveApplication,
+  approvingApplicationId,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -392,6 +397,57 @@ export default function CrmPipelineBoard({
                               {card.nextAction}
                             </p>
                           )}
+                          {(card as KanbanCard & { pendingApplications?: CrmPendingPromotionApplication[] })
+                            .pendingApplications &&
+                            (card as KanbanCard & { pendingApplications?: CrmPendingPromotionApplication[] })
+                              .pendingApplications!.length > 0 &&
+                            onApproveApplication && (
+                              <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 space-y-1.5">
+                                <p className="text-[10px] font-semibold text-amber-950 uppercase tracking-wide">
+                                  Solicitud promo
+                                </p>
+                                {(
+                                  card as KanbanCard & {
+                                    pendingApplications?: CrmPendingPromotionApplication[];
+                                  }
+                                ).pendingApplications!.map((app) => (
+                                  <div
+                                    key={app.id}
+                                    className="flex items-start justify-between gap-1.5"
+                                  >
+                                    <p className="text-[10px] text-amber-950 leading-snug min-w-0 flex-1 line-clamp-2">
+                                      {app.promotionTitle}
+                                      {app.redirectInsteadOfQr ? (
+                                        <span className="text-amber-700"> · URL</span>
+                                      ) : null}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (
+                                          !window.confirm(
+                                            `¿Aprobar la solicitud para «${app.promotionTitle}»?`,
+                                          )
+                                        ) {
+                                          return;
+                                        }
+                                        void onApproveApplication(card.influencerId, app.id);
+                                      }}
+                                      disabled={approvingApplicationId === app.id}
+                                      className="shrink-0 inline-flex items-center gap-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                    >
+                                      {approvingApplicationId === app.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                                      ) : (
+                                        <FileCheck className="w-3 h-3" aria-hidden />
+                                      )}
+                                      Aceptar
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           {boardKind === 'monetization' &&
                             mCard.stageMismatch &&
                             mCard.suggestedMonetizationStage &&
