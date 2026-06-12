@@ -337,7 +337,7 @@ export default function BrandDashboard() {
                         </div>
                         <div className="flex items-center space-x-3">
                             <Link
-                                to="/brand-setup"
+                                to="/brands/setup"
                                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                             >
                                 <Plus className="w-4 h-4" />

@@ -21,7 +21,7 @@ export function AddInfluencerQuick() {
       if (influencer) {
         // In a real app, you would save this to your backend
         console.log('Influencer data:', influencer);
-        navigate('/influencers');
+        navigate('/influencer');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch influencer data');
@@ -34,7 +34,7 @@ export function AddInfluencerQuick() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="container mx-auto px-4 py-8">
         <Link 
-          to="/influencers" 
+          to="/influencer" 
           className="inline-flex items-center space-x-2 text-purple-400 hover:text-purple-300 mb-8"
         >
           <ArrowLeft className="h-4 w-4" />

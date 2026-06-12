@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { canAccessAdminCrm } from '../config/adminAccess';
 import { apiUrl, mediaUrl } from '../utils/apiUrl';
 import { fetchInfluencerByPublicSlug } from '../utils/fetchInfluencerByPublicSlug';
 
@@ -73,7 +74,8 @@ function csvToArray(v: string): string[] {
 export default function InfluencerProfileEditPage() {
   const { influencerSlug } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading, token } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token, user } = useAuth();
+  const isAdminEditor = canAccessAdminCrm(user);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +122,13 @@ export default function InfluencerProfileEditPage() {
         const target = result.data;
         const tId = asString(target.id);
         setTargetId(tId);
+
+        // Superuser / super admin: edita cualquier perfil vía CRM (sin vincular cuenta influencer).
+        if (isAdminEditor) {
+          setEditMode('admin');
+          setForm(buildFormFromData(target));
+          return;
+        }
 
         const accessRes = await fetch(
           apiUrl(`/api/influencers/me/edit-access?slug=${encodeURIComponent(influencerSlug)}`),
@@ -174,7 +183,7 @@ export default function InfluencerProfileEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [influencerSlug, isAuthenticated, authLoading, token]);
+  }, [influencerSlug, isAuthenticated, authLoading, token, isAdminEditor]);
 
   const handleClaimProfile = async () => {
     if (!influencerSlug || !token) return;

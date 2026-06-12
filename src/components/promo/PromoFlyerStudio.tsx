@@ -9,24 +9,15 @@ import {
     X,
     Wand2,
     AlertTriangle,
+    ArrowRight,
 } from 'lucide-react';
+import type { FlyerFormData, FlyerImageMeta, FlyerToPromotionInput } from '../../utils/flyerToQuickPromotion';
 
-interface FlyerForm {
-    productName: string;
-    originalPrice: string;
-    finalPrice: string;
-    currency: string;
-    discountPercentage: string;
-    cashbackText: string;
-    platform: string;
-    headline: string;
-    extraNotes: string;
-}
+export type { FlyerFormData };
 
-interface FlyerImage {
-    url: string;
-    filename: string;
-    mimeType: string;
+type FlyerForm = FlyerFormData;
+
+interface FlyerImage extends FlyerImageMeta {
     width: number;
     height: number;
 }
@@ -68,7 +59,12 @@ function resolveAssetUrl(url: string): string {
     return url;
 }
 
-export default function PromoFlyerStudio() {
+interface PromoFlyerStudioProps {
+    /** Tras generar el flyer, rellena el formulario de crear promoción y cambia de pestaña. */
+    onContinueToPromotion?: (payload: FlyerToPromotionInput) => void | Promise<void>;
+}
+
+export default function PromoFlyerStudio({ onContinueToPromotion }: PromoFlyerStudioProps) {
     const [form, setForm] = useState<FlyerForm>(() => emptyForm());
     const [productImage, setProductImage] = useState<File | null>(null);
     const [productPreview, setProductPreview] = useState<string | null>(null);
@@ -76,7 +72,10 @@ export default function PromoFlyerStudio() {
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<FlyerResult | null>(null);
     const [copied, setCopied] = useState(false);
+    const [isContinuing, setIsContinuing] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
+
+    const canContinue = Boolean(onContinueToPromotion) && form.productName.trim().length > 0 && result != null;
 
     const autoDiscount = useMemo(() => {
         const o = toNumber(form.originalPrice);
@@ -134,6 +133,27 @@ export default function PromoFlyerStudio() {
             setError(err instanceof Error ? err.message : 'No se pudo generar el flyer.');
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleContinueToPromotion = async () => {
+        if (!onContinueToPromotion || !form.productName.trim()) return;
+        setIsContinuing(true);
+        try {
+            await onContinueToPromotion({
+                form: { ...form },
+                copy: result?.copy,
+                productImage,
+                flyerImage: result?.image
+                    ? {
+                          url: result.image.url,
+                          filename: result.image.filename,
+                          mimeType: result.image.mimeType,
+                      }
+                    : null,
+            });
+        } finally {
+            setIsContinuing(false);
         }
     };
 
@@ -377,17 +397,63 @@ export default function PromoFlyerStudio() {
                             <Download className="w-4 h-4" />
                             Descargar flyer
                         </a>
+                        {onContinueToPromotion && (
+                            <button
+                                type="button"
+                                onClick={handleContinueToPromotion}
+                                disabled={!canContinue || isContinuing}
+                                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                    !canContinue || isContinuing
+                                        ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500 shadow-lg shadow-amber-900/25'
+                                }`}
+                            >
+                                {isContinuing ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                        Preparando promoción…
+                                    </>
+                                ) : (
+                                    <>
+                                        <ArrowRight className="w-5 h-5" />
+                                        Continuar a crear promoción
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        {onContinueToPromotion && result?.generated && (
+                            <p className="text-xs text-center text-gray-500">
+                                Los datos del flyer y las fotos se cargarán en el formulario de promoción.
+                            </p>
+                        )}
                     </div>
                 )}
 
                 {result && !result.image && (
-                    <div className="rounded-xl border border-white/10 bg-gray-950/50 p-4 text-sm text-gray-300">
-                        <p className="mb-2 text-amber-200">
-                            No se generó la imagen en el servidor. Puedes copiar el prompt y generarla manualmente:
-                        </p>
-                        <pre className="whitespace-pre-wrap text-xs text-gray-400 max-h-48 overflow-auto">
-                            {result.promptForClient || result.prompt}
-                        </pre>
+                    <div className="space-y-4">
+                        <div className="rounded-xl border border-white/10 bg-gray-950/50 p-4 text-sm text-gray-300">
+                            <p className="mb-2 text-amber-200">
+                                No se generó la imagen en el servidor. Puedes copiar el prompt y generarla manualmente:
+                            </p>
+                            <pre className="whitespace-pre-wrap text-xs text-gray-400 max-h-48 overflow-auto">
+                                {result.promptForClient || result.prompt}
+                            </pre>
+                        </div>
+                        {onContinueToPromotion && (
+                            <button
+                                type="button"
+                                onClick={handleContinueToPromotion}
+                                disabled={!canContinue || isContinuing}
+                                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                    !canContinue || isContinuing
+                                        ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500'
+                                }`}
+                            >
+                                <ArrowRight className="w-5 h-5" />
+                                Continuar a crear promoción (solo datos)
+                            </button>
+                        )}
                     </div>
                 )}
 

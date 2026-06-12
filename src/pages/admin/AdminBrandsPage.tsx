@@ -33,7 +33,7 @@ export default function AdminBrandsPage() {
       <div className="bg-slate-800 text-slate-100 text-center text-xs py-1.5 px-4">
         Administración Link4Deal — todas las marcas · El dueño de marca usa{' '}
         <a href={DASHBOARD_ROUTES.role.brand} className="underline font-medium">
-          /dashboard/brand
+          /brands/panel
         </a>
       </div>
       <BrandDashboard />

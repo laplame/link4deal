@@ -24,6 +24,10 @@ export const SITE_CONFIG = {
   bizneAiWebsiteUrl: 'https://www.bizneai.com/',
   appStoreUrl: 'https://apps.apple.com/app/damecodigo',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=com.damecodigo.app',
+  /** Programa de prueba cerrada (testers) en Google Play — mismo package que producción. */
+  playStoreTestingUrl:
+    (import.meta.env.VITE_PLAY_STORE_TESTING_URL as string | undefined)?.trim() ||
+    'https://play.google.com/apps/testing/com.damecodigo.app',
   /** Descarga directa del APK (Android). Pasa por redirect para contabilizar descargas. */
   apkDownloadUrl: '/api/app-downloads/redirect',
   /** Ruta del APK estático (usado por el redirect en backend) */

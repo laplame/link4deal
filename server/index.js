@@ -26,6 +26,8 @@ const brandRoutes = require('./routes/brands');
 const kycWhatsappRoutes = require('./routes/kycWhatsapp');
 const loyaltyRoutes = require('./routes/loyalty');
 const geoToolsRoutes = require('./routes/geoTools');
+const seoPublicRoutes = require('./routes/seoPublic');
+const influencerWaitlistRoutes = require('./routes/influencerWaitlist');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -273,6 +275,9 @@ app.get('/api', (req, res) => {
     });
 });
 
+// ===== SEO PÚBLICO (sitemap, robots, prerender HTML) =====
+app.use(seoPublicRoutes);
+
 // ===== RUTAS DE LA API =====
 
 // OpenAPI spec (para documentación Redoc; acceso público al spec)
@@ -290,6 +295,10 @@ app.use('/api/users', userRoutes);
 
 // Agency routes
 app.use('/api/agencies', agencyRoutes);
+
+// Waitlist influencers (landing /influencer/waitlist — acceso app vía Google Play testers)
+app.use('/api/waitlist', influencerWaitlistRoutes);
+app.use('/api/admin/waitlist', influencerWaitlistRoutes.adminRouter);
 
 // Promotion routes - La ruta principal para la app móvil
 app.use('/api/promotions', promotionRoutes);

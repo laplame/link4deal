@@ -89,6 +89,33 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
+const videoFileFilter = (req, file, cb) => {
+    const allowedMimeTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'];
+    const allowedExtensions = ['.mp4', '.mov', '.webm', '.m4v'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+        const error = new Error('Tipo de video no permitido. Usa MP4, MOV o WEBM.');
+        error.code = 'INVALID_FILE_TYPE';
+        return cb(error, false);
+    }
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+        const error = new Error('Extensión de video no permitida (.mp4, .mov, .webm, .m4v).');
+        error.code = 'INVALID_FILE_EXTENSION';
+        return cb(error, false);
+    }
+    cb(null, true);
+};
+
+const promotionMediaFileFilter = (req, file, cb) => {
+    if (file.fieldname === 'videos') {
+        return videoFileFilter(req, file, cb);
+    }
+    return fileFilter(req, file, cb);
+};
+
+const maxImageBytes = parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
+const maxVideoBytes = parseInt(process.env.MAX_PROMO_VIDEO_SIZE, 10) || 50 * 1024 * 1024;
+
 // Configuración de Multer para almacenamiento en memoria (para OCR)
 const memoryUpload = multer({
     storage: memoryStorage,
@@ -102,15 +129,17 @@ const memoryUpload = multer({
 
 const promotionImageUpload = multer({
     storage: memoryStorage,
-    fileFilter: fileFilter,
+    fileFilter: promotionMediaFileFilter,
     limits: {
-        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
-        files: 24,
+        fileSize: maxVideoBytes,
+        files: 28,
         fieldSize: 10 * 1024 * 1024
     }
 }).fields([
     { name: 'images', maxCount: 8 },
-    { name: 'termsImages', maxCount: 8 }
+    { name: 'termsImages', maxCount: 8 },
+    { name: 'verificationImages', maxCount: 3 },
+    { name: 'videos', maxCount: 2 },
 ]);
 
 // Configuración de Multer para almacenamiento en disco (para respaldo local)

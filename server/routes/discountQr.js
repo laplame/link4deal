@@ -31,6 +31,7 @@ const {
     isSettlementEnabled,
 } = require('../utils/influencerTokenSettlement');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
+const { isPromotionRedeemable } = require('../utils/promotionKind');
 const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
@@ -376,6 +377,7 @@ const ERROR_CODES = {
     PROMO_INACTIVE: 'La promoción no está activa.',
     PROMO_EXPIRED: 'La promoción ha expirado.',
     PROMO_NOT_FOUND: 'Promoción no encontrada.',
+    PROMOTION_NOT_REDEEMABLE: 'Esta promoción no admite cupón QR (sin deal o pendiente de verificación).',
     QR_INVALID: 'Código QR inválido o expirado.',
     QR_ALREADY_REDEEMED: 'Este cupón ya fue redimido.',
     IDEMPOTENCY_KEY_MISMATCH: 'La misma idempotencyKey se reutiliza con shopId o productId distintos al canje original.'
@@ -403,6 +405,11 @@ async function validateBusinessRules(payload, context = {}) {
     const promotion = await Promotion.findById(payload.promotionId).lean();
     if (!promotion) {
         errors.push({ code: 'PROMO_NOT_FOUND', message: ERROR_CODES.PROMO_NOT_FOUND });
+        return errors;
+    }
+
+    if (!isPromotionRedeemable(promotion)) {
+        errors.push({ code: 'PROMOTION_NOT_REDEEMABLE', message: ERROR_CODES.PROMOTION_NOT_REDEEMABLE });
         return errors;
     }
 
@@ -683,8 +690,11 @@ function buildRedeemedByFromBody(body) {
  */
 async function getRedirectInsteadOfQr(promotionId) {
     if (!isValidObjectId(promotionId)) return null;
-    const promotion = await Promotion.findById(promotionId).select('redirectInsteadOfQr redirectToUrl').lean();
+    const promotion = await Promotion.findById(promotionId)
+        .select('redirectInsteadOfQr redirectToUrl promotionKind hasDeal verificationStatus status')
+        .lean();
     if (!promotion || !promotion.redirectInsteadOfQr) return null;
+    if (!isPromotionRedeemable(promotion)) return null;
     const url = buildAmazonAffiliateUrl(promotion.redirectToUrl);
     return { redirectToUrl: url, noQr: true };
 }

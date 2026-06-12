@@ -37,6 +37,9 @@ import {
   contentPaddingByTier,
   marketplaceMasonryTier,
 } from '../utils/masonryVariant';
+import PageSeo from '../components/seo/PageSeo';
+import { marketplaceSeo } from '../utils/promotionSeo';
+import { promotionDetailPath } from '../utils/promotionPublicUrl';
 
 const IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
 
@@ -55,6 +58,7 @@ interface PromotionLocalized {
 
 interface Promotion {
   id: string;
+  publicSlug?: string;
   title: string;
   brand: string;
   category: string;
@@ -82,6 +86,8 @@ interface Promotion {
   gpsActivationEnabled?: boolean;
   locationRadiusMeters?: number;
   localizedStrings?: PromotionLocalized;
+  communityVerificationBadgeLabel?: string;
+  promotionKind?: 'verification_only' | 'with_deal';
 }
 
 interface FilterState {
@@ -199,6 +205,7 @@ export default function PromotionsMarketplace() {
 
             return {
               id: promo.id || promo._id?.toString() || '',
+              publicSlug: promo.publicSlug ? String(promo.publicSlug) : undefined,
               title: promo.title || 'Sin título',
               brand: promo.brand || 'Sin marca',
               category: categoryMap[promo.category] || promo.category || 'Otros',
@@ -231,7 +238,11 @@ export default function PromotionsMarketplace() {
                   : typeof promo.gpsRadiusMeters === 'number'
                     ? promo.gpsRadiusMeters
                     : 500,
-              localizedStrings: promo.localizedStrings
+              localizedStrings: promo.localizedStrings,
+              communityVerificationBadgeLabel: promo.communityVerificationBadgeLabel
+                ? String(promo.communityVerificationBadgeLabel)
+                : undefined,
+              promotionKind: promo.promotionKind,
             };
           });
 
@@ -367,8 +378,15 @@ export default function PromotionsMarketplace() {
     setSelectedPromotion(null);
   };
 
+  const seo = marketplaceSeo();
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageSeo
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalUrl}
+      />
       {applicationFeedback ? (
         <div
           className={`fixed top-0 inset-x-0 z-[60] px-4 py-3 text-center text-sm font-medium shadow-md ${
@@ -403,7 +421,7 @@ export default function PromotionsMarketplace() {
             </p>
             <p className="text-sm text-purple-200/95 mb-6">
               ¿Eres marca?{' '}
-              <Link to="/brand/aplicaciones" className="underline decoration-white/50 font-medium hover:text-white">
+              <Link to="/brands/aplicaciones" className="underline decoration-white/50 font-medium hover:text-white">
                 Ver solicitudes de influencers
               </Link>
             </p>
@@ -454,6 +472,29 @@ export default function PromotionsMarketplace() {
               </p>
             </div>
           </Link>
+        </div>
+
+        <div className="mb-8 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 to-violet-50/50 px-4 py-4">
+          <p className="text-sm font-medium text-indigo-950 mb-1">Promociones por zona y categoría</p>
+          <p className="text-xs text-indigo-900/80 mb-3">
+            Páginas indexables con ofertas filtradas por ubicación o rubro.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { slug: 'roma-norte', label: 'Roma Norte' },
+              { slug: 'restaurantes-cdmx', label: 'Restaurantes CDMX' },
+              { slug: 'belleza-cdmx', label: 'Belleza CDMX' },
+            ].map((z) => (
+              <Link
+                key={z.slug}
+                to={`/promociones/${z.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white/90 px-3 py-1.5 text-sm font-medium text-indigo-950 shadow-sm hover:bg-indigo-100/80 transition-colors"
+              >
+                <MapPin className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                {z.label}
+              </Link>
+            ))}
+          </div>
         </div>
 
         {chainPresetList.length > 0 && (
@@ -708,6 +749,7 @@ export default function PromotionsMarketplace() {
               const cardRounded = CARD_ROUNDED_BY_TIER[tier];
               const imgHeight = MARKETPLACE_IMAGE_BY_TIER[tier];
               const bodyPad = contentPaddingByTier(tier);
+              const detailPath = promotionDetailPath(promotion);
               return (
             <div key={promotion.id} className={`break-inside-avoid mb-6 bg-white ${cardRounded} shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow`}>
               {/* Imagen y badges */}
@@ -743,6 +785,11 @@ export default function PromotionsMarketplace() {
                       {promotion.localizedStrings?.es?.badgeShort ?? 'Por ubicación'}
                     </div>
                   )}
+                  {promotion.promotionKind === 'verification_only' && (
+                    <div className="bg-violet-600 text-white px-2 py-1 rounded-full text-xs font-medium shadow-sm">
+                      {promotion.communityVerificationBadgeLabel || 'Tercero verificado'}
+                    </div>
+                  )}
                 </div>
                 <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
                   {promotion.maxApplications > 0 && promotion.totalApplications >= promotion.maxApplications ? (
@@ -765,7 +812,12 @@ export default function PromotionsMarketplace() {
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-2">{promotion.title}</h3>
+                    <Link
+                      to={detailPath}
+                      className="font-semibold text-gray-900 text-lg mb-1 line-clamp-2 hover:text-purple-700 transition-colors block"
+                    >
+                      {promotion.title}
+                    </Link>
                     <p className="text-sm text-gray-600">{promotion.brand}</p>
                   </div>
                   <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -870,10 +922,13 @@ export default function PromotionsMarketplace() {
 
                 {/* Acciones adicionales */}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                  <button className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <Link
+                    to={detailPath}
+                    className="flex items-center gap-2 text-gray-500 hover:text-purple-700 transition-colors"
+                  >
                     <Eye className="w-4 h-4" />
                     <span className="text-sm">Ver Detalles</span>
-                  </button>
+                  </Link>
                   <button className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
                     <Heart className="w-4 h-4" />
                     <span className="text-sm">Guardar</span>

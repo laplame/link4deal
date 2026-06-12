@@ -303,7 +303,7 @@ const InfluencerSetup: React.FC = () => {
             } else if (typeof newId === 'string' && newId) {
                 navigate(`/influencer/${newId}`);
             } else {
-                navigate('/influencers');
+                navigate('/influencer');
             }
         } catch (error) {
             console.error('Error al crear perfil de influencer:', error);
@@ -694,17 +694,20 @@ const InfluencerSetup: React.FC = () => {
             {/* Header */}
             <div className="bg-white shadow-sm border-b border-gray-200">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <Link to="/user-type-selector" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
-                            <ArrowLeft className="w-5 h-5" />
-                            <span>Volver</span>
+                    <div className="flex justify-between items-center gap-3 min-h-16 py-2">
+                        <Link
+                            to="/user-type-selector"
+                            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 shrink-0"
+                        >
+                            <ArrowLeft className="w-5 h-5 shrink-0" />
+                            <span className="text-sm sm:text-base">Volver</span>
                         </Link>
-                        
-                        <div className="flex items-center space-x-4">
-                            <span className="text-sm text-gray-500">
+
+                        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                            <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap shrink-0">
                                 Paso {currentStep} de 3
                             </span>
-                            <div className="w-32 bg-gray-200 rounded-full h-2">
+                            <div className="w-20 sm:w-32 bg-gray-200 rounded-full h-2 shrink-0">
                                 <div 
                                     className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                                     style={{ width: `${(currentStep / 3) * 100}%` }}

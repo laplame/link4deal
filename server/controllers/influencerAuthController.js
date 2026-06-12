@@ -105,7 +105,6 @@ async function ensureInfluencerProfile(user, body = {}) {
         `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
         (user.email ? user.email.split('@')[0] : 'Influencer');
 
-    const socialMedia = body.socialMedia && typeof body.socialMedia === 'object' ? body.socialMedia : {};
     const username =
         deriveUsername(body.username, '') ||
         deriveUsername(socialMedia.instagram, '') ||

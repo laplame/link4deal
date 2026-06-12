@@ -135,8 +135,8 @@ export default function BrandOwnerDashboard() {
   if (missingProfile) {
     const shopIdForSetup = normalizeBizneShopId(pendingShopId) || pendingShopId.trim();
     const setupHref = shopIdForSetup
-      ? `/brand-setup?bizneShopId=${encodeURIComponent(shopIdForSetup)}`
-      : '/brand-setup';
+      ? `/brands/setup?bizneShopId=${encodeURIComponent(shopIdForSetup)}`
+      : '/brands/setup';
     const canGoToSetup = Boolean(validatedShop && shopIdForSetup);
     return (
       <div className="max-w-2xl mx-auto px-4 py-12">
@@ -363,7 +363,7 @@ export default function BrandOwnerDashboard() {
 
         <div className="grid sm:grid-cols-2 gap-4">
           <Link
-            to="/brand/aplicaciones"
+            to="/brands/aplicaciones"
             className="bg-white rounded-xl border border-gray-200 p-5 hover:border-violet-300 hover:shadow-md transition-all"
           >
             <Target className="h-8 w-8 text-violet-600 mb-2" />

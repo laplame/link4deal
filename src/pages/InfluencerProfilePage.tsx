@@ -68,6 +68,9 @@ import {
 } from '../utils/mapPromotionToProductCard';
 import { masonryTierFromId } from '../utils/masonryVariant';
 import { buildInfluencerPromoPath, buildInfluencerPromoUrl } from '../utils/mobileWebApp';
+import InfluencerTrafficAttributionPanel from '../components/influencer/InfluencerTrafficAttributionPanel';
+import InfluencerGtmSessionSnapshot from '../components/influencer/InfluencerGtmSessionSnapshot';
+import InfluencerPublicDemandPanel from '../components/influencer/InfluencerPublicDemandPanel';
 
 interface Influencer {
   id: string;
@@ -84,6 +87,7 @@ interface Influencer {
   engagement: number;
   categories: string[];
   status: 'active' | 'pending' | 'verified' | 'suspended';
+  identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
   joinDate: string;
   totalEarnings: number;
   monthlyEarnings: number;
@@ -222,6 +226,7 @@ export default function InfluencerProfilePage() {
   } | null>(null);
   const [storyError, setStoryError] = useState<string | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showProfileRemovalModal, setShowProfileRemovalModal] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
   const [contactSenderName, setContactSenderName] = useState('');
   const [contactSenderEmail, setContactSenderEmail] = useState('');
@@ -252,6 +257,23 @@ export default function InfluencerProfilePage() {
     Boolean(viewerInfluencerId && influencer?.id && viewerInfluencerId === influencer.id);
 
   const ownerEditHref = isOwnProfile ? getInfluencerOwnerEditHref(user) : undefined;
+
+  const profileRemovalMailto = useMemo(() => {
+    if (!influencer) return 'mailto:admin@damecodigo.com';
+    const profileUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/influencer/${encodeURIComponent(influencerSlug || '')}`
+        : `https://www.damecodigo.com/influencer/${encodeURIComponent(influencerSlug || '')}`;
+    const subject = encodeURIComponent('Solicitud de eliminación de perfil');
+    const body = encodeURIComponent(
+      `Hola,\n\nSolicito la eliminación de mi perfil de influencer:\n${profileUrl}\n\nID técnico: ${influencer.id}\n\nConfirmo que este perfil me pertenece.\n\nGracias.`,
+    );
+    return `mailto:admin@damecodigo.com?subject=${subject}&body=${body}`;
+  }, [influencer, influencerSlug]);
+
+  const showProfileRemovalNotice = Boolean(
+    influencer && (influencer.identityVerificationStatus ?? 'pending') !== 'approved',
+  );
 
   const canCreateStory = (isOwnProfile || isSuperAdmin) && isAuthenticated;
 
@@ -801,7 +823,7 @@ export default function InfluencerProfilePage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Influencer no encontrado</h2>
           <p className="text-gray-600 mb-6">{error || 'El perfil que buscas no existe'}</p>
           <Link
-            to="/influencers"
+            to="/influencer"
             className="bg-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors"
           >
             Volver al Marketplace
@@ -818,106 +840,124 @@ export default function InfluencerProfilePage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
             <Link
-              to="/influencers"
+              to="/influencer"
               className="flex items-center gap-2 text-pink-100 hover:text-white transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
               Volver al Marketplace
             </Link>
-            <div className="flex flex-wrap items-stretch sm:items-center justify-stretch sm:justify-end gap-2 w-full sm:w-auto">
+            <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:w-auto">
               <button
                 type="button"
                 onClick={copyMyIdForPromotions}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0"
+                className="col-span-2 sm:col-span-1 flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm leading-tight bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0"
                 title="Copiar el ID técnico del influencer (MongoDB)"
               >
                 {copiedInfluencerId ? (
                   <>
-                    <Check className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" />
                     ¡Copiado!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-5 h-5 shrink-0" />
-                    <span className="text-left leading-snug">Copiar ID técnico del perfil</span>
+                    <Copy className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                    <span className="text-center">
+                      <span className="sm:hidden">Copiar ID</span>
+                      <span className="hidden sm:inline">Copiar ID técnico del perfil</span>
+                    </span>
                   </>
                 )}
               </button>
               <Link
                 to={`/redenciones-en-vivo?influencerId=${encodeURIComponent(influencer.id)}`}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm leading-tight bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
                 title="Cupones redimidos filtrados por tu influencerId"
               >
-                <Ticket className="w-5 h-5 shrink-0" />
-                <span className="text-left leading-snug">Redenciones en vivo (solo tú)</span>
+                <Ticket className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="text-center">
+                  <span className="sm:hidden">Redenciones</span>
+                  <span className="hidden sm:inline">Redenciones en vivo (solo tú)</span>
+                </span>
               </Link>
               <Link
                 to={`/influencer/${encodeURIComponent(influencerSlug || '')}/tienda`}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all min-w-0 shadow-sm"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm leading-tight bg-purple-600 text-white hover:bg-purple-700 transition-all min-w-0 shadow-sm"
                 title="Ver tienda con cupones disponibles (aprobados por la marca)"
               >
-                <LayoutGrid className="w-5 h-5 shrink-0" aria-hidden />
-                <span className="text-left leading-snug">Ver tienda</span>
+                <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden />
+                <span className="text-center">Ver tienda</span>
               </Link>
               <Link
                 to={`/influencer/${encodeURIComponent(influencerSlug || '')}/faq`}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm leading-tight bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-all min-w-0"
                 title="Preguntas frecuentes con tus enlaces personalizados"
               >
-                <HelpCircle className="w-5 h-5 shrink-0" aria-hidden />
-                <span className="text-left leading-snug">FAQ y mis enlaces</span>
+                <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden />
+                <span className="text-center">
+                  <span className="sm:hidden">FAQ</span>
+                  <span className="hidden sm:inline">FAQ y mis enlaces</span>
+                </span>
               </Link>
               {viewerInfluencerId === influencer.id || isSuperAdmin ? (
                 <Link
                   to={`/influencer/${encodeURIComponent(influencerSlug || '')}/edit`}
-                  className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-white text-purple-800 hover:bg-purple-50 transition-all min-w-0 shadow-sm"
+                  className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm leading-tight bg-white text-purple-800 hover:bg-purple-50 transition-all min-w-0 shadow-sm"
                   title="Editar foto, textos, redes y métricas del perfil"
                 >
-                  <ImagePlus className="w-5 h-5 shrink-0" aria-hidden />
-                  <span className="text-left leading-snug">Editar perfil</span>
+                  <ImagePlus className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden />
+                  <span className="text-center">Editar perfil</span>
                 </Link>
               ) : null}
               {viewerInfluencerId === influencer.id && ownerEditHref ? (
                 <Link
                   to={ownerEditHref}
-                  className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold bg-amber-300 text-gray-900 hover:bg-amber-200 transition-all min-w-0 shadow-md ring-2 ring-white/30"
+                  className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm leading-tight bg-amber-300 text-gray-900 hover:bg-amber-200 transition-all min-w-0 shadow-md ring-2 ring-white/30"
                   title="Editar vitrina UGC: enlaces a piezas y frases públicas"
                 >
-                  <LayoutGrid className="w-5 h-5 shrink-0 text-gray-900" />
-                  <span className="text-left leading-snug">Mi perfil UGC</span>
+                  <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-gray-900" />
+                  <span className="text-center">
+                    <span className="sm:hidden">UGC</span>
+                    <span className="hidden sm:inline">Mi perfil UGC</span>
+                  </span>
                 </Link>
               ) : null}
               <button
                 type="button"
                 onClick={handleDownloadProfilePdf}
                 disabled={pdfLoading}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0 disabled:opacity-60"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm leading-tight bg-white text-purple-800 hover:bg-pink-50 transition-all shadow-sm min-w-0 disabled:opacity-60"
                 title="Descargar ficha PDF (carta): métricas, códigos y QR"
               >
                 {pdfLoading ? (
                   <>
-                    <Loader2 className="w-5 h-5 shrink-0 animate-spin" aria-hidden />
-                    Generando PDF…
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 animate-spin" aria-hidden />
+                    <span className="text-center">Generando…</span>
                   </>
                 ) : (
                   <>
-                    <FileDown className="w-5 h-5 shrink-0" aria-hidden />
-                    <span className="text-left leading-snug">Descargar ficha PDF</span>
+                    <FileDown className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden />
+                    <span className="text-center">
+                      <span className="sm:hidden">PDF ficha</span>
+                      <span className="hidden sm:inline">Descargar ficha PDF</span>
+                    </span>
                   </>
                 )}
               </button>
               <button
                 type="button"
                 onClick={toggleSaveProfile}
-                className={`flex flex-1 sm:flex-initial items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                className={`flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm leading-tight transition-all min-w-0 ${
                   isSaved
                     ? 'bg-white/25 text-white'
                     : 'bg-white/15 text-pink-100 hover:bg-white/25 hover:text-white'
                 }`}
                 title={isSaved ? 'Quitar de guardados' : 'Guardar perfil'}
               >
-                <Heart className={`w-5 h-5 shrink-0 ${isSaved ? 'fill-current' : ''}`} />
-                Guardar perfil
+                <Heart className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isSaved ? 'fill-current' : ''}`} />
+                <span className="text-center">
+                  <span className="sm:hidden">Guardar</span>
+                  <span className="hidden sm:inline">Guardar perfil</span>
+                </span>
               </button>
             </div>
           </div>
@@ -1161,6 +1201,23 @@ export default function InfluencerProfilePage() {
                   </span>
                 ) : null}
               </p>
+              {showProfileRemovalNotice ? (
+                <div className="mb-4 max-w-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileRemovalModal(true)}
+                    className="w-full text-left rounded-lg border border-white/20 bg-black/15 px-3 py-2.5 text-xs sm:text-sm text-pink-100/90 hover:bg-black/25 hover:border-white/30 transition-colors"
+                  >
+                    <span className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                      <span>
+                        ¿Aún no estás verificado y quieres que eliminemos tu perfil?{' '}
+                        <span className="underline font-medium text-white">Consulta aquí</span>
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              ) : null}
               {followerPlatforms.length > 0 ? (
                 <div className="mb-4 flex flex-wrap gap-2">
                   {followerPlatforms.map((row) => (
@@ -1243,6 +1300,26 @@ export default function InfluencerProfilePage() {
             </p>
           )}
         </section>
+
+        <InfluencerPublicDemandPanel
+          publicSlug={influencer.publicSlug || influencerSlug}
+          influencerName={influencer.name}
+        />
+
+        {(isOwnProfile || isSuperAdmin) && (
+          <>
+            <InfluencerTrafficAttributionPanel
+              influencerId={influencer.id}
+              influencerName={influencer.name}
+              publicSlug={influencer.publicSlug || influencerSlug}
+            />
+            <InfluencerGtmSessionSnapshot
+              influencerId={influencer.id}
+              influencerName={influencer.name}
+              publicSlug={influencer.publicSlug || influencerSlug}
+            />
+          </>
+        )}
 
         <InfluencerUgcShowcase
           influencerName={influencer.name}
@@ -1861,6 +1938,76 @@ export default function InfluencerProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Modal: eliminación de perfil (sin verificación KYC) */}
+      {showProfileRemovalModal && influencer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Eliminar tu perfil</h3>
+              <button
+                type="button"
+                onClick={() => setShowProfileRemovalModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Cerrar"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+              <p>
+                Este perfil <strong>puede estar generando comisiones</strong> por campañas activas o canjes de
+                cupones atribuidos a ti, aunque aún no hayas completado la verificación.
+              </p>
+              <p>Antes de solicitar su eliminación, te recomendamos:</p>
+              <ul className="list-disc pl-5 space-y-1.5">
+                <li>
+                  <strong>Revisar si tienes saldo disponible</strong> — puede haber abonos pendientes por ventas ya
+                  registradas.
+                </li>
+                <li>
+                  <strong>Completar tu verificación KYC</strong> — así podrás reclamar lo que te corresponda y
+                  confirmar que el perfil es tuyo.
+                </li>
+                <li>
+                  <strong>Escribirnos</strong> — cuando estés listo, envía un correo a{' '}
+                  <a href="mailto:admin@damecodigo.com" className="text-purple-700 underline font-medium">
+                    admin@damecodigo.com
+                  </a>{' '}
+                  con el enlace de tu perfil e indica que deseas darlo de baja.
+                </li>
+              </ul>
+              <p className="text-gray-600">
+                Si el perfil que quieres eliminar es tuyo, con gusto te ayudamos una vez verificada tu identidad.
+              </p>
+            </div>
+            <div className="mt-5 flex flex-col sm:flex-row gap-2">
+              <Link
+                to="/kyc-form"
+                onClick={() => setShowProfileRemovalModal(false)}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors text-sm"
+              >
+                Verificar identidad (KYC)
+              </Link>
+              <a
+                href={profileRemovalMailto}
+                onClick={() => setShowProfileRemovalModal(false)}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 font-medium hover:bg-gray-50 transition-colors text-sm"
+              >
+                <Mail className="w-4 h-4 shrink-0" aria-hidden />
+                Escribir a soporte
+              </a>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowProfileRemovalModal(false)}
+              className="mt-3 w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal Contactar Influencer - mensaje para que lo lea al iniciar sesión */}
       {showContactModal && influencer && (

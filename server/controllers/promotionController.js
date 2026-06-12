@@ -7,9 +7,25 @@ const { analyzePromotionImages } = require('../services/geminiPromoAnalyzer');
 const database = require('../config/database');
 const { getPromotionUploadDir } = require('../middleware/upload');
 const { persistPromotionImage } = require('../utils/promotionImageStorage');
+const {
+    countProofEvidenceFromRequest,
+    processPurchaseProofUploads,
+    mergePurchaseProof,
+    summarizePurchaseProof,
+} = require('../utils/promotionPurchaseProof');
 const { getPromotionalValueUsd, getValuePerCouponAndMaxEmissionAsync } = require('../utils/promotionValueUsd');
 const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
+const { buildPromotionPublicSlug } = require('../utils/promotionPublicSlug');
 const { buildPromotionShopIdQuery } = require('../utils/promotionShopFilter');
+const {
+    resolvePromotionKindFromRequest,
+    applyPromotionKindRules,
+    buildPromotionListFilters,
+    buildPublicVisibilityClause,
+    mergeMongoClauses,
+    serializePromotionKindFields,
+    assertPromotionKindNotConverted,
+} = require('../utils/promotionKind');
 const { parseChainLocations } = require('../utils/chainStore');
 const { normalizeIncomingCode, getInfluencerPromotionsCatalogByShortCode } = require('../utils/influencerPromoShortCodes');
 const mongoose = require('mongoose');
@@ -404,6 +420,10 @@ class PromotionController {
             }
             }
 
+            const purchaseProofEntries = await processPurchaseProofUploads(req, req.body);
+            const proofCounts = countProofEvidenceFromRequest(req.body, req);
+            const promoImageCount = processedImages.filter((img) => img.imageRole !== 'terms').length;
+
             // Calcular descuento si no se proporcionó
             let discountPercentage = req.body.discountPercentage;
             if (!discountPercentage && originalPrice && currentPrice) {
@@ -442,6 +462,15 @@ class PromotionController {
             const extPid = req.body.externalProductId ?? req.body.productId;
             if (extPid !== undefined && extPid !== null && String(extPid).trim() !== '') {
                 optionalAttribution.externalProductId = String(extPid).trim();
+            }
+
+            const { parseAttributionContractFromBody } = require('../utils/cryptomarketingAttributionContract');
+            const parsedAttributionContract = parseAttributionContractFromBody(req.body);
+            if (parsedAttributionContract && parsedAttributionContract.error) {
+                return res.status(400).json({
+                    success: false,
+                    message: parsedAttributionContract.error
+                });
             }
 
             // Crear la promoción (campos con valores por defecto para máxima flexibilidad)
@@ -533,8 +562,55 @@ class PromotionController {
                     email: 'system@link4deal.com',
                     verified: false
                 },
-                ...optionalAttribution
+                ...optionalAttribution,
+                ...(parsedAttributionContract
+                    ? {
+                          attributionContract: {
+                              type: parsedAttributionContract.type,
+                              clientName: parsedAttributionContract.clientName,
+                              providerName: parsedAttributionContract.providerName,
+                              signDate: parsedAttributionContract.signDate,
+                              promotionValidFrom: parsedAttributionContract.promotionValidFrom,
+                              promotionValidUntil: parsedAttributionContract.promotionValidUntil,
+                              promotionTotalQuantity: parsedAttributionContract.promotionTotalQuantity,
+                              agreedRedemptionPercent: parsedAttributionContract.agreedRedemptionPercent,
+                              contractMonths: parsedAttributionContract.contractMonths,
+                              renderedText: parsedAttributionContract.renderedText,
+                              createdAt: new Date()
+                          }
+                      }
+                    : {})
             };
+
+            const kindResolved = resolvePromotionKindFromRequest(req.body, {
+                imageCount: processedImages.length,
+                promoImageCount,
+                proofEvidenceCount: purchaseProofEntries.length || proofCounts.proofEvidenceCount,
+                videoCount: proofCounts.proofVideoUploadCount,
+            });
+            if (kindResolved.errors.length > 0) {
+                const first = kindResolved.errors[0];
+                return res.status(400).json({
+                    success: false,
+                    code: first.code,
+                    message: first.message,
+                });
+            }
+
+            if (purchaseProofEntries.length > 0) {
+                promotionData.verification = promotionData.verification || {};
+                promotionData.verification.purchaseProof = purchaseProofEntries;
+            }
+            applyPromotionKindRules(promotionData, kindResolved, req.body);
+
+            const deviceIdRaw = req.body.deviceId;
+            if (deviceIdRaw != null && String(deviceIdRaw).trim()) {
+                promotionData.deviceId = String(deviceIdRaw).trim();
+            }
+            const submittedByRaw = req.body.submittedByUserId;
+            if (submittedByRaw != null && String(submittedByRaw).trim()) {
+                promotionData.submittedByUserId = String(submittedByRaw).trim();
+            }
 
             if (promotionData.isChainStore && parsedChainLocations.length > 0) {
                 const first = parsedChainLocations[0];
@@ -632,6 +708,8 @@ class PromotionController {
 
                     console.log('✅ Promoción creada exitosamente en MongoDB:', promotion._id);
 
+                    const savedObj = promotion.toObject ? promotion.toObject() : promotion;
+                    const enrichedCreated = enrichPromotionClientFields(savedObj);
                     return res.status(201).json({
                         success: true,
                         message: 'Promoción creada exitosamente',
@@ -641,7 +719,11 @@ class PromotionController {
                             productName: promotion.productName,
                             images: promotion.images.length,
                             ocrProcessed: !!promotion.ocrData,
-                            status: promotion.status
+                            status: promotion.status,
+                            publicSlug: enrichedCreated.publicSlug,
+                            publicUrl: enrichedCreated.publicUrl,
+                            ...serializePromotionKindFields(savedObj),
+                            ...summarizePurchaseProof(savedObj),
                         },
                         mode: 'database'
                     });
@@ -729,7 +811,9 @@ class PromotionController {
                     productName: simulatedPromotion.productName,
                     images: simulatedPromotion.images.length,
                     ocrProcessed: !!simulatedPromotion.ocrData,
-                    status: simulatedPromotion.status
+                    status: simulatedPromotion.status,
+                    ...serializePromotionKindFields(simulatedPromotion),
+                    ...summarizePurchaseProof(simulatedPromotion),
                 },
                 mode: 'simulated',
                 warning: 'Esta promoción se guardó en memoria. Conecta MongoDB para persistencia real.'
@@ -788,7 +872,23 @@ class PromotionController {
                 isHotOffer,
                 search,
                 shopId: shopIdQuery,
+                promotionKind,
+                hasDeal,
+                verificationStatus,
+                sourceChannel,
+                publicFeed,
             } = req.query;
+
+            const kindFilterResult = buildPromotionListFilters({
+                promotionKind,
+                hasDeal,
+                verificationStatus,
+                sourceChannel,
+                publicFeed,
+            });
+            if (kindFilterResult.error) {
+                return res.status(kindFilterResult.error.status).json(kindFilterResult.error.body);
+            }
 
             const query = {};
             const shopFilter = shopIdQuery ? buildPromotionShopIdQuery(shopIdQuery) : null;
@@ -831,6 +931,14 @@ class PromotionController {
                 Object.assign(query, shopFilter);
             }
 
+            let listQuery = query;
+            if (wantOnlyActive && publicFeed !== 'true' && publicFeed !== true) {
+                listQuery = mergeMongoClauses(listQuery, buildPublicVisibilityClause());
+            }
+            if (kindFilterResult.clause && Object.keys(kindFilterResult.clause).length > 0) {
+                listQuery = mergeMongoClauses(listQuery, kindFilterResult.clause);
+            }
+
             const options = {
                 page: parseInt(page),
                 limit: parseInt(limit),
@@ -838,7 +946,7 @@ class PromotionController {
                 populate: 'seller'
             };
 
-            const promotions = await Promotion.paginate(query, options);
+            const promotions = await Promotion.paginate(listQuery, options);
             const data = {
                 ...promotions,
                 docs: (promotions.docs || []).map((doc) =>
@@ -879,10 +987,13 @@ class PromotionController {
                 return res.json(empty);
             }
             const now = new Date();
-            const baseQuery = {
-                status: 'active',
-                validUntil: { $gte: now }
-            };
+            const baseQuery = mergeMongoClauses(
+                {
+                    status: 'active',
+                    validUntil: { $gte: now },
+                },
+                buildPublicVisibilityClause()
+            );
             const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
             const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
 
@@ -1041,10 +1152,16 @@ class PromotionController {
                 geoEnrichOpts.userLongitude = uLo;
             }
 
-            // Si el ID no es ObjectId (ej. sim-xxx de modo simulado), buscar en memoria o devolver 404
+            // Slug público (/promo/:slug) o ID simulado no-ObjectId
             if (!this.isValidObjectId(id)) {
                 if (global.simulatedPromotions) {
-                    const promo = global.simulatedPromotions.find(p => p._id === id || p.id === id);
+                    const promo = global.simulatedPromotions.find(
+                        (p) =>
+                            p._id === id ||
+                            p.id === id ||
+                            p.publicSlug === id ||
+                            buildPromotionPublicSlug(p) === id
+                    );
                     if (promo) {
                         return res.json({
                             success: true,
@@ -1053,6 +1170,30 @@ class PromotionController {
                         });
                     }
                 }
+
+                if (this.isMongoConnected()) {
+                    const slug = String(id).trim().toLowerCase();
+                    const bySlug = await Promotion.findOne({ publicSlug: slug });
+                    if (bySlug) {
+                        await bySlug.incrementViews();
+                        const promoObj = bySlug.toObject ? bySlug.toObject() : bySlug;
+                        const contractValues = await getValuePerCouponAndMaxEmissionAsync(promoObj);
+                        const enriched = enrichPromotionClientFields({
+                            ...promoObj,
+                            valuePerCouponUsd: contractValues.valuePerCouponUsd,
+                            maxEmissionUsd: contractValues.maxEmissionUsd,
+                            fxRateUsed: contractValues.fxRateUsed,
+                            currencyDisplay: promoObj.currency || 'USD',
+                            normalizedCurrency: contractValues.normalizedCurrency || 'USD',
+                        }, geoEnrichOpts);
+                        return res.json({
+                            success: true,
+                            data: enriched,
+                            message: 'Promoción obtenida exitosamente',
+                        });
+                    }
+                }
+
                 return res.status(404).json({
                     success: false,
                     message: 'Promoción no encontrada'
@@ -1252,6 +1393,83 @@ class PromotionController {
         }
     }
 
+    /**
+     * POST /api/promotions/:id/purchase-proof
+     * Añade evidencia de compra (foto verificationImages y/o purchaseProofVideoUrl) a promo sin deal.
+     */
+    async submitPurchaseProof(req, res) {
+        try {
+            const { id } = req.params;
+
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de promoción inválido',
+                });
+            }
+
+            if (!this.isMongoConnected()) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'MongoDB no conectado',
+                });
+            }
+
+            const promotion = await Promotion.findById(id);
+            if (!promotion) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Promoción no encontrada',
+                });
+            }
+
+            if (promotion.promotionKind !== 'verification_only') {
+                return res.status(400).json({
+                    success: false,
+                    code: 'NOT_VERIFICATION_PROMOTION',
+                    message: 'Solo las promociones sin deal (verification_only) admiten evidencia de compra.',
+                });
+            }
+
+            const newEntries = await processPurchaseProofUploads(req, req.body);
+            if (!newEntries.length) {
+                return res.status(400).json({
+                    success: false,
+                    code: 'VERIFICATION_REQUIRES_MEDIA',
+                    message:
+                        'Envía verificationImages (foto de ticket/recibo), videos (archivo) y/o purchaseProofVideoUrl (link HTTPS al video).',
+                });
+            }
+
+            promotion.verification = promotion.verification || {};
+            promotion.verification.purchaseProof = mergePurchaseProof(
+                promotion.verification.purchaseProof,
+                newEntries,
+            );
+            promotion.verification.submittedAt = new Date();
+            promotion.verification.autoApproved = true;
+            promotion.verification.approvalMode = 'auto_third_party';
+            promotion.verificationStatus = 'approved';
+            promotion.status = 'active';
+            await promotion.save();
+
+            const plain = promotion.toObject ? promotion.toObject() : promotion;
+            return res.json({
+                success: true,
+                message:
+                    'Evidencia recibida. Oferta de tercero publicada (no nativa Cryptomarketing, sin contrato de marca).',
+                data: enrichPromotionClientFields(plain),
+            });
+        } catch (error) {
+            console.error('❌ Error submitPurchaseProof:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error al subir evidencia de compra',
+                error: error.message,
+            });
+        }
+    }
+
     async updatePromotion(req, res) {
         try {
             const { id } = req.params;
@@ -1290,6 +1508,15 @@ class PromotionController {
                 });
             }
 
+            const kindBlock = assertPromotionKindNotConverted(existingPromotion, updateData);
+            if (kindBlock) {
+                return res.status(400).json({
+                    success: false,
+                    code: kindBlock.code,
+                    message: kindBlock.message,
+                });
+            }
+
             // Validar fechas si se están actualizando
             if (updateData.validFrom || updateData.validUntil) {
                 const validFrom = updateData.validFrom || existingPromotion.validFrom;
@@ -1316,6 +1543,15 @@ class PromotionController {
                 'brandId', 'shopId', 'externalProductId', 'gtmTag', 'campaignId', 'source', 'medium',
                 'isChainStore', 'chainBrandName', 'chainLocations'
             ];
+
+            const { parseAttributionContractFromBody } = require('../utils/cryptomarketingAttributionContract');
+            const parsedAttributionContract = parseAttributionContractFromBody(updateData);
+            if (parsedAttributionContract && parsedAttributionContract.error) {
+                return res.status(400).json({
+                    success: false,
+                    message: parsedAttributionContract.error
+                });
+            }
 
             const filteredData = {};
             allowedFields.forEach(field => {
@@ -1373,6 +1609,51 @@ class PromotionController {
 
             const appendedImages = await processAppendPromotionImages(req);
             const updatePayload = { ...filteredData };
+
+            if (parsedAttributionContract) {
+                updatePayload.attributionContract = {
+                    type: parsedAttributionContract.type,
+                    clientName: parsedAttributionContract.clientName,
+                    providerName: parsedAttributionContract.providerName,
+                    signDate: parsedAttributionContract.signDate,
+                    promotionValidFrom: parsedAttributionContract.promotionValidFrom,
+                    promotionValidUntil: parsedAttributionContract.promotionValidUntil,
+                    promotionTotalQuantity: parsedAttributionContract.promotionTotalQuantity,
+                    agreedRedemptionPercent: parsedAttributionContract.agreedRedemptionPercent,
+                    contractMonths: parsedAttributionContract.contractMonths,
+                    renderedText: parsedAttributionContract.renderedText,
+                    createdAt: new Date()
+                };
+            } else if (
+                updateData.attributionContractType === 'none' ||
+                updateData.removeAttributionContract === 'true' ||
+                updateData.removeAttributionContract === true
+            ) {
+                updatePayload.$unset = { ...(updatePayload.$unset || {}), attributionContract: '' };
+            }
+
+            const proofEntries = await processPurchaseProofUploads(req, req.body);
+            if (proofEntries.length > 0) {
+                if (existingPromotion.promotionKind !== 'verification_only') {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Evidencia de compra solo aplica a promociones sin deal.',
+                    });
+                }
+                const prevProof = existingPromotion.verification?.purchaseProof || [];
+                updatePayload.verification = {
+                    ...(existingPromotion.verification?.toObject
+                        ? existingPromotion.verification.toObject()
+                        : existingPromotion.verification || {}),
+                    purchaseProof: mergePurchaseProof(prevProof, proofEntries),
+                    submittedAt: new Date(),
+                    autoApproved: true,
+                    approvalMode: 'auto_third_party',
+                };
+                updatePayload.verificationStatus = 'approved';
+                updatePayload.status = 'active';
+            }
+
             if (appendedImages.length > 0) {
                 const prevImages = Array.isArray(existingPromotion.images) ? existingPromotion.images : [];
                 const asPlain = prevImages.map((img) => (img && img.toObject ? img.toObject() : { ...img }));
@@ -1384,9 +1665,17 @@ class PromotionController {
                 updatePayload.images = [...newPromo, ...prevPromo, ...prevTerms, ...newTerms];
             }
 
+            let mongoUpdate = updatePayload;
+            if (updatePayload.$unset) {
+                const { $unset, ...setFields } = updatePayload;
+                mongoUpdate = Object.keys(setFields).length
+                    ? { $set: setFields, $unset }
+                    : { $unset };
+            }
+
             const updatedPromotion = await Promotion.findByIdAndUpdate(
                 id,
-                updatePayload,
+                mongoUpdate,
                 { new: true, runValidators: true }
             );
 

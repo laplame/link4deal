@@ -6,7 +6,7 @@ import { canAccessAdminRoute, DASHBOARD_ROUTES } from '../../config/dashboardCon
 
 /**
  * Administración Link4Deal — influencers (staff).
- * No confundir con el hub del creador (/dashboard/influencer).
+ * No confundir con el hub del creador (/influencer).
  */
 export default function AdminInfluencersPage() {
   const { isAuthenticated, isLoading, user, primaryRole } = useAuth();
@@ -46,7 +46,7 @@ export default function AdminInfluencersPage() {
           <p className="text-gray-600 mt-2 text-sm">
             Gestión interna Link4Deal. El panel del creador (cupones, UGC, mensajes) vive en{' '}
             <Link to={DASHBOARD_ROUTES.role.influencer} className="text-purple-700 font-medium underline">
-              /dashboard/influencer
+              /influencer/panel
             </Link>
             .
           </p>
@@ -63,14 +63,14 @@ export default function AdminInfluencersPage() {
           <p className="text-sm text-gray-600 mt-1">Activación, outreach, apps, instalaciones.</p>
         </Link>
         <a
-          href="/influencers"
+          href="/influencer"
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-purple-300 hover:shadow-md transition-all"
         >
           <ExternalLink className="w-8 h-8 text-gray-500 mb-3" />
           <h2 className="font-semibold text-gray-900">Marketplace público</h2>
-          <p className="text-sm text-gray-600 mt-1">Listado /influencers en el sitio.</p>
+          <p className="text-sm text-gray-600 mt-1">Listado /influencer en el sitio.</p>
         </a>
         <Link
           to={DASHBOARD_ROUTES.role.influencer}

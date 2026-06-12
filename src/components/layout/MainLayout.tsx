@@ -7,7 +7,14 @@ import { getMobileWebAppContext, isInfluencerStorePath } from '../../utils/mobil
 const pathTitles: Record<string, string> = {
   '/': 'Inicio',
   '/brands': 'Marcas y Negocios',
-  '/influencers': 'Influencers',
+  '/influencer': 'Influencers',
+  '/influencer/setup': 'Registrar influencer',
+  '/influencer/panel': 'Panel creador',
+  '/brands/setup': 'Registrar marca',
+  '/brands/panel': 'Panel marca',
+  '/brands/aplicaciones': 'Aplicaciones marca',
+  '/agency': 'Agencia',
+  '/agency/setup': 'Registrar agencia',
   '/marketplace': 'Ofertas',
   '/subastas': 'Subastas en vivo',
   '/redenciones-en-vivo': 'Cupones redimidos',
@@ -16,8 +23,6 @@ const pathTitles: Record<string, string> = {
   '/signup': 'Registro',
   '/cart': 'Carrito',
   '/dashboard': 'Mi cuenta',
-  '/brand-setup': 'Registrar marca',
-  '/influencer-setup': 'Registrar influencer',
   '/categories': 'Categorías',
   '/tiendas': 'Tiendas BizneAI',
   '/referral-system': 'Referidos',
@@ -26,10 +31,8 @@ const pathTitles: Record<string, string> = {
   '/importar-sucursales': 'Importar sucursales',
   '/admin': 'Admin',
   '/dashboard/panel': 'Mi panel',
-  '/dashboard/influencer': 'Panel creador',
   '/admin/influencers': 'Admin influencers',
   '/admin/brands': 'Panel marcas',
-  '/dashboard/brand': 'Mi marca',
   '/admin/agencies': 'Panel agencias',
   '/dashboard/suite': 'Multi-panel (superusuario)',
   '/demo/influencer-dashboard': 'Demo panel influencer'
@@ -39,8 +42,13 @@ function getTitle(pathname: string): string | undefined {
   if (pathTitles[pathname]) return pathTitles[pathname];
   if (pathname.startsWith('/admin')) return 'Admin';
   if (pathname.startsWith('/promotion-details')) return 'Detalle oferta';
+  if (pathname.startsWith('/promo/')) return 'Detalle oferta';
+  if (pathname.startsWith('/promociones/')) return 'Promociones por zona';
+  if (pathname === '/influencer/waitlist') return 'Lista de espera influencers';
   if (pathname.startsWith('/promocion/') && pathname.endsWith('/smart-contract')) return 'Smart contract';
+  if (pathname === '/influencer') return 'Influencers';
   if (pathname.startsWith('/influencer/')) return 'Perfil influencer';
+  if (pathname === '/brands') return 'Marcas y Negocios';
   if (pathname.startsWith('/brand/')) return 'Marca o negocio';
   if (pathname.startsWith('/shop/bizne/')) return 'Tienda BizneAI';
   if (pathname.startsWith('/category/')) return 'Categoría';
@@ -51,7 +59,7 @@ function getTitle(pathname: string): string | undefined {
 const ROUTES_WITH_OWN_NAV = ['/', '/landing', '/comisionista-digital'];
 
 /** Panel hub sin navbar global solo para influencer en estas rutas. */
-const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/dashboard/influencer', '/admin/influencers'];
+const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/influencer/panel', '/admin/influencers'];
 const DEMO_INFLUENCER_HUB_PATH = '/demo/influencer-dashboard';
 
 export function MainLayout() {

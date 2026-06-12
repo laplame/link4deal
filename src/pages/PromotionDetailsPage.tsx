@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { formatPrice, calculateDiscountPercentage } from '../utils/formatters';
 import { 
@@ -24,13 +24,27 @@ import {
     MessageCircle,
     Info,
     ZoomIn,
-    X
+    X,
+    MessageSquare,
+    ShieldCheck
 } from 'lucide-react';
+import PageSeo from '../components/seo/PageSeo';
+import {
+    buildPromotionMetaDescription,
+    buildPromotionOfferJsonLd,
+    buildPromotionPageTitle,
+} from '../utils/promotionSeo';
+import { promotionAbsoluteUrl, promotionDetailPath } from '../utils/promotionPublicUrl';
 import CouponRequestForm from '../components/CouponRequestForm';
 import DiscountHistoryTimeline from '../components/DiscountHistoryTimeline';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 import { findNearestChainBranch, resolveBranchMapsUrl, normalizeChainBranchesFromApi, type ChainBranch } from '../utils/geo';
 import { getPolygonscanAddressUrl } from '../utils/polygonExplorer';
+import PromotionAttributionContractDisplay, {
+    hasAttributionContract,
+    PromotionAttributionContractEmptyState,
+    type AttributionContractView
+} from '../components/promo/PromotionAttributionContractDisplay';
 
 interface SmartContract {
     address: string;
@@ -70,9 +84,22 @@ interface ProductDetails {
         rating: number;
         verified: boolean;
         address: string;
+        phone?: string;
         totalSales: number;
         memberSince: string;
     };
+    publicSlug?: string;
+    publicUrl?: string;
+    promotionKind?: 'verification_only' | 'with_deal';
+    hasDeal?: boolean;
+    showRedeemButton?: boolean;
+    communityVerificationBadgeLabel?: string;
+    thirdPartyDisclaimers?: {
+        es?: { notNative?: string; noContract?: string };
+    };
+    isExpired?: boolean;
+    status?: string;
+    redirectInsteadOfQr?: boolean;
     specifications: Record<string, string | undefined>;
     smartContract: SmartContract;
     promotionDetails: {
@@ -93,10 +120,19 @@ interface ProductDetails {
     isChainStore?: boolean;
     chainBrandName?: string;
     chainLocations?: ChainBranch[];
+    attributionContract?: AttributionContractView | null;
+}
+
+function buildWhatsAppUrl(phone: string, message: string): string {
+    const digits = phone.replace(/\D/g, '');
+    if (!digits) return '';
+    const normalized = digits.length === 10 ? `52${digits}` : digits;
+    return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
 export default function PromotionDetailsPage() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
     const [product, setProduct] = useState<ProductDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -115,6 +151,7 @@ export default function PromotionDetailsPage() {
     const [chainGeoStatus, setChainGeoStatus] = useState<
         'idle' | 'loading' | 'ok' | 'denied' | 'unavailable'
     >('idle');
+    const [shareCopied, setShareCopied] = useState(false);
     const { addItem, state } = useCart();
 
     // Cargar promoción desde la API
@@ -138,6 +175,10 @@ export default function PromotionDetailsPage() {
                 }
 
                 const promo = data.data;
+                const validUntilDate = promo.validUntil ? new Date(promo.validUntil) : null;
+                const isExpired =
+                    promo.status === 'expired' ||
+                    (validUntilDate != null && validUntilDate.getTime() < Date.now());
 
                 // Calcular descuento
                 const originalPrice = promo.originalPrice || 0;
@@ -184,9 +225,22 @@ export default function PromotionDetailsPage() {
                         rating: 4.5,
                         verified: promo.seller?.verified || false,
                         address: promo.seller?.address || '0x0000000000000000000000000000000000000000',
+                        phone: promo.seller?.phone ? String(promo.seller.phone) : undefined,
                         totalSales: promo.conversions || 0,
                         memberSince: promo.createdAt ? new Date(promo.createdAt).toISOString().split('T')[0] : '2024-01-01'
                     },
+                    publicSlug: promo.publicSlug ? String(promo.publicSlug) : undefined,
+                    publicUrl: promo.publicUrl ? String(promo.publicUrl) : undefined,
+                    promotionKind: promo.promotionKind,
+                    hasDeal: promo.hasDeal,
+                    showRedeemButton: promo.showRedeemButton,
+                    communityVerificationBadgeLabel: promo.communityVerificationBadgeLabel
+                        ? String(promo.communityVerificationBadgeLabel)
+                        : undefined,
+                    thirdPartyDisclaimers: promo.thirdPartyDisclaimers,
+                    isExpired,
+                    status: promo.status,
+                    redirectInsteadOfQr: !!promo.redirectInsteadOfQr,
                     specifications: promo.specifications || {
                         'Categoría': categoryMap[promo.category] || promo.category,
                         'Marca': promo.brand,
@@ -210,11 +264,16 @@ export default function PromotionDetailsPage() {
                         endDate: promo.validUntil ? new Date(promo.validUntil).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                         maxQuantity: promo.maxQuantity || promo.totalQuantity || 1000,
                         soldQuantity: promo.soldQuantity || promo.conversions || 0,
-                        terms: promo.terms || [
-                            'Oferta válida hasta agotar existencias',
-                            'Precio especial solo para usuarios registrados',
-                            'Envío disponible'
-                        ],
+                        terms: promo.termsAndConditions
+                            ? String(promo.termsAndConditions)
+                                  .split(/\n+/)
+                                  .map((t: string) => t.trim())
+                                  .filter(Boolean)
+                            : promo.terms || [
+                                  'Oferta válida hasta agotar existencias',
+                                  'Precio especial solo para usuarios registrados',
+                                  'Envío disponible'
+                              ],
                         benefits: promo.benefits || [
                             `Descuento del ${discountPercentage}% sobre precio original`,
                             'Envío disponible',
@@ -231,10 +290,21 @@ export default function PromotionDetailsPage() {
                     promotionLng: promo.storeLocation?.coordinates?.longitude ?? null,
                     isChainStore: !!promo.isChainStore,
                     chainBrandName: promo.chainBrandName ? String(promo.chainBrandName) : '',
-                    chainLocations: normalizeChainBranchesFromApi(promo.chainLocations)
+                    chainLocations: normalizeChainBranchesFromApi(promo.chainLocations),
+                    attributionContract: promo.attributionContract || null
                 };
 
                 setProduct(transformedProduct);
+
+                const canonicalSlug = promo.publicSlug ? String(promo.publicSlug) : '';
+                if (
+                    canonicalSlug &&
+                    id &&
+                    id !== canonicalSlug &&
+                    /^[a-f0-9]{24}$/i.test(id)
+                ) {
+                    navigate(promotionDetailPath({ publicSlug: canonicalSlug }), { replace: true });
+                }
             } catch (err: any) {
                 console.error('Error cargando promoción:', err);
                 setError(err.message || 'No se pudo cargar la promoción');
@@ -374,6 +444,56 @@ export default function PromotionDetailsPage() {
         ? calculateDiscountPercentage(product.originalPrice, product.price)
         : 0;
 
+    const isVerificationOnly =
+        product.promotionKind === 'verification_only' || product.hasDeal === false;
+    const canRedeemCoupon = product.showRedeemButton !== false && !product.isExpired;
+
+    const seoInput = {
+        id: product.id,
+        publicSlug: product.publicSlug,
+        title: product.name,
+        description: product.description,
+        brand: product.brand,
+        storeName: product.seller.name,
+        discountPercentage,
+        currentPrice: product.price,
+        originalPrice: product.originalPrice,
+        currency: product.currency,
+        validUntil: product.promotionDetails.endDate,
+        image: product.image,
+        storeLocation: {
+            city: product.location.split(',')[0]?.trim(),
+            address: product.location,
+        },
+        isExpired: product.isExpired,
+    };
+
+    const whatsAppUrl = product.seller.phone
+        ? buildWhatsAppUrl(
+              product.seller.phone,
+              `Hola, vi la promoción "${product.name}" en DameCodigo y me interesa.`
+          )
+        : '';
+
+    const handleShare = async () => {
+        const url = product.publicUrl || promotionAbsoluteUrl(product);
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: product.name, url });
+                return;
+            }
+        } catch {
+            /* cancelado */
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+            setShareCopied(true);
+            window.setTimeout(() => setShareCopied(false), 2000);
+        } catch {
+            /* ignore */
+        }
+    };
+
     const couponLat =
         nearestBranchInfo?.branch.coordinates.latitude ??
         (product.promotionLat != null ? product.promotionLat : undefined) ??
@@ -417,6 +537,49 @@ export default function PromotionDetailsPage() {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <PageSeo
+                title={buildPromotionPageTitle(seoInput)}
+                description={buildPromotionMetaDescription(seoInput)}
+                canonicalUrl={product.publicUrl || promotionAbsoluteUrl(product)}
+                ogImage={product.image}
+                ogType="product"
+                noindex={!!product.isExpired}
+                jsonLd={buildPromotionOfferJsonLd(seoInput)}
+            />
+
+            {product.isExpired && (
+                <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <p className="text-sm text-amber-900">
+                            <strong>Esta promoción ya no está vigente.</strong> La información se muestra solo como referencia.
+                        </p>
+                        <Link
+                            to="/marketplace"
+                            className="text-sm font-medium text-amber-800 underline hover:text-amber-950 shrink-0"
+                        >
+                            Ver promociones activas
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {isVerificationOnly && (
+                <div className="bg-violet-50 border-b border-violet-200 px-4 py-3">
+                    <div className="max-w-7xl mx-auto flex items-start gap-2 text-sm text-violet-900">
+                        <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5" aria-hidden />
+                        <div>
+                            {product.communityVerificationBadgeLabel && (
+                                <p className="font-semibold">{product.communityVerificationBadgeLabel}</p>
+                            )}
+                            <p>{product.thirdPartyDisclaimers?.es?.notNative || 'Oferta de tercero verificada por la comunidad.'}</p>
+                            {product.thirdPartyDisclaimers?.es?.noContract && (
+                                <p className="text-violet-800/90 mt-1">{product.thirdPartyDisclaimers.es.noContract}</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 py-4">
@@ -450,7 +613,7 @@ export default function PromotionDetailsPage() {
             <div className="max-w-7xl mx-auto px-4 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Left Column - Product Info */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 min-w-0">
                         {/* Product Images & Basic Info */}
                         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -601,15 +764,23 @@ export default function PromotionDetailsPage() {
                                     )}
                                     
                                     <div className="flex gap-3">
-                                        <button
-                                            type="button"
-                                            disabled={waitingForNearest}
-                                            onClick={() => setShowCouponForm(true)}
-                                            className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <MessageCircle className="h-5 w-5" />
-                                            {waitingForNearest ? 'Ubicando sucursal…' : 'Solicitar Cupón'}
-                                        </button>
+                                        {canRedeemCoupon ? (
+                                            <button
+                                                type="button"
+                                                disabled={waitingForNearest}
+                                                onClick={() => setShowCouponForm(true)}
+                                                className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <MessageCircle className="h-5 w-5" />
+                                                {waitingForNearest ? 'Ubicando sucursal…' : 'Solicitar Cupón'}
+                                            </button>
+                                        ) : (
+                                            <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 text-center">
+                                                {product.isExpired
+                                                    ? 'Cupón no disponible: promoción expirada'
+                                                    : 'Esta oferta es solo informativa (sin cupón QR)'}
+                                            </div>
+                                        )}
                                         <button
                                             onClick={() => setIsWishlisted(!isWishlisted)}
                                             className={`p-3 rounded-lg border transition-colors ${
@@ -620,10 +791,31 @@ export default function PromotionDetailsPage() {
                                         >
                                             <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-current' : ''}`} />
                                         </button>
-                                        <button className="p-3 rounded-lg border border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-500 transition-colors">
-                                            <Share2 className="h-5 w-5" />
+                                        <button
+                                            type="button"
+                                            onClick={handleShare}
+                                            className="p-3 rounded-lg border border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-500 transition-colors"
+                                            aria-label={shareCopied ? 'Enlace copiado' : 'Compartir oferta'}
+                                        >
+                                            {shareCopied ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                            ) : (
+                                                <Share2 className="h-5 w-5" />
+                                            )}
                                         </button>
                                     </div>
+
+                                    {whatsAppUrl && (
+                                        <a
+                                            href={whatsAppUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 py-2.5 px-4 text-sm font-medium hover:bg-emerald-100 transition-colors"
+                                        >
+                                            <MessageSquare className="h-4 w-4" />
+                                            Contactar al comercio por WhatsApp
+                                        </a>
+                                    )}
                                     
                                     {/* Información sobre el proceso de compra */}
                                     <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -655,34 +847,49 @@ export default function PromotionDetailsPage() {
                         </div>
 
                         {/* Tabs Navigation */}
-                        <div className="bg-white rounded-xl shadow-lg mb-8">
-                            <div className="border-b border-gray-200">
-                                <nav className="flex space-x-8 px-6">
-                                    {[
-                                        { id: 'overview', label: 'Descripción General', icon: TrendingUp },
-                                        { id: 'smart-contract', label: 'Smart Contract', icon: FileText },
-                                        { id: 'promotion', label: 'Detalles Promoción', icon: Zap },
-                                        { id: 'history', label: 'Historial de Precios', icon: Clock },
-                                        { id: 'seller', label: 'Información Vendedor', icon: Users },
-                                        { id: 'specifications', label: 'Especificaciones', icon: Lock }
-                                    ].map((tab) => (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                                                activeTab === tab.id
-                                                    ? 'border-blue-500 text-blue-600'
-                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <tab.icon className="h-4 w-4" />
-                                            {tab.label}
-                                        </button>
-                                    ))}
-                                </nav>
+                        <div className="bg-white rounded-xl shadow-lg mb-8 overflow-hidden">
+                            <div className="border-b border-gray-200 relative">
+                                <div
+                                    className="overflow-x-auto overscroll-x-contain [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]"
+                                    aria-label="Secciones de la promoción"
+                                >
+                                    <nav className="flex flex-nowrap items-stretch gap-0 px-3 sm:px-6 min-w-max">
+                                        {[
+                                            { id: 'overview', label: 'Descripción General', shortLabel: 'General', icon: TrendingUp },
+                                            { id: 'smart-contract', label: 'Smart Contract', shortLabel: 'Contract', icon: FileText },
+                                            { id: 'promotion', label: 'Detalles Promoción', shortLabel: 'Promoción', icon: Zap },
+                                            ...(hasAttributionContract(product.attributionContract)
+                                                ? [{
+                                                    id: 'attribution-contract',
+                                                    label: 'Contrato de atribución',
+                                                    shortLabel: 'Atribución',
+                                                    icon: FileText
+                                                }]
+                                                : []),
+                                            { id: 'history', label: 'Historial de Precios', shortLabel: 'Precios', icon: Clock },
+                                            { id: 'seller', label: 'Información Vendedor', shortLabel: 'Vendedor', icon: Users },
+                                            { id: 'specifications', label: 'Especificaciones', shortLabel: 'Especific.', icon: Lock }
+                                        ].map((tab) => (
+                                            <button
+                                                key={tab.id}
+                                                type="button"
+                                                onClick={() => setActiveTab(tab.id)}
+                                                className={`shrink-0 py-3 sm:py-4 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-colors whitespace-nowrap ${
+                                                    activeTab === tab.id
+                                                        ? 'border-blue-500 text-blue-600 bg-blue-50/40'
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <tab.icon className="h-4 w-4 shrink-0" />
+                                                <span className="sm:hidden">{tab.shortLabel}</span>
+                                                <span className="hidden sm:inline">{tab.label}</span>
+                                            </button>
+                                        ))}
+                                    </nav>
+                                </div>
                             </div>
-                            
-                            <div className="p-6">
+
+                            <div className="p-4 sm:p-6 min-w-0">
                                 {/* Overview Tab */}
                                 {activeTab === 'overview' && (
                                     <div>
@@ -940,7 +1147,26 @@ export default function PromotionDetailsPage() {
                                                 </ul>
                                             </div>
                                         </div>
+
+                                        <div className="mt-8 pt-8 border-t border-gray-200">
+                                            {hasAttributionContract(product.attributionContract) ? (
+                                                <PromotionAttributionContractDisplay
+                                                    contract={product.attributionContract!}
+                                                    onCopy={copyToClipboard}
+                                                    compact
+                                                />
+                                            ) : (
+                                                <PromotionAttributionContractEmptyState brand={product.brand} />
+                                            )}
+                                        </div>
                                     </div>
+                                )}
+
+                                {activeTab === 'attribution-contract' && hasAttributionContract(product.attributionContract) && (
+                                    <PromotionAttributionContractDisplay
+                                        contract={product.attributionContract!}
+                                        onCopy={copyToClipboard}
+                                    />
                                 )}
 
                                 {/* Seller Tab */}
@@ -1087,6 +1313,29 @@ export default function PromotionDetailsPage() {
                             </div>
                         </div>
 
+                        {hasAttributionContract(product.attributionContract) && (
+                            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-indigo-600" />
+                                    Contrato de atribución
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    {product.attributionContract?.clientName} ↔ {product.attributionContract?.providerName}
+                                    {product.attributionContract?.promotionTotalQuantity
+                                        ? ` · ${product.attributionContract.promotionTotalQuantity} piezas`
+                                        : ''}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('attribution-contract')}
+                                    className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Ver contrato completo
+                                </button>
+                            </div>
+                        )}
+
                         {/* Promotion Summary */}
                         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -1134,10 +1383,25 @@ export default function PromotionDetailsPage() {
                                     Agregar a Favoritos
                                 </button>
                                 
-                                <button className="w-full bg-green-100 text-green-700 py-3 px-4 rounded-lg font-medium hover:bg-green-200 transition-colors flex items-center justify-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleShare}
+                                    className="w-full bg-green-100 text-green-700 py-3 px-4 rounded-lg font-medium hover:bg-green-200 transition-colors flex items-center justify-center gap-2"
+                                >
                                     <Share2 className="h-5 w-5" />
-                                    Compartir Oferta
+                                    {shareCopied ? 'Enlace copiado' : 'Compartir Oferta'}
                                 </button>
+                                {whatsAppUrl && (
+                                    <a
+                                        href={whatsAppUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <MessageSquare className="h-5 w-5" />
+                                        WhatsApp comercio
+                                    </a>
+                                )}
                             </div>
                         </div>
                     </div>

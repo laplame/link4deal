@@ -42,7 +42,7 @@ export function AddInfluencerPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="container mx-auto px-4 py-8">
-        <Link to="/influencers" className="inline-flex items-center space-x-2 text-purple-400 hover:text-purple-300 mb-8">
+        <Link to="/influencer" className="inline-flex items-center space-x-2 text-purple-400 hover:text-purple-300 mb-8">
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Influencers</span>
         </Link>

@@ -199,7 +199,7 @@ export function BrandPage() {
 
           <div className="flex flex-wrap gap-2 mb-6">
             <Link
-              to="/influencers"
+              to="/influencer"
               className="inline-flex items-center gap-2 bg-purple-500/90 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
             >
               <Users className="h-4 w-4" />
@@ -213,7 +213,7 @@ export function BrandPage() {
               {language === 'es' ? 'Página solo tiendas' : 'Stores-only page'}
             </Link>
             <Link
-              to="/brand-setup"
+              to="/brands/setup"
               className="inline-flex items-center gap-2 bg-blue-600/90 hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
             >
               {language === 'es' ? 'Registrar marca' : 'List your brand'}
@@ -377,7 +377,7 @@ export function BrandPage() {
                 : 'Try adjusting your search or filters, or list your brand or business.'}
             </p>
             <Link
-              to="/brand-setup"
+              to="/brands/setup"
               className="inline-block mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
             >
               {language === 'es' ? 'Registra tu marca o negocio' : 'List your brand or business'}

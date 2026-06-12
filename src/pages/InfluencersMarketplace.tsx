@@ -637,7 +637,7 @@ export default function InfluencersMarketplace() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">No hay influencers registrados</h3>
             <p className="text-gray-500 mb-4">Regístrate como influencer para aparecer en el marketplace.</p>
             <Link
-              to="/influencer-setup"
+              to="/influencer/setup"
               className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium"
             >
               <Plus className="w-4 h-4" />

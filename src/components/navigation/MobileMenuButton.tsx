@@ -12,7 +12,7 @@ export function MobileMenuButton({ to, onClick, children }: Props) {
     <Link
       to={to}
       onClick={onClick}
-      className="block w-full min-h-[44px] px-4 py-3 text-white font-medium bg-gray-700 hover:bg-gray-600 active:bg-gray-500 rounded-lg transition-colors duration-200 text-center"
+      className="flex w-full min-h-[44px] items-center px-4 py-3 text-white font-medium bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors duration-200 text-left"
     >
       {children}
     </Link>

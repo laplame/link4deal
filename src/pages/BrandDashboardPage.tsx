@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import BrandOwnerDashboard from './dashboards/BrandOwnerDashboard';
 
-/** Panel de la marca dueña (no listado admin). Ruta: /dashboard/brand */
+/** Panel de la marca dueña (no listado admin). Ruta: /brands/panel */
 export default function BrandDashboardPage() {
   const { isAuthenticated, isLoading, primaryRole, user } = useAuth();
 
@@ -17,7 +17,7 @@ export default function BrandDashboardPage() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/signin" replace state={{ from: '/dashboard/brand' }} />;
+    return <Navigate to="/signin" replace state={{ from: '/brands/panel' }} />;
   }
 
   const allowed =

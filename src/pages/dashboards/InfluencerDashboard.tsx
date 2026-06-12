@@ -785,7 +785,7 @@ export default function InfluencerDashboard() {
                         <p className="text-sm text-gray-400 mt-1">En vivo y pujas</p>
                     </Link>
                     <Link
-                        to="/influencers"
+                        to="/influencer"
                         className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-sm hover:border-violet-500/40 hover:shadow-md transition-all"
                     >
                         <Users className="w-8 h-8 text-pink-500 mb-3" />

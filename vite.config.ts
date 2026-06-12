@@ -53,6 +53,16 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/sitemap.xml': {
+          target: `http://localhost:${backendDevPort}`,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/robots.txt': {
+          target: `http://localhost:${backendDevPort}`,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   };

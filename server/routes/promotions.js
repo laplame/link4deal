@@ -84,6 +84,14 @@ router.get('/:id/history', (req, res) => promotionController.getPriceHistory(req
 // POST /api/promotions/backfill-conversions - Crear datos de éxito atribuidos a "Influencer General"
 router.post('/backfill-conversions', (req, res) => promotionController.backfillConversionsToInfluencerGeneral(req, res));
 
+// POST /api/promotions/:id/purchase-proof - Evidencia de compra (promo sin deal)
+router.post(
+    '/:id/purchase-proof',
+    createPromotionLimiter,
+    promotionImageUpload,
+    (req, res) => promotionController.submitPurchaseProof(req, res),
+);
+
 // GET /api/promotions/:id - Obtener promoción por ID (DEBE IR AL FINAL)
 router.get('/:id', (req, res) => promotionController.getPromotionById(req, res));
 

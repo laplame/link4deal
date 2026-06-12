@@ -5,6 +5,7 @@
 
 import type { AuthUser } from '../types/auth';
 import { DASHBOARD_ROUTES } from './dashboardContexts';
+import { ROLE_ROUTES } from './roleRoutes';
 
 export const SHARED_STORE_ROUTE = '/marketplace';
 
@@ -30,8 +31,8 @@ export function getAccountLabel(user: AuthUser | null | undefined): string {
 }
 
 export function getInfluencerOwnerEditHref(user: AuthUser | null | undefined): string {
-  if (canAccessRoleDashboards(user)) return '/dashboard/influencer?hub=ugc';
-  return '/influencer-setup';
+  if (canAccessRoleDashboards(user)) return `${ROLE_ROUTES.influencer.panel}?hub=ugc`;
+  return ROLE_ROUTES.influencer.setup;
 }
 
 export interface NavMenuItem {
@@ -78,28 +79,33 @@ export function getRoleWorkspaceItems(user: AuthUser): NavMenuItem[] {
     case 'brand':
       return [
         store,
+        { to: ROLE_ROUTES.brand.hub, label: 'Mis marcas', hint: 'Espacio de marca' },
+        { to: ROLE_ROUTES.brand.panel, label: 'Panel marca', hint: 'Operación y métricas' },
         { to: '/create-promotion', label: 'Crear promoción', hint: 'Nueva oferta' },
         { to: '/quick-promotion', label: 'Oferta rápida', hint: 'Publicación exprés' },
         {
-          to: '/brand/aplicaciones',
+          to: ROLE_ROUTES.brand.applications,
           label: 'Mis aplicaciones',
           hint: 'Solicitudes y cupones con influencers',
         },
-        { to: '/brand-setup', label: 'Mi marca', hint: 'Perfil del negocio' },
+        { to: ROLE_ROUTES.brand.setup, label: 'Registrar marca', hint: 'Perfil del negocio' },
       ];
     case 'influencer':
       return [
         store,
-        { to: '/influencer-setup', label: 'Mi perfil creador', hint: 'Bio, redes y slug' },
+        { to: ROLE_ROUTES.influencer.hub, label: 'Influencers', hint: 'Directorio y tu espacio' },
+        { to: ROLE_ROUTES.influencer.panel, label: 'Mi panel', hint: 'Mensajes y campañas' },
+        { to: ROLE_ROUTES.influencer.setup, label: 'Mi perfil creador', hint: 'Bio, redes y slug' },
         { to: '/subastas', label: 'Subastas', hint: 'En vivo' },
         { to: '/redenciones-en-vivo', label: 'Redenciones', hint: 'Cupones redimidos' },
       ];
     case 'agency':
       return [
         store,
-        { to: '/agency-setup', label: 'Mi agencia', hint: 'Perfil y clientes' },
-        { to: '/brands', label: 'Marcas', hint: 'Directorio' },
-        { to: '/influencers', label: 'Influencers', hint: 'Directorio' },
+        { to: ROLE_ROUTES.agency.hub, label: 'Mi agencia', hint: 'Panel y clientes' },
+        { to: ROLE_ROUTES.agency.setup, label: 'Configurar agencia', hint: 'Perfil' },
+        { to: ROLE_ROUTES.brand.hub, label: 'Marcas', hint: 'Directorio' },
+        { to: ROLE_ROUTES.influencer.hub, label: 'Influencers', hint: 'Directorio' },
       ];
     default:
       return [

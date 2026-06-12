@@ -25,6 +25,14 @@ import PromotionOptionalAttributionSection, {
     emptyPromotionOptionalAttribution,
     type PromotionOptionalAttribution
 } from '../components/PromotionOptionalAttributionSection';
+import PromotionAttributionContractSection, {
+    emptyPromotionAttributionContract,
+    type PromotionAttributionContract
+} from '../components/promo/PromotionAttributionContractSection';
+import {
+    serializeAttributionContractForSubmit,
+    validateAttributionContract
+} from '../utils/cryptomarketingAttributionContract';
 import type { BizneShop } from '../components/BizneShopCard';
 import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
 
@@ -99,6 +107,7 @@ interface PromotionData {
         warranty: string;
     };
     optionalAttribution: PromotionOptionalAttribution;
+    attributionContract: PromotionAttributionContract;
 }
 
 type ChainPresetMeta = {
@@ -199,7 +208,8 @@ export default function CreatePromotionWizard() {
             returnPolicy: '',
             warranty: ''
         },
-        optionalAttribution: emptyPromotionOptionalAttribution()
+        optionalAttribution: emptyPromotionOptionalAttribution(),
+        attributionContract: emptyPromotionAttributionContract()
     });
 
     useEffect(() => {
@@ -1597,6 +1607,47 @@ export default function CreatePromotionWizard() {
                     placeholder="Ingresa los beneficios uno por línea..."
                 />
             </div>
+
+            <PromotionAttributionContractSection
+                idPrefix="wizard-promo-contract"
+                value={promotionData.attributionContract}
+                onChange={(patch) =>
+                    setPromotionData((prev) => ({
+                        ...prev,
+                        attributionContract: { ...prev.attributionContract, ...patch }
+                    }))
+                }
+                promotionContext={{
+                    validFrom:
+                        promotionData.timing.startDate ||
+                        new Date().toISOString().slice(0, 10),
+                    validUntil:
+                        promotionData.timing.endDate ||
+                        promotionData.timing.validUntil ||
+                        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+                    totalQuantity:
+                        promotionData.inventory.totalQuantity > 0
+                            ? promotionData.inventory.totalQuantity
+                            : 100,
+                    agreedRedemptionPercent:
+                        promotionData.pricing.originalPrice > 0
+                            ? Math.round(
+                                  ((promotionData.pricing.originalPrice - promotionData.pricing.offerPrice) /
+                                      promotionData.pricing.originalPrice) *
+                                      100
+                              )
+                            : promotionData.smartContract.commissionValue || null,
+                    discountPercentage:
+                        promotionData.pricing.originalPrice > 0
+                            ? Math.round(
+                                  ((promotionData.pricing.originalPrice - promotionData.pricing.offerPrice) /
+                                      promotionData.pricing.originalPrice) *
+                                      100
+                              )
+                            : null
+                }}
+                suggestedClientName={promotionData.basicInfo.brand}
+            />
         </div>
     );
 
@@ -1647,6 +1698,13 @@ export default function CreatePromotionWizard() {
                 setCurrentStep(steps.findIndex((s) => s.id === 'targeting'));
                 return;
             }
+        }
+
+        const attributionContractError = validateAttributionContract(promotionData.attributionContract);
+        if (attributionContractError) {
+            setSubmitError(attributionContractError);
+            setCurrentStep(steps.findIndex((s) => s.id === 'terms'));
+            return;
         }
 
         setIsSubmitting(true);
@@ -1748,6 +1806,10 @@ export default function CreatePromotionWizard() {
             });
             if (o.externalProductId?.trim()) {
                 formData.append('externalProductId', o.externalProductId.trim());
+            }
+            const attributionContractPayload = serializeAttributionContractForSubmit(promotionData.attributionContract);
+            if (attributionContractPayload) {
+                formData.append('attributionContract', attributionContractPayload);
             }
 
             // Category: backend espera slug (electronics, fashion...); el wizard usa nombre (Electrónica, Moda...)

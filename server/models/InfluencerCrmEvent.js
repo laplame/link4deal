@@ -21,7 +21,15 @@ const influencerCrmEventSchema = new mongoose.Schema(
         },
         eventType: {
             type: String,
-            enum: ['install', 'open', 'terms_accepted', 'profile_submitted', 'admin_update', 'data_export'],
+            enum: [
+                'install',
+                'open',
+                'terms_accepted',
+                'profile_submitted',
+                'admin_update',
+                'admin_avatar_upload',
+                'data_export',
+            ],
             required: true,
             index: true,
         },

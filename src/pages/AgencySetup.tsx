@@ -195,7 +195,7 @@ const AgencySetup: React.FC = () => {
             const token = localStorage.getItem('auth_token');
             if (!token) {
                 setSubmitError('Debes iniciar sesión para registrar tu agencia.');
-                navigate('/signin', { state: { from: '/agency-setup' } });
+                navigate('/signin', { state: { from: '/agency/setup' } });
                 return;
             }
 
@@ -229,7 +229,7 @@ const AgencySetup: React.FC = () => {
                 throw new Error(msg);
             }
 
-            navigate('/dashboard/agency', { replace: true });
+            navigate('/agency', { replace: true });
         } catch (error) {
             console.error('Error al crear perfil de agencia:', error);
             setSubmitError(error instanceof Error ? error.message : 'Error al crear la agencia');
@@ -247,7 +247,7 @@ const AgencySetup: React.FC = () => {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/signin" replace state={{ from: '/agency-setup' }} />;
+        return <Navigate to="/signin" replace state={{ from: '/agency/setup' }} />;
     }
 
     const renderStep1 = () => (

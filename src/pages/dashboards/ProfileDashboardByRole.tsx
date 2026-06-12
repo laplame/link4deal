@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { canAccessRoleDashboards, SHARED_STORE_ROUTE } from '../../config/roleNavigation';
 import { DASHBOARD_ROUTES } from '../../config/dashboardContexts';
+import { ROLE_ROUTES } from '../../config/roleRoutes';
 
 /**
  * Entrada legacy `/dashboard/panel`: superusuario → suite; staff → admin; resto → tienda.
@@ -28,6 +29,16 @@ export default function ProfileDashboardByRole() {
 
     if (user?.primaryRole === 'admin' || user?.primaryRole === 'moderator') {
         return <Navigate to={DASHBOARD_ROUTES.admin.home} replace />;
+    }
+
+    if (user?.primaryRole === 'influencer') {
+        return <Navigate to={ROLE_ROUTES.influencer.hub} replace />;
+    }
+    if (user?.primaryRole === 'brand') {
+        return <Navigate to={ROLE_ROUTES.brand.hub} replace />;
+    }
+    if (user?.primaryRole === 'agency') {
+        return <Navigate to={ROLE_ROUTES.agency.hub} replace />;
     }
 
     return <Navigate to={SHARED_STORE_ROUTE} replace />;

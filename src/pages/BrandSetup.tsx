@@ -351,7 +351,7 @@ const BrandSetup: React.FC = () => {
             }
 
             clearBrandSetupBizneShop();
-            navigate('/dashboard/brand');
+            navigate('/brands/panel');
         } catch (error) {
             console.error('Error al crear perfil de marca:', error);
             alert(error instanceof Error ? error.message : 'Error al registrar. Intenta de nuevo.');
@@ -921,7 +921,7 @@ const BrandSetup: React.FC = () => {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/signin" replace state={{ from: '/brand-setup' }} />;
+        return <Navigate to="/signin" replace state={{ from: '/brands/setup' }} />;
     }
 
     return (

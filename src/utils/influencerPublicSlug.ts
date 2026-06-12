@@ -74,6 +74,37 @@ export function resolveCanonicalPublicSlug(inf: {
   return '';
 }
 
+export type InfluencerPublicEntryType =
+  | 'profile'
+  | 'store'
+  | 'promo'
+  | 'coupon'
+  | 'faq'
+  | 'edit'
+  | 'auth'
+  | 'other';
+
+/** Parsea /influencer/:slug y subrutas (alineado con server/utils/influencerTraffic.js). */
+export function parseInfluencerPublicPath(pathname: string): {
+  slug: string;
+  entryType: InfluencerPublicEntryType;
+} | null {
+  const path = String(pathname || '').split('?')[0];
+  const m = path.match(/^\/influencer\/([^/]+)(?:\/(.*))?$/i);
+  if (!m) return null;
+  const slug = normalizeSlugInput(m[1]);
+  if (!slug) return null;
+  const rest = (m[2] || '').toLowerCase();
+  let entryType: InfluencerPublicEntryType = 'profile';
+  if (rest.startsWith('tienda')) entryType = 'store';
+  else if (rest.startsWith('promo/')) entryType = 'promo';
+  else if (rest.startsWith('faq')) entryType = 'faq';
+  else if (rest.startsWith('edit')) entryType = 'edit';
+  else if (rest.startsWith('auth')) entryType = 'auth';
+  else if (rest) entryType = 'other';
+  return { slug, entryType };
+}
+
 /** Ruta del perfil: slug público o ObjectId si no hay slug. */
 export function influencerProfilePath(inf: {
   id: string;

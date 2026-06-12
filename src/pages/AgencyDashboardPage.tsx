@@ -40,7 +40,7 @@ export default function AgencyDashboardPage() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/signin" replace state={{ from: '/dashboard/agency' }} />;
+    return <Navigate to="/signin" replace state={{ from: '/agency' }} />;
   }
 
   if (!canAccessRolePanel(user, 'agency')) {
@@ -48,7 +48,7 @@ export default function AgencyDashboardPage() {
   }
 
   if (agencyCheck === 'missing') {
-    return <Navigate to="/agency-setup" replace />;
+    return <Navigate to="/agency/setup" replace />;
   }
 
   return (

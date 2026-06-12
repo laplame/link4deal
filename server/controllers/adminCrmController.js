@@ -35,6 +35,8 @@ const PromotionApplication = require('../models/PromotionApplication');
 const Promotion = require('../models/Promotion');
 const { persistInfluencerImage } = require('../utils/influencerImageStorage');
 const { queueEnsurePromoShortCodesForInfluencer } = require('../utils/ensureInfluencerPromoShortCodes');
+const { enrichPromotionClientFields } = require('../utils/promotionClientFields');
+const { serializePromotionKindFields } = require('../utils/promotionKind');
 
 function promotionRedirectLive(pr, now = new Date()) {
     if (!pr || pr.status !== 'active') return false;
@@ -631,16 +633,20 @@ class AdminCrmController {
             doc.markModified('crm');
             await doc.save();
 
-            await InfluencerCrmEvent.create({
-                influencerId: doc._id,
-                userId: doc.userId || undefined,
-                appKey: 'web',
-                eventType: 'admin_avatar_upload',
-                metadata: {
-                    adminUserId: String(req.user._id),
-                    cloudinary: Boolean(stored.savedToCloudinary),
-                },
-            });
+            try {
+                await InfluencerCrmEvent.create({
+                    influencerId: doc._id,
+                    userId: doc.userId || undefined,
+                    appKey: 'web',
+                    eventType: 'admin_avatar_upload',
+                    metadata: {
+                        adminUserId: String(req.user._id),
+                        cloudinary: Boolean(stored.savedToCloudinary),
+                    },
+                });
+            } catch (eventErr) {
+                console.warn('⚠️ CRM avatar audit event (no bloquea upload):', eventErr.message);
+            }
 
             return res.json({
                 success: true,
@@ -1694,6 +1700,108 @@ class AdminCrmController {
             });
         } catch (error) {
             console.error('❌ CRM patch monetization:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** GET /api/admin/crm/promotions/verification-queue — cola de promos sin deal pendientes */
+    async listPromotionVerificationQueue(req, res) {
+        try {
+            const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+            const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 20));
+            const statusFilter = String(req.query.verificationStatus || 'pending_review').trim();
+
+            const query = { promotionKind: 'verification_only' };
+            if (statusFilter && statusFilter !== 'all') {
+                query.verificationStatus = statusFilter;
+            }
+
+            const result = await Promotion.paginate(query, {
+                page,
+                limit,
+                sort: { createdAt: -1 },
+            });
+
+            return res.json({
+                success: true,
+                data: {
+                    ...result,
+                    docs: (result.docs || []).map((doc) =>
+                        enrichPromotionClientFields(doc.toObject ? doc.toObject() : doc),
+                    ),
+                },
+                message: 'Cola de verificación de promociones sin deal',
+            });
+        } catch (error) {
+            console.error('❌ CRM verification queue:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /** PATCH /api/admin/crm/promotions/:id/verification — aprobar o rechazar verificación */
+    async patchPromotionVerification(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!this.isValidObjectId(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+
+            const action = String(req.body?.action || '').trim().toLowerCase();
+            if (action !== 'approve' && action !== 'reject') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'action debe ser "approve" o "reject"',
+                });
+            }
+
+            const promotion = await Promotion.findById(id);
+            if (!promotion) {
+                return res.status(404).json({ success: false, message: 'Promoción no encontrada' });
+            }
+            if (promotion.promotionKind !== 'verification_only') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Solo aplica a promociones verification_only (sin deal)',
+                });
+            }
+
+            const now = new Date();
+            promotion.verification = promotion.verification || {};
+            promotion.verification.reviewedAt = now;
+            promotion.verification.reviewedByUserId = req.user?._id ? String(req.user._id) : undefined;
+
+            if (action === 'approve') {
+                promotion.verificationStatus = 'approved';
+                if (req.body?.activateOnApprove === true || req.body?.activateOnApprove === 'true') {
+                    promotion.status = 'active';
+                }
+            } else {
+                promotion.verificationStatus = 'rejected';
+                const reason = req.body?.rejectionReason;
+                if (reason != null && String(reason).trim()) {
+                    promotion.verification.rejectionReason = String(reason).trim().slice(0, 2000);
+                }
+                if (promotion.status === 'active') {
+                    promotion.status = 'draft';
+                }
+            }
+
+            await promotion.save();
+
+            return res.json({
+                success: true,
+                data: {
+                    id: promotion._id,
+                    status: promotion.status,
+                    ...serializePromotionKindFields(promotion.toObject ? promotion.toObject() : promotion),
+                },
+                message:
+                    action === 'approve'
+                        ? 'Promoción verificada y aprobada'
+                        : 'Promoción rechazada en verificación',
+            });
+        } catch (error) {
+            console.error('❌ CRM patch promotion verification:', error);
             return res.status(500).json({ success: false, message: error.message });
         }
     }

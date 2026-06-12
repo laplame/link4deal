@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle, LogOut, Search } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import AdminAccessModal from '../components/AdminAccessModal';
 import CartIcon from '../components/CartIcon';
 import Toast from '../components/Toast';
 import DownloadApp from '../components/DownloadApp';
@@ -404,7 +403,6 @@ function productMatchesTextQuery(p: Product, q: string): boolean {
 
 export default function LandingPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [adminModalOpen, setAdminModalOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
     const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
@@ -681,7 +679,7 @@ export default function LandingPage() {
                                                 </div>
                                             </Link>
                                             <Link
-                                                to="/influencers"
+                                                to="/influencer"
                                                 className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                                                 onClick={() => setMarketplaceDropdownOpen(false)}
                                             >
@@ -778,7 +776,7 @@ export default function LandingPage() {
                                         </div>
                                     </Link>
                                     <Link
-                                        to="/influencers"
+                                        to="/influencer"
                                         className="flex items-center justify-center gap-3 text-gray-700 hover:text-blue-600 font-medium transition-colors py-2"
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
@@ -1313,31 +1311,6 @@ export default function LandingPage() {
                 </div>
             </div>
 
-            {/* Floating Admin Button */}
-            <div className="fixed bottom-6 right-6 z-50">
-                <button
-                    onClick={() => setAdminModalOpen(true)}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-full shadow-2xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-110 flex items-center space-x-2 group"
-                >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="font-medium">Admin</span>
-                    <svg className="w-4 h-4 text-yellow-300 group-hover:text-yellow-200 transition-colors" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                    </svg>
-                </button>
-                
-                {/* Tooltip */}
-                <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                    Panel de Administración (Protegido)
-                    <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                </div>
-            </div>
-            {/* Admin Access Modal */}
-            <AdminAccessModal isOpen={adminModalOpen} onClose={() => setAdminModalOpen(false)} />
-            
             {/* Toast Notification */}
             <Toast 
                 message={toastMessage}

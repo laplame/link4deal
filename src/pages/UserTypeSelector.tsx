@@ -135,13 +135,13 @@ const UserTypeSelector: React.FC = () => {
             // Redirigir según el tipo seleccionado
             switch (selectedType) {
                 case 'influencer':
-                    navigate('/influencer-setup');
+                    navigate('/influencer/setup');
                     break;
                 case 'brand':
-                    navigate('/brand-setup');
+                    navigate('/brands/setup');
                     break;
                 case 'agency':
-                    navigate('/agency-setup');
+                    navigate('/agency/setup');
                     break;
                 default:
                     navigate('/dashboard');

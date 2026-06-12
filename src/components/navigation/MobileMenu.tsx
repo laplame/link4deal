@@ -33,7 +33,7 @@ interface Props {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-1 mt-4 first:mt-0 mb-2">{children}</p>;
+  return <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-1 mt-4 first:mt-0 mb-2">{children}</p>;
 }
 
 export function MobileMenu({ isOpen, onClose }: Props) {
@@ -72,23 +72,24 @@ export function MobileMenu({ isOpen, onClose }: Props) {
 
   return (
     <div
-      className={`fixed inset-0 bg-gray-900/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${
-        isOpen ? 'opacity-100 z-50' : 'opacity-0 pointer-events-none'
+      className={`fixed inset-0 bg-black/70 transition-opacity duration-300 xl:hidden ${
+        isOpen ? 'opacity-100 z-[100]' : 'opacity-0 pointer-events-none invisible'
       }`}
+      aria-hidden={!isOpen}
     >
       <div
         ref={menuRef}
-        className={`fixed inset-y-0 right-0 w-full max-w-sm bg-gray-800 shadow-xl transition-transform duration-300 ease-in-out border-l border-gray-700 ${
+        className={`fixed inset-y-0 right-0 w-full max-w-sm bg-gray-950 shadow-2xl transition-transform duration-300 ease-in-out border-l border-gray-600 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full overflow-y-auto">
-          <div className="flex items-center justify-between p-4 border-b border-gray-700 shrink-0">
+          <div className="flex items-center justify-between p-4 border-b border-gray-700 shrink-0 bg-gray-900">
             <h2 className="text-xl font-bold text-white">Menú</h2>
             <button
               onClick={onClose}
               aria-label="Cerrar menú"
-              className="p-2 text-gray-400 hover:text-white transition-colors"
+              className="p-2 text-gray-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <X className="h-6 w-6" />
             </button>
@@ -97,7 +98,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
           <nav className="flex-1 px-4 py-4 space-y-1 pb-8">
             {isAuthenticated && user ? (
               <>
-                <div className="text-gray-300 text-sm mb-3 px-1">Hola, {user.firstName}</div>
+                <div className="text-gray-100 text-sm mb-3 px-1">Hola, {user.firstName}</div>
                 <SectionLabel>{accountLabel}</SectionLabel>
                 {workspaceItems.map((item) => (
                   <MobileMenuButton key={`${item.to}-${item.label}`} to={item.to} onClick={onClose}>
@@ -122,7 +123,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
                     onClose();
                     logout();
                   }}
-                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-gray-100 hover:text-white hover:bg-gray-800 rounded-lg border border-gray-700 transition-colors"
                 >
                   <LogOut className="h-4 w-4" /> Salir
                 </button>
@@ -135,7 +136,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
                 <Link
                   to="/signup"
                   onClick={onClose}
-                  className="block w-full min-h-[44px] px-4 py-3 text-center text-green-400 font-medium bg-gray-700/50 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="block w-full min-h-[44px] px-4 py-3 text-center text-white font-semibold bg-green-600 hover:bg-green-500 rounded-lg transition-colors shadow-sm"
                 >
                   Registrarse
                 </Link>
@@ -192,7 +193,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
                 <Store className="h-4 w-4" /> Tiendas BizneAI
               </span>
             </MobileMenuButton>
-            <MobileMenuButton to="/influencers" onClick={onClose}>
+            <MobileMenuButton to="/influencer" onClick={onClose}>
               <span className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4" /> Influencers
               </span>
@@ -217,10 +218,10 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             {showJoin ? (
               <>
                 <SectionLabel>Únete</SectionLabel>
-                <MobileMenuButton to="/brand-setup" onClick={onClose}>
+                <MobileMenuButton to="/brands/setup" onClick={onClose}>
                   Registrar marca
                 </MobileMenuButton>
-                <MobileMenuButton to="/influencer-setup" onClick={onClose}>
+                <MobileMenuButton to="/influencer/setup" onClick={onClose}>
                   Ser influencer
                 </MobileMenuButton>
               </>

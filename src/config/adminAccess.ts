@@ -56,5 +56,7 @@ export function safeInternalRedirectPath(raw: string | null | undefined): string
   const path = raw.trim();
   if (!path.startsWith('/') || path.startsWith('//')) return null;
   if (path.startsWith('/admin') || path.startsWith('/dashboard/suite')) return path;
+  // Edición de perfil influencer (superuser o dueño)
+  if (/^\/influencer\/[^/]+\/edit\/?$/.test(path)) return path;
   return null;
 }

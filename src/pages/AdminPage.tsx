@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdminPinUnlockSession } from '../config/adminAccess';
-import { getDownloadCount } from '../services/appDownloads';
+import AdminGtmPanel from '../components/admin/AdminGtmPanel';
 import { 
     ArrowLeft, 
     Users, 
@@ -38,7 +38,6 @@ import {
     Ticket,
     CreditCard,
     Store,
-    Download
 } from 'lucide-react';
 
 interface AdminSection {
@@ -57,14 +56,6 @@ interface AdminSection {
 export default function AdminPage() {
     const { user, isAuthenticated, isLoading } = useAuth();
     const isSuperAdmin = user?.isSuperAdmin === true;
-    const [downloadCount, setDownloadCount] = useState<number | null>(null);
-
-    useEffect(() => {
-        if (!isSuperAdmin) return;
-        getDownloadCount()
-            .then(({ count }) => setDownloadCount(count))
-            .catch(() => setDownloadCount(0));
-    }, [isSuperAdmin]);
 
     if (isLoading) {
         return (
@@ -144,19 +135,19 @@ export default function AdminPage() {
             links: [
                 {
                     name: "Setup de Influencer",
-                    path: "/influencer-setup",
+                    path: "/influencer/setup",
                     description: "Configuración completa del perfil de influencer",
                     icon: <Camera className="w-5 h-5" />
                 },
                 {
                     name: "Setup de Marca",
-                    path: "/brand-setup",
+                    path: "/brands/setup",
                     description: "Configuración completa del perfil de marca",
                     icon: <Building2 className="w-5 h-5" />
                 },
                 {
                     name: "Setup de Agencia",
-                    path: "/agency-setup",
+                    path: "/agency/setup",
                     description: "Configuración completa del perfil de agencia",
                     icon: <Building2 className="w-5 h-5" />
                 }
@@ -214,7 +205,7 @@ export default function AdminPage() {
                 },
                 {
                     name: "Marketplace de Influencers",
-                    path: "/influencers",
+                    path: "/influencer",
                     description: "Vista pública del listado de influencers",
                     icon: <Camera className="w-5 h-5" />
                 },
@@ -431,6 +422,12 @@ export default function AdminPage() {
             color: "from-red-500 to-red-600",
             links: [
                 {
+                    name: "Google Tag Manager (verificación)",
+                    path: "/admin#gtm",
+                    description: "Estado GTM, UTMs de entrada e historial de rutas SPA",
+                    icon: <BarChart3 className="w-5 h-5" />
+                },
+                {
                     name: "Dashboard Usuario",
                     path: "/dashboard",
                     description: "Panel principal del usuario logueado",
@@ -519,23 +516,7 @@ export default function AdminPage() {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Contador de descargas de la app */}
-                <div className="mb-8 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl shadow-lg text-white">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                                <Download className="w-8 h-8" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-semibold opacity-90">Descargas de la App</h3>
-                                <p className="text-sm opacity-80">Total de descargas del APK registradas</p>
-                            </div>
-                        </div>
-                        <div className="text-4xl font-bold">
-                            {downloadCount !== null ? downloadCount.toLocaleString() : '—'}
-                        </div>
-                    </div>
-                </div>
+                <AdminGtmPanel />
 
                 {/* Acceso rápido: trabajar en Marcas/Negocios e Influencers */}
                 <div className="mb-10">
@@ -707,7 +688,7 @@ export default function AdminPage() {
                                     <ExternalLink className="w-4 h-4 ml-1" />
                                 </Link>
                                 <Link 
-                                    to="/influencer-setup"
+                                    to="/influencer/setup"
                                     className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
                                 >
                                     Configurar Perfil
@@ -742,7 +723,7 @@ export default function AdminPage() {
                                     <ExternalLink className="w-4 h-4 ml-1" />
                                 </Link>
                                 <Link 
-                                    to="/brand-setup"
+                                    to="/brands/setup"
                                     className="inline-flex items-center text-gray-600 hover:text-gray-700 font-medium"
                                 >
                                     Configurar Perfil
@@ -777,7 +758,7 @@ export default function AdminPage() {
                                     <ExternalLink className="w-4 h-4 ml-1" />
                                 </Link>
                                 <Link 
-                                    to="/agency-setup"
+                                    to="/agency/setup"
                                     className="inline-flex items-center text-gray-600 hover:text-gray-700 font-medium"
                                 >
                                     Configurar Perfil

@@ -7,6 +7,8 @@ import { GeolocationProvider } from './context/GeolocationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { routerConfig } from './config/router';
 import CookieBanner from './components/CookieBanner';
+import GtmRouteTracker from './components/analytics/GtmRouteTracker';
+import InfluencerAttributionTracker from './components/analytics/InfluencerAttributionTracker';
 import LandingPage from './pages/landing';
 import AboutPage from './pages/AboutPage';
 import PrivacyPage from './pages/PrivacyPage';
@@ -25,11 +27,13 @@ import CreatePromotionWizard from './pages/CreatePromotionWizard';
 import ChainLocationsBulkPage from './pages/ChainLocationsBulkPage';
 import QuickPromotionPage from './pages/QuickPromotionPage';
 import PromotionsMarketplace from './pages/PromotionsMarketplace';
+import PromotionsZonePage from './pages/PromotionsZonePage';
 import { BrandPage } from './pages/BrandPage';
 import BrandProfilePage from './pages/BrandProfilePage';
 import BizneShopProfilePage from './pages/BizneShopProfilePage';
 import BizneStoresPage from './pages/BizneStoresPage';
 import InfluencersMarketplace from './pages/InfluencersMarketplace';
+import InfluencerWaitlistLandingPage from './pages/InfluencerWaitlistLandingPage';
 import InfluencerProfilePage from './pages/InfluencerProfilePage';
 import InfluencerProfileEditPage from './pages/InfluencerProfileEditPage';
 import InfluencerAuthPage from './pages/InfluencerAuthPage';
@@ -133,6 +137,8 @@ function App() {
         <GeolocationProvider>
           <CartProvider>
             <Router {...routerConfig}>
+              <GtmRouteTracker />
+              <InfluencerAttributionTracker />
               <Routes>
                 <Route element={<MainLayout />}>
                   <Route path="/" element={<LandingPage />} />
@@ -146,10 +152,11 @@ function App() {
                   <Route path="/cookies" element={<CookiesPage />} />
                   <Route path="/demo/influencer-dashboard" element={<InfluencerHubDemoPage />} />
                   <Route path="/user-type-selector" element={<UserTypeSelector />} />
-                  <Route path="/influencer-setup" element={<InfluencerSetup />} />
-                  <Route path="/brand-setup" element={<BrandSetup />} />
-                  <Route path="/agency-setup" element={<AgencySetup />} />
+                  <Route path="/influencer-setup" element={<Navigate to="/influencer/setup" replace />} />
+                  <Route path="/brand-setup" element={<Navigate to="/brands/setup" replace />} />
+                  <Route path="/agency-setup" element={<Navigate to="/agency/setup" replace />} />
                   <Route path="/promotion-details/:id" element={<PromotionDetailsPage />} />
+                  <Route path="/promo/:id" element={<PromotionDetailsPage />} />
                   <Route path="/promocion/:id/smart-contract" element={<PromotionSmartContractPage />} />
                   <Route path="/coupon/:couponId" element={<CouponPage />} />
                   <Route path="/categories" element={<CategoriesPage />} />
@@ -160,12 +167,20 @@ function App() {
                   <Route path="/quick-promotion" element={<QuickPromotionPage />} />
                   <Route path="/add-promotion" element={<QuickPromotionPage />} />
                   <Route path="/marketplace" element={<PromotionsMarketplace />} />
-                  <Route path="/brand/aplicaciones" element={<BrandApplicationsDashboardPage />} />
+                  <Route path="/promociones/:zoneSlug" element={<PromotionsZonePage />} />
+                  <Route path="/brand/aplicaciones" element={<Navigate to="/brands/aplicaciones" replace />} />
                   <Route path="/brands" element={<BrandPage />} />
+                  <Route path="/brands/setup" element={<BrandSetup />} />
+                  <Route path="/brands/aplicaciones" element={<BrandApplicationsDashboardPage />} />
+                  <Route path="/brands/panel" element={<BrandDashboardPage />} />
                   <Route path="/tiendas" element={<BizneStoresPage />} />
                   <Route path="/brand/:brandId" element={<BrandProfilePage />} />
                   <Route path="/shop/bizne/:shopId" element={<BizneShopProfilePage />} />
-                  <Route path="/influencers" element={<InfluencersMarketplace />} />
+                  <Route path="/influencers" element={<Navigate to="/influencer" replace />} />
+                  <Route path="/influencer" element={<InfluencersMarketplace />} />
+                  <Route path="/influencer/waitlist" element={<InfluencerWaitlistLandingPage />} />
+                  <Route path="/influencer/setup" element={<InfluencerSetup />} />
+                  <Route path="/influencer/panel" element={<InfluencerDashboardPage />} />
                   <Route path="/faq" element={<FaqPage />} />
                   <Route path="/terminos" element={<TermsPage />} />
                   <Route path="/terms" element={<TermsPage />} />
@@ -190,30 +205,11 @@ function App() {
                   <Route path="/admin/crm/influencers" element={<AdminInfluencerProfilesPage />} />
                   <Route path="/admin/crm/instagram-leads" element={<InstagramLeadsCrmPage />} />
                   <Route path="/dashboard/crm" element={<Navigate to="/admin/crm" replace />} />
-                  <Route
-                    path="/dashboard/influencer"
-                    element={
-                      <SuperuserOnlyRoute>
-                        <InfluencerDashboardPage />
-                      </SuperuserOnlyRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/brand"
-                    element={
-                      <SuperuserOnlyRoute>
-                        <BrandDashboardPage />
-                      </SuperuserOnlyRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/agency"
-                    element={
-                      <SuperuserOnlyRoute>
-                        <AgencyDashboardPage />
-                      </SuperuserOnlyRoute>
-                    }
-                  />
+                  <Route path="/dashboard/influencer" element={<Navigate to="/influencer/panel" replace />} />
+                  <Route path="/dashboard/brand" element={<Navigate to="/brands/panel" replace />} />
+                  <Route path="/dashboard/agency" element={<Navigate to="/agency" replace />} />
+                  <Route path="/agency" element={<AgencyDashboardPage />} />
+                  <Route path="/agency/setup" element={<AgencySetup />} />
                   <Route path="/admin/influencers" element={<AdminInfluencersPage />} />
                   <Route path="/admin/brands" element={<AdminBrandsPage />} />
                   <Route path="/admin/agencies" element={<AdminAgenciesPage />} />

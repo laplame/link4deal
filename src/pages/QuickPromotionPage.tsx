@@ -25,9 +25,23 @@ import PromotionOptionalAttributionSection, {
     emptyPromotionOptionalAttribution,
     type PromotionOptionalAttribution
 } from '../components/PromotionOptionalAttributionSection';
+import PromotionAttributionContractSection, {
+    emptyPromotionAttributionContract,
+    type PromotionAttributionContract
+} from '../components/promo/PromotionAttributionContractSection';
+import {
+    serializeAttributionContractForSubmit,
+    validateAttributionContract
+} from '../utils/cryptomarketingAttributionContract';
 import type { BizneShop } from '../components/BizneShopCard';
 import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
 import PromoFlyerStudio from '../components/promo/PromoFlyerStudio';
+import {
+    mapFlyerToQuickPromotion,
+    collectFlyerPromotionImages,
+    type FlyerToPromotionInput,
+} from '../utils/flyerToQuickPromotion';
+import { promotionDetailPath } from '../utils/promotionPublicUrl';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
@@ -95,6 +109,7 @@ interface QuickPromotionData {
     storeLatitude: string;
     storeLongitude: string;
     optionalAttribution: PromotionOptionalAttribution;
+    attributionContract: PromotionAttributionContract;
     /** Sucursales / puntos donde se puede canjear (se envían como chainLocations). */
     redemptionLocations: RedemptionLocationRow[];
 }
@@ -222,11 +237,13 @@ export default function QuickPromotionPage() {
         storeLatitude: '',
         storeLongitude: '',
         optionalAttribution: emptyPromotionOptionalAttribution(),
+        attributionContract: emptyPromotionAttributionContract(),
         redemptionLocations: []
     });
 
     /** Tab activo: crear promoción o generar flyer con IA. */
     const [activeTab, setActiveTab] = useState<'promotion' | 'flyer'>('promotion');
+    const [flyerTransferNotice, setFlyerTransferNotice] = useState<string | null>(null);
     const [formData, setFormData] = useState<QuickPromotionData>(() => emptyQuickForm());
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [termsImagePreviews, setTermsImagePreviews] = useState<string[]>([]);
@@ -403,6 +420,37 @@ export default function QuickPromotionPage() {
             ...prev,
             redemptionLocations: prev.redemptionLocations.filter((_, i) => i !== index)
         }));
+    };
+
+    const applyFlyerToPromotionForm = async (payload: FlyerToPromotionInput) => {
+        const mapped = mapFlyerToQuickPromotion(payload);
+        const imageFiles = await collectFlyerPromotionImages(mapped, payload.flyerImage ?? null);
+
+        imagePreviews.forEach((u) => URL.revokeObjectURL(u));
+        const urls = imageFiles.map((file) => URL.createObjectURL(file));
+
+        setFormData((prev) => ({
+            ...prev,
+            title: mapped.title,
+            description: mapped.description,
+            brand: mapped.brand || prev.brand,
+            originalPrice: mapped.originalPrice,
+            currentPrice: mapped.currentPrice,
+            currency: mapped.currency,
+            offerType: mapped.offerType,
+            cashbackValue: mapped.cashbackValue,
+            images: imageFiles,
+        }));
+        setImagePreviews(urls);
+        setAnalyzeError(null);
+        setSubmitError(null);
+        setActiveTab('promotion');
+        setFlyerTransferNotice(
+            imageFiles.length > 0
+                ? 'Datos e imágenes del flyer cargados. Revisa el formulario y publica cuando estés listo.'
+                : 'Datos del flyer cargados. Sube al menos una foto si no se importó el cartel.'
+        );
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const loadTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
@@ -653,6 +701,11 @@ export default function QuickPromotionPage() {
             setSubmitError('Para quick promotion con URL personalizada debes indicar la URL de compra.');
             return;
         }
+        const attributionContractError = validateAttributionContract(formData.attributionContract);
+        if (attributionContractError) {
+            setSubmitError(attributionContractError);
+            return;
+        }
 
         setIsSubmitting(true);
         setSubmitError(null);
@@ -746,6 +799,10 @@ export default function QuickPromotionPage() {
             if (o.externalProductId?.trim()) {
                 formDataToSend.append('externalProductId', o.externalProductId.trim());
             }
+            const attributionContractPayload = serializeAttributionContractForSubmit(formData.attributionContract);
+            if (attributionContractPayload) {
+                formDataToSend.append('attributionContract', attributionContractPayload);
+            }
             // Tipo de promoción: redirección en lugar de QR
             formDataToSend.append('redirectInsteadOfQr', promotionType === 'quick-promotion' ? 'true' : 'false');
             if (promotionType === 'quick-promotion') {
@@ -771,15 +828,17 @@ export default function QuickPromotionPage() {
             const { data, raw } = await readResponseBodyJson(response);
 
             if (response.ok && data.success) {
-                const id = data.data != null && typeof data.data === 'object' && 'id' in data.data
-                    ? String((data.data as { id: unknown }).id)
+                const payload = data.data != null && typeof data.data === 'object'
+                    ? (data.data as { id?: unknown; publicSlug?: string })
                     : null;
+                const id = payload?.id != null ? String(payload.id) : null;
+                const publicSlug = payload?.publicSlug?.trim() || undefined;
                 if (data.mode === 'simulated' && typeof data.warning === 'string') {
                     window.alert(data.warning);
                 }
                 setSubmitSuccess(true);
                 if (id) {
-                    navigate(`/promotion-details/${id}`);
+                    navigate(promotionDetailPath({ id, publicSlug }));
                 } else {
                     setCreatedPromotionId(id);
                     setShowReward(true);
@@ -867,9 +926,23 @@ export default function QuickPromotionPage() {
 
             <div className="max-w-4xl mx-auto px-4 py-8">
                 {activeTab === 'flyer' ? (
-                    <PromoFlyerStudio />
+                    <PromoFlyerStudio onContinueToPromotion={applyFlyerToPromotionForm} />
                 ) : (
                 <>
+                {flyerTransferNotice && (
+                    <div className="mb-6 rounded-xl border border-amber-500/35 bg-amber-950/30 p-4 flex items-start gap-3">
+                        <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-sm text-amber-100 flex-1">{flyerTransferNotice}</p>
+                        <button
+                            type="button"
+                            onClick={() => setFlyerTransferNotice(null)}
+                            className="text-amber-300/80 hover:text-amber-100 shrink-0"
+                            aria-label="Cerrar aviso"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
                 <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 mb-6 shadow-lg shadow-black/20">
                     <div className="flex items-center gap-2 mb-4">
                         <Sparkles className="h-5 w-5 text-amber-400 shrink-0" />
@@ -909,7 +982,7 @@ export default function QuickPromotionPage() {
                             setRedirectDestination('amazon');
                             setCustomRedirectUrl('');
                             setAmazonProductUrl('');
-                            if (id) navigate(`/promotion-details/${id}`);
+                            if (id) navigate(promotionDetailPath({ id }));
                         }}
                     >
                         <div
@@ -949,7 +1022,7 @@ export default function QuickPromotionPage() {
                                                     setRedirectDestination('amazon');
                                                     setCustomRedirectUrl('');
                                                     setAmazonProductUrl('');
-                                                    if (id) navigate(`/promotion-details/${id}`);
+                                                    if (id) navigate(promotionDetailPath({ id }));
                                                 }}
                                                 className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-medium hover:from-amber-500 hover:to-orange-500 transition-all shadow-lg shadow-amber-900/30"
                                             >
@@ -989,7 +1062,7 @@ export default function QuickPromotionPage() {
                                             setRedirectDestination('amazon');
                                             setCustomRedirectUrl('');
                                             setAmazonProductUrl('');
-                                            if (id) navigate(`/promotion-details/${id}`);
+                                            if (id) navigate(promotionDetailPath({ id }));
                                         }}
                                         className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-200 rounded transition-colors"
                                         aria-label="Cerrar"
@@ -1877,6 +1950,26 @@ export default function QuickPromotionPage() {
                             variant="dark"
                         />
 
+                        <PromotionAttributionContractSection
+                            idPrefix="quick-promo-contract"
+                            value={formData.attributionContract}
+                            onChange={(patch) =>
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    attributionContract: { ...prev.attributionContract, ...patch }
+                                }))
+                            }
+                            promotionContext={{
+                                validFrom: formData.validFrom,
+                                validUntil: formData.validUntil,
+                                totalQuantity: formData.totalQuantity > 0 ? formData.totalQuantity : 100,
+                                agreedRedemptionPercent: calculateDiscount(),
+                                discountPercentage: calculateDiscount()
+                            }}
+                            suggestedClientName={formData.brand}
+                            variant="dark"
+                        />
+
                         {/* Términos y condiciones (opcional; se puede rellenar con Gemini) */}
                         <div className="border-t border-white/10 pt-6">
                             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1894,7 +1987,7 @@ export default function QuickPromotionPage() {
                         {/* Botones */}
                         <div className="flex items-center justify-between pt-6 border-t border-white/10">
                             <Link
-                                to="/promotions-marketplace"
+                                to="/marketplace"
                                 className="text-gray-400 hover:text-amber-200 font-medium transition-colors"
                             >
                                 Cancelar

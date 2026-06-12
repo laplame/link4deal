@@ -1,5 +1,11 @@
 const { findNearestBranch } = require('./geoDistance');
 const { findPresetMatchingPromotion } = require('./chainLocationPresets');
+const { serializePromotionKindFields } = require('./promotionKind');
+const { enrichPurchaseProofClientFields } = require('./promotionPurchaseProof');
+const {
+    buildPromotionPublicSlug,
+    resolvePromotionPublicUrl,
+} = require('./promotionPublicSlug');
 
 function resolveBranchMapsUrl(branch) {
     if (!branch || typeof branch !== 'object') return '';
@@ -124,7 +130,15 @@ function enrichPromotionClientFields(promo, opts = {}) {
         }
     };
 
-    return o;
+    Object.assign(o, serializePromotionKindFields(o));
+
+    if (!o.publicSlug || !String(o.publicSlug).trim()) {
+        const generated = buildPromotionPublicSlug(o);
+        if (generated) o.publicSlug = generated;
+    }
+    o.publicUrl = resolvePromotionPublicUrl(o.publicSlug, o._id || o.id);
+
+    return enrichPurchaseProofClientFields(o);
 }
 
 module.exports = { enrichPromotionClientFields };

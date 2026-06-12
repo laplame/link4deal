@@ -361,7 +361,7 @@ export default function InfluencerStorePage() {
         </div>
         <div className="mt-4">
           <Link
-            to="/influencers"
+            to="/influencer"
             className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden />

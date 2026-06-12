@@ -5,6 +5,7 @@ const influencerController = require('../controllers/influencerController');
 const influencerAppController = require('../controllers/influencerAppController');
 const influencerAuthController = require('../controllers/influencerAuthController');
 const influencerSettlementController = require('../controllers/influencerSettlementController');
+const influencerTrafficController = require('../controllers/influencerTrafficController');
 const { authenticateToken, optionalAuth } = require('../middleware/jwtAuth');
 const { memoryUpload, handleUploadError } = require('../middleware/upload');
 
@@ -37,6 +38,19 @@ router.post(
 
 // GET /api/influencers/by-slug/:slug - Obtener por slug (nombre normalizado, ej. damecodigo)
 router.get('/by-slug/:slug', (req, res) => influencerController.getInfluencerBySlug(req, res));
+
+// GET /api/influencers/by-slug/:slug/demand-stats — interés público (marcas / marketplace)
+router.get('/by-slug/:slug/demand-stats', (req, res) =>
+    influencerTrafficController.getPublicDemandBySlug(req, res),
+);
+
+// Tráfico atribuido por URL de influencer (antes de /:id)
+router.post('/traffic/visit', influencerAppLimiter, (req, res) =>
+    influencerTrafficController.recordVisit(req, res),
+);
+router.get('/traffic/resolve-slug/:slug', (req, res) =>
+    influencerTrafficController.resolveSlug(req, res),
+);
 
 // Bandeja de mensajes del influencer (debe ir antes de /:id)
 router.get('/messages/inbox', authenticateToken, (req, res) => influencerController.getInbox(req, res));
@@ -118,6 +132,11 @@ router.get('/:id/available-products', (req, res) => influencerController.getAvai
 
 // POST /api/influencers/:id/outbound-click — tracking de clicks outbound (quick promotion redirect)
 router.post('/:id/outbound-click', optionalAuth, (req, res) => influencerController.trackOutboundClick(req, res));
+
+// GET /api/influencers/:id/traffic-stats — visitas atribuidas (dueño o super admin)
+router.get('/:id/traffic-stats', authenticateToken, (req, res) =>
+    influencerTrafficController.getStats(req, res),
+);
 
 // GET /api/influencers/:id/promo-short-codes — códigos alfanuméricos cortos (app) por influencer
 router.get('/:id/promo-short-codes', (req, res) => influencerController.getPromoShortCodes(req, res));

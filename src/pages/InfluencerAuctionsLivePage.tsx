@@ -236,7 +236,7 @@ export default function InfluencerAuctionsLivePage() {
                 Actualizar
               </button>
               <Link
-                to="/influencers"
+                to="/influencer"
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-sm font-medium transition-colors"
               >
                 <Users className="h-4 w-4" />

@@ -33,7 +33,7 @@ export default function AdminAgenciesPage() {
       <div className="bg-slate-800 text-slate-100 text-center text-xs py-1.5 px-4">
         Administración Link4Deal — agencias · El panel de una agencia usa{' '}
         <a href={DASHBOARD_ROUTES.role.agency} className="underline font-medium">
-          /dashboard/agency
+          /agency
         </a>
       </div>
       <AgencyDashboard />

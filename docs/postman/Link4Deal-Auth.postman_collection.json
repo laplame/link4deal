@@ -1,0 +1,598 @@
+{
+  "info": {
+    "_postman_id": "link4deal-auth-collection",
+    "name": "Link4Deal — Auth y rutas protegidas",
+    "description": "Colección para probar login JWT por rol y acceder a las APIs protegidas.\n\n**Antes de usar:**\n1. Importa también `Link4Deal-Local.postman_environment.json` y actívalo.\n2. Crea usuarios demo: `node server/scripts/seed-demo-dashboard-users.js --apply`\n3. Super admin (opcional): `node server/scripts/promote-user-to-super-admin.js`\n4. Ejecuta la carpeta **01 — Login (todos los roles)** con *Run collection* o cada request por separado.\n\n**Roles demo:** usuario, influencer, brand, agency (`DemoLink4Deal2026!`).\n**Super admin:** `email_superadmin` + `superAdminPassword` (ver script promote-user-to-super-admin.js).\n\nLas rutas SPA (`/admin`, `/dashboard`, etc.) requieren navegador; esta colección cubre las APIs `/api/...`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" }
+  ],
+  "item": [
+    {
+      "name": "00 — Setup",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "API info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 — Login (todos los roles)",
+      "description": "Ejecuta estos requests para guardar tokens en el entorno (`token_usuario`, `token_influencer`, etc.).",
+      "item": [
+        {
+          "name": "Login — Usuario (user)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login usuario OK', () => pm.response.to.have.status(200));",
+                  "if (body.token) {",
+                  "  pm.environment.set('token_usuario', body.token);",
+                  "  pm.environment.set('token', body.token);",
+                  "}",
+                  "if (body.refreshToken) pm.environment.set('refreshToken', body.refreshToken);",
+                  "if (body.user?.id) pm.environment.set('userId', body.user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_usuario}}\",\n  \"password\": \"{{demoPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login — Influencer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login influencer OK', () => pm.response.to.have.status(200));",
+                  "if (body.token) {",
+                  "  pm.environment.set('token_influencer', body.token);",
+                  "  pm.environment.set('token', body.token);",
+                  "}",
+                  "if (body.refreshToken) pm.environment.set('refreshToken', body.refreshToken);",
+                  "if (body.user?.id) pm.environment.set('userId', body.user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_influencer}}\",\n  \"password\": \"{{demoPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login — Marca (brand)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login brand OK', () => pm.response.to.have.status(200));",
+                  "if (body.token) {",
+                  "  pm.environment.set('token_brand', body.token);",
+                  "  pm.environment.set('token', body.token);",
+                  "}",
+                  "if (body.refreshToken) pm.environment.set('refreshToken', body.refreshToken);",
+                  "if (body.user?.id) pm.environment.set('userId', body.user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_brand}}\",\n  \"password\": \"{{demoPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login — Agencia (agency)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login agency OK', () => pm.response.to.have.status(200));",
+                  "if (body.token) {",
+                  "  pm.environment.set('token_agency', body.token);",
+                  "  pm.environment.set('token', body.token);",
+                  "}",
+                  "if (body.refreshToken) pm.environment.set('refreshToken', body.refreshToken);",
+                  "if (body.user?.id) pm.environment.set('userId', body.user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_agency}}\",\n  \"password\": \"{{demoPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login — Super Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Login super admin OK', () => pm.response.to.have.status(200));",
+                  "if (body.token) {",
+                  "  pm.environment.set('token_superadmin', body.token);",
+                  "  pm.environment.set('token', body.token);",
+                  "}",
+                  "if (body.refreshToken) pm.environment.set('refreshToken', body.refreshToken);",
+                  "if (body.user?.id) pm.environment.set('userId', body.user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_superadmin}}\",\n  \"password\": \"{{superAdminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login — App Influencer (auth dedicado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('App influencer login OK', () => pm.response.to.have.status(200));",
+                  "const token = body.token || body.data?.token;",
+                  "if (token) {",
+                  "  pm.environment.set('token_influencer', token);",
+                  "  pm.environment.set('token', token);",
+                  "}",
+                  "const inf = body.influencer || body.data?.influencer;",
+                  "if (inf?._id) pm.environment.set('influencerId', inf._id);",
+                  "if (inf?.id) pm.environment.set('influencerId', inf.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{email_influencer}}\",\n  \"password\": \"{{demoPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/influencers/app/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Sesión (Bearer {{token}})",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/me"
+          }
+        },
+        {
+          "name": "POST /api/auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/refresh"
+          }
+        },
+        {
+          "name": "POST /api/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Usuario (token_usuario)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_usuario}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/auth/me",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/auth/me" }
+        },
+        {
+          "name": "GET /api/users/:id (propio perfil)",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users/{{userId}}" }
+        }
+      ]
+    },
+    {
+      "name": "04 — Influencer (token_influencer)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_influencer}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "Perfil y cuenta",
+          "item": [
+            {
+              "name": "GET /api/influencers/me",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const b = pm.response.json();",
+                      "const inf = b.influencer || b.data?.influencer || b;",
+                      "const id = inf?._id || inf?.id;",
+                      "if (id) pm.environment.set('influencerId', id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/me" }
+            },
+            {
+              "name": "GET /api/influencers/me/edit-access",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/me/edit-access" }
+            },
+            {
+              "name": "GET /api/influencers/messages/inbox",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/messages/inbox" }
+            }
+          ]
+        },
+        {
+          "name": "App móvil influencer",
+          "item": [
+            {
+              "name": "POST /api/influencers/app/verify-session",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{}" },
+                "url": "{{baseUrl}}/api/influencers/app/verify-session"
+              }
+            },
+            {
+              "name": "GET /api/influencers/app/campaigns",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/app/campaigns" }
+            },
+            {
+              "name": "GET /api/influencers/app/settlements/summary",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/app/settlements/summary" }
+            },
+            {
+              "name": "GET /api/influencers/app/settlements",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/influencers/app/settlements" }
+            }
+          ]
+        },
+        {
+          "name": "Tráfico y analytics",
+          "item": [
+            {
+              "name": "GET /api/influencers/:id/traffic-stats",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/influencers/{{influencerId}}/traffic-stats"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Marca (token_brand)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_brand}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/brands/me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "const brand = b.brand || b.data?.brand || b;",
+                  "const id = brand?._id || brand?.id;",
+                  "if (id) pm.environment.set('brandId', id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/brands/me" }
+        },
+        {
+          "name": "GET /api/brands/me/promotions",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/brands/me/promotions" }
+        }
+      ]
+    },
+    {
+      "name": "06 — Agencia (token_agency)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_agency}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/agencies/mine",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "const ag = b.agency || b.agencies?.[0] || b.data?.agency;",
+                  "const id = ag?._id || ag?.id;",
+                  "if (id) pm.environment.set('agencyId', id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/agencies/mine" }
+        },
+        {
+          "name": "GET /api/agencies/:id/analytics",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/agencies/{{agencyId}}/analytics" }
+        }
+      ]
+    },
+    {
+      "name": "07 — Panel marcas (PIN o super admin JWT)",
+      "item": [
+        {
+          "name": "GET aplicaciones — JWT super admin",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/promotion-applications/brand"
+          }
+        },
+        {
+          "name": "GET aplicaciones — PIN (X-Brand-Dashboard-Password)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Brand-Dashboard-Password", "value": "{{brandDashboardPin}}" }
+            ],
+            "url": "{{baseUrl}}/api/promotion-applications/brand"
+          }
+        },
+        {
+          "name": "PATCH aplicación status — super admin JWT",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            },
+            "url": "{{baseUrl}}/api/promotion-applications/{{applicationId}}/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — Super Admin — CRM",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/admin/crm/stats",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/stats" }
+        },
+        {
+          "name": "GET /api/admin/crm/pipeline/board",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/pipeline/board" }
+        },
+        {
+          "name": "GET /api/admin/crm/monetization/board",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/monetization/board" }
+        },
+        {
+          "name": "GET /api/admin/crm/influencers",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/influencers" }
+        },
+        {
+          "name": "GET /api/admin/crm/influencers/:id",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/influencers/{{influencerId}}" }
+        },
+        {
+          "name": "GET /api/admin/crm/influencers/:id/monetization",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/influencers/{{influencerId}}/monetization" }
+        },
+        {
+          "name": "GET /api/admin/crm/influencers/:id/outreach",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/influencers/{{influencerId}}/outreach" }
+        },
+        {
+          "name": "GET /api/admin/crm/influencers/:id/live-activity",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/influencers/{{influencerId}}/live-activity" }
+        },
+        {
+          "name": "GET /api/admin/crm/promotion-applications",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/promotion-applications" }
+        },
+        {
+          "name": "GET /api/admin/crm/promotion-applications/categories",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/promotion-applications/categories" }
+        },
+        {
+          "name": "GET /api/admin/crm/promotions/verification-queue",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/crm/promotions/verification-queue" }
+        }
+      ]
+    },
+    {
+      "name": "09 — Super Admin — Instagram",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/admin/instagram/integration",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/instagram/integration" }
+        },
+        {
+          "name": "GET /api/admin/instagram/leads/stats",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/instagram/leads/stats" }
+        },
+        {
+          "name": "GET /api/admin/instagram/leads",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/instagram/leads" }
+        }
+      ]
+    },
+    {
+      "name": "10 — Super Admin — Outbound y descargas",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/admin/outbound/clicks",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/admin/outbound/clicks" }
+        },
+        {
+          "name": "GET /api/app-downloads (admin)",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/app-downloads" }
+        }
+      ]
+    },
+    {
+      "name": "11 — Super Admin — Usuarios (moderador/admin)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{token_superadmin}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/users (listado)",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users?page=1&limit=20" }
+        },
+        {
+          "name": "GET /api/users/stats/overview",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users/stats/overview" }
+        }
+      ]
+    },
+    {
+      "name": "12 — Referencia rutas SPA protegidas",
+      "description": "Rutas del frontend (React). Abrir en navegador con sesión iniciada; Postman no las sirve directamente.\n\n| Rol | Rutas principales |\n|-----|-------------------|\n| Usuario | `/marketplace`, `/dashboard` (solo superuser) |\n| Influencer | `/influencer`, `/influencer/panel`, `/influencer/setup`, `/influencer/{{influencerSlug}}` |\n| Marca | `/brands`, `/brands/panel`, `/brands/setup`, `/brands/aplicaciones` |\n| Agencia | `/agency`, `/agency/setup` |\n| Super admin | `/admin`, `/admin/dashboard`, `/admin/crm`, `/admin/influencers`, `/admin/brands`, `/admin/agencies`, `/dashboard/suite` |\n\nTras login web, el JWT se guarda en localStorage del navegador (no en Postman).",
+      "item": [
+        {
+          "name": "(info) Abrir frontend — Influencer hub",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{frontendUrl}}/influencer"
+          }
+        },
+        {
+          "name": "(info) Abrir frontend — Admin CRM",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{frontendUrl}}/admin/crm"
+          }
+        },
+        {
+          "name": "(info) Abrir frontend — Dashboard suite",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{frontendUrl}}/dashboard/suite"
+          }
+        }
+      ]
+    }
+  ]
+}

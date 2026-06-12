@@ -7,6 +7,7 @@
  */
 
 import type { AuthUser, PrimaryRole } from '../types/auth';
+import { ROLE_ROUTES } from './roleRoutes';
 
 export type DashboardContext = 'admin' | 'role' | 'suite';
 
@@ -16,12 +17,12 @@ export const DASHBOARD_ROUTES = {
   panelByRole: '/dashboard/panel',
   role: {
     user: '/dashboard',
-    influencer: '/dashboard/influencer',
-    brand: '/dashboard/brand',
-    agency: '/dashboard/agency',
+    influencer: ROLE_ROUTES.influencer.hub,
+    brand: ROLE_ROUTES.brand.hub,
+    agency: ROLE_ROUTES.agency.hub,
   },
   admin: {
-    home: '/admin',
+    home: ROLE_ROUTES.admin.home,
     superPromotions: '/admin/dashboard',
     crm: '/admin/crm',
     influencers: '/admin/influencers',
@@ -53,6 +54,9 @@ export function defaultRouteAfterLogin(user: AuthUser): string {
   if (user.primaryRole === 'admin' || user.primaryRole === 'moderator') {
     return DASHBOARD_ROUTES.admin.home;
   }
+  if (user.primaryRole === 'influencer') return ROLE_ROUTES.influencer.hub;
+  if (user.primaryRole === 'brand') return ROLE_ROUTES.brand.hub;
+  if (user.primaryRole === 'agency') return ROLE_ROUTES.agency.hub;
   return SHARED_STORE_ROUTE;
 }
 

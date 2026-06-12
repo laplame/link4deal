@@ -5,6 +5,10 @@ const fs = require('fs').promises;
 const cloudinaryConfig = require('../config/cloudinary');
 const { getUploadDir, getPromotionUploadDir } = require('../middleware/upload');
 
+function getPromotionProofUploadDir() {
+    return path.join(getPromotionUploadDir(), 'proof');
+}
+
 /**
  * Resuelve ruta física de una imagen de promoción (ruta actual, legacy o raíz uploads).
  */
@@ -98,6 +102,68 @@ async function persistPromotionImage(file, optimizedImage = null) {
     };
 }
 
+async function persistPromotionProofImage(file, optimizedImage = null) {
+    const uploadDir = getPromotionProofUploadDir();
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const optimizedFormat = optimizedImage?.format || path.extname(file.originalname || '').slice(1) || 'jpg';
+    const fileExtension = extensionForFormat(optimizedFormat, file.originalname);
+    const uniqueFilename = `proof-image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExtension}`;
+    const localPath = path.join(uploadDir, uniqueFilename);
+    const publicLocalUrl = `/uploads/promotions/proof/${uniqueFilename}`;
+
+    await fs.writeFile(localPath, file.buffer);
+
+    let cloudinaryUrl = null;
+    if (cloudinaryConfig.isConfigured) {
+        try {
+            const cloudinaryFile = {
+                ...file,
+                buffer: file.buffer,
+                mimetype: mimetypeForFormat(optimizedFormat),
+            };
+            const cloudinaryResult = await cloudinaryConfig.uploadImage(cloudinaryFile, {
+                folder: 'link4deal/promotions/proof',
+            });
+            if (cloudinaryResult.success) {
+                cloudinaryUrl = cloudinaryResult.data.secure_url;
+            }
+        } catch (cloudinaryError) {
+            console.warn(`⚠️ Cloudinary proof image: ${cloudinaryError.message}`);
+        }
+    }
+
+    return {
+        originalName: file.originalname,
+        filename: uniqueFilename,
+        path: localPath,
+        url: cloudinaryUrl || publicLocalUrl,
+        uploadedAt: new Date(),
+    };
+}
+
+async function persistPromotionProofVideo(file) {
+    const uploadDir = getPromotionProofUploadDir();
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.mp4';
+    const allowed = ['.mp4', '.mov', '.webm', '.m4v'];
+    const safeExt = allowed.includes(ext) ? ext : '.mp4';
+    const uniqueFilename = `proof-video-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${safeExt}`;
+    const localPath = path.join(uploadDir, uniqueFilename);
+    const publicLocalUrl = `/uploads/promotions/proof/${uniqueFilename}`;
+
+    await fs.writeFile(localPath, file.buffer);
+
+    return {
+        originalName: file.originalname,
+        filename: uniqueFilename,
+        path: localPath,
+        url: publicLocalUrl,
+        uploadedAt: new Date(),
+    };
+}
+
 /**
  * Sube un archivo local existente a Cloudinary y devuelve URLs.
  */
@@ -123,8 +189,11 @@ async function uploadLocalFileToCloudinary(localPath, options = {}) {
 module.exports = {
     getUploadDir,
     getPromotionUploadDir,
+    getPromotionProofUploadDir,
     resolveLocalPromotionFilePath,
     firstExistingPath,
     persistPromotionImage,
+    persistPromotionProofImage,
+    persistPromotionProofVideo,
     uploadLocalFileToCloudinary,
 };

@@ -33,7 +33,7 @@ server {
     # Frontend (React/Vite build)
     location / {
         root /home/cto/project/link4deal/dist;
-        try_files $uri $uri/ /index.html;
+        try_files $uri /index.html;
         index index.html;
 
         add_header X-Frame-Options "SAMEORIGIN" always;

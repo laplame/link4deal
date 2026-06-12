@@ -271,7 +271,7 @@ export default function AdminPromotionApplicationsPage() {
               Si el influencer aplicó sin vincular su ID, aparecerán aquí como «Sin influencer».
             </p>
             <Link
-              to="/brand/aplicaciones"
+              to="/brands/aplicaciones"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block mt-4 text-sm text-purple-700 underline"

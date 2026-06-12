@@ -15,7 +15,16 @@ const promotionSchema = new mongoose.Schema({
         trim: true,
         maxlength: [1000, 'La descripción no puede exceder 1000 caracteres']
     },
-    
+    /** URL pública legible: /promo/{publicSlug} */
+    publicSlug: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        maxlength: [160, 'El slug no puede exceder 160 caracteres'],
+        index: true,
+        sparse: true,
+    },
+
     // Información del producto
     productName: {
         type: String,
@@ -250,10 +259,105 @@ const promotionSchema = new mongoose.Schema({
     source: { type: String, trim: true },
     medium: { type: String, trim: true },
 
+    /**
+     * Contrato de atribución Cryptomarketing (opcional).
+     * El texto renderizado se genera en servidor a partir de los metadatos.
+     */
+    /** Solo se persiste cuando type === 'cryptomarketing' (sin defaults que generen stubs vacíos). */
+    attributionContract: {
+        type: {
+            type: String,
+            enum: ['cryptomarketing'],
+            required: true
+        },
+        clientName: { type: String, trim: true, required: true },
+        providerName: { type: String, trim: true, required: true },
+        signDate: { type: String, trim: true, required: true },
+        promotionValidFrom: { type: String, trim: true },
+        promotionValidUntil: { type: String, trim: true },
+        promotionTotalQuantity: { type: Number, min: 0 },
+        agreedRedemptionPercent: { type: Number, min: 0, max: 100 },
+        /** @deprecated Contratos anteriores con vigencia fija en meses */
+        contractMonths: { type: Number, min: 1, max: 120 },
+        renderedText: { type: String, maxlength: 50000, required: true },
+        createdAt: { type: Date, default: Date.now }
+    },
+
     /** Si es true, al solicitar cupón no se genera QR; se redirige a redirectToUrl (ej. link de afiliado Amazon). */
     redirectInsteadOfQr: { type: Boolean, default: false },
     /** URL de redirección para comprar (ej. Amazon afiliado). Si redirectInsteadOfQr y está vacío, se usa el default del sistema (amzn.to). */
     redirectToUrl: { type: String, trim: true, default: '' },
+
+    /**
+     * Sin deal = verificación de oferta real (app móvil); con deal = flujo comercial (QR, comisiones).
+     * @see server/utils/promotionKind.js
+     */
+    promotionKind: {
+        type: String,
+        enum: ['verification_only', 'with_deal'],
+        default: 'with_deal',
+    },
+    hasDeal: {
+        type: Boolean,
+        default: true,
+    },
+    sourceChannel: {
+        type: String,
+        enum: ['mobile_app', 'web_wizard', 'web_quick', 'admin', 'import'],
+        default: 'web_wizard',
+    },
+    verificationStatus: {
+        type: String,
+        enum: ['pending_submission', 'pending_review', 'approved', 'rejected', 'not_applicable'],
+        default: 'not_applicable',
+    },
+    verification: {
+        submittedAt: Date,
+        reviewedAt: Date,
+        reviewedByUserId: { type: String, trim: true },
+        rejectionReason: { type: String, trim: true, maxlength: 2000 },
+        /** Sin deal con evidencia: auto-aprobada (sin cola CRM). */
+        autoApproved: { type: Boolean, default: false },
+        approvalMode: {
+            type: String,
+            enum: ['auto_third_party', 'admin_crm', 'not_applicable'],
+            default: 'not_applicable',
+        },
+        purchaseProof: [{
+            mediaType: {
+                type: String,
+                enum: ['image', 'video', 'video_link'],
+            },
+            source: {
+                type: String,
+                enum: ['upload', 'external_link'],
+                default: 'upload',
+            },
+            url: { type: String, trim: true },
+            originalName: { type: String, trim: true },
+            uploadedAt: { type: Date, default: Date.now },
+        }],
+    },
+    submittedByUserId: { type: String, trim: true },
+    deviceId: { type: String, trim: true },
+
+    /**
+     * Ofertas de terceros (verification_only): no nativas del ecosistema Cryptomarketing.
+     * Sin contrato de marca; condiciones pueden cambiar.
+     */
+    isEcosystemNative: { type: Boolean, default: true },
+    hasBrandContract: { type: Boolean, default: true },
+    offerMayChange: { type: Boolean, default: false },
+    /** Progreso de badge comunitario: verificada por 10, 100 o N (app). */
+    communityVerification: {
+        badgeTier: {
+            type: String,
+            enum: ['none', 'target_10', 'target_100', 'target_custom'],
+            default: 'target_10',
+        },
+        targetCount: { type: Number, default: 10, min: 1 },
+        currentCount: { type: Number, default: 0, min: 0 },
+    },
     
     // Estadísticas
     views: {
@@ -296,6 +400,8 @@ promotionSchema.index({ isHotOffer: 1, status: 1 });
 // Las coordenadas del modelo son { latitude, longitude }; un índice 2dsphere aquí hace fallar insertMany/save.
 // Si necesitas búsquedas por radio, añade un campo GeoJSON y rellénalo en el controlador, o migra coordenadas a ese formato.
 promotionSchema.index({ createdAt: -1 });
+promotionSchema.index({ promotionKind: 1, verificationStatus: 1, status: 1 });
+promotionSchema.index({ sourceChannel: 1, createdAt: -1 });
 
 // Virtual para calcular si la promoción está activa
 promotionSchema.virtual('isActive').get(function() {
@@ -320,9 +426,24 @@ promotionSchema.virtual('savings').get(function() {
     return this.originalPrice - this.currentPrice;
 });
 
-// Middleware para actualizar updatedAt
-promotionSchema.pre('save', function(next) {
+const {
+    buildPromotionPublicSlug,
+    ensureUniquePublicSlug,
+} = require('../utils/promotionPublicSlug');
+
+// Middleware: updatedAt + slug público indexable
+promotionSchema.pre('save', async function savePromotionHook(next) {
     this.updatedAt = new Date();
+    try {
+        if (!this.publicSlug || !String(this.publicSlug).trim()) {
+            const base = buildPromotionPublicSlug(this);
+            if (base) {
+                this.publicSlug = await ensureUniquePublicSlug(this.constructor, base, this._id);
+            }
+        }
+    } catch (err) {
+        return next(err);
+    }
     next();
 });
 

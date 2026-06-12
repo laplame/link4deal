@@ -17,7 +17,7 @@ export default function InfluencerDashboardPage() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/signin" replace state={{ from: '/dashboard/influencer' }} />;
+    return <Navigate to="/signin" replace state={{ from: '/influencer/panel' }} />;
   }
 
   if (!canAccessRolePanel(user, 'influencer')) {

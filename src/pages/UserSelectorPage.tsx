@@ -34,7 +34,7 @@ export default function UserSelectorPage() {
             </div>
           </Link>
 
-          <Link to="/influencers" className="group">
+          <Link to="/influencer" className="group">
             <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 hover:border-purple-500 transition-all">
               <Users className="h-12 w-12 text-purple-400 mb-4" />
               <h2 className="text-2xl font-bold text-white mb-4">I'm an Influencer</h2>
