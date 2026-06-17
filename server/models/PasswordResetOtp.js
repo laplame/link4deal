@@ -9,7 +9,7 @@ const passwordResetOtpSchema = new mongoose.Schema(
         phone: { type: String, required: true, trim: true, index: true },
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
         otpHash: { type: String, required: true, trim: true },
-        expiresAt: { type: Date, required: true, index: true },
+        expiresAt: { type: Date, required: true },
         attempts: { type: Number, default: 0, min: 0 },
         verifiedAt: { type: Date, default: null },
         consumedAt: { type: Date, default: null },

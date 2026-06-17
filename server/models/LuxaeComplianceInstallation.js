@@ -34,7 +34,6 @@ const luxaeComplianceInstallationSchema = new mongoose.Schema(
             type: String,
             required: true,
             trim: true,
-            index: true,
             maxlength: 128,
         },
         platform: {

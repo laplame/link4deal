@@ -298,7 +298,7 @@ const cartSchema = new mongoose.Schema({
 cartSchema.index({ user: 1, status: 1 });
 cartSchema.index({ sessionId: 1 });
 cartSchema.index({ status: 1, updatedAt: 1 });
-cartSchema.index({ expiresAt: 1 });
+// expiresAt: TTL definido en el campo (index: { expireAfterSeconds: 0 })
 
 // Virtuals para cartItemSchema
 cartItemSchema.virtual('totalPrice').get(function() {

@@ -17,10 +17,12 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 5001,
+        QR_REDEEM_RETENTION_DAYS: '90',
       },
       env_production: {
         NODE_ENV: 'production',
         PORT: 5001,
+        QR_REDEEM_RETENTION_DAYS: '90',
       },
       error_file: path.join(logsDir, 'pm2-error.log'),
       out_file: path.join(logsDir, 'pm2-out.log'),

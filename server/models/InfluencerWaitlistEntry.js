@@ -8,7 +8,6 @@ const influencerWaitlistEntrySchema = new mongoose.Schema(
             trim: true,
             lowercase: true,
             maxlength: 320,
-            index: true,
         },
         name: { type: String, trim: true, default: '', maxlength: 120 },
         /** @deprecated usar primarySocialPlatform + primarySocialHandle; se mantiene si plataforma = instagram */
