@@ -28,6 +28,7 @@ const loyaltyRoutes = require('./routes/loyalty');
 const geoToolsRoutes = require('./routes/geoTools');
 const seoPublicRoutes = require('./routes/seoPublic');
 const influencerWaitlistRoutes = require('./routes/influencerWaitlist');
+const whatsappBotRoutes = require('./routes/whatsappBot');
 
 // ===== CONFIGURACIÓN =====
 const app = express();
@@ -277,6 +278,9 @@ app.get('/api', (req, res) => {
 
 // ===== SEO PÚBLICO (sitemap, robots, prerender HTML) =====
 app.use(seoPublicRoutes);
+
+// ===== WEBHOOK WHATSAPP (Twilio + Claude onboarding bot) =====
+app.use(whatsappBotRoutes);
 
 // ===== RUTAS DE LA API =====
 

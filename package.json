@@ -50,6 +50,7 @@
     "db:redemptions-today": "node server/scripts/list-redemptions-by-day.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.2",
     "axios": "^1.6.2",
     "cloudinary": "^1.41.0",
     "cors": "^2.8.5",
@@ -64,10 +65,15 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",
-    "recharts": "^2.15.4"
+    "recharts": "^2.15.4",
+    "twilio": "^6.0.2"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "core-js", "sharp"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "core-js",
+      "sharp"
+    ]
   },
   "overrides": {
     "vite": "5.4.21"

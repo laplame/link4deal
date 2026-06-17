@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Filter, 
@@ -58,6 +58,16 @@ import { influencerProfilePath } from '../utils/influencerPublicSlug';
 
 type Influencer = MarketplaceInfluencer;
 
+/** Mezcla aleatoria (Fisher-Yates) sin mutar el arreglo original. */
+function shuffleArray<T>(input: T[]): T[] {
+  const arr = [...input];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 interface FilterState {
   category: string;
   location: string;
@@ -68,6 +78,7 @@ interface FilterState {
 }
 
 export default function InfluencersMarketplace() {
+  const navigate = useNavigate();
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [filteredInfluencers, setFilteredInfluencers] = useState<Influencer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,7 +88,7 @@ export default function InfluencersMarketplace() {
     followersRange: 'all',
     engagementRange: 'all',
     status: 'all',
-    sortBy: 'trending'
+    sortBy: 'random'
   });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null);
@@ -115,6 +126,7 @@ export default function InfluencersMarketplace() {
           ? (data.data.docs as Record<string, unknown>[]).map(normalizeMarketplaceInfluencer)
           : [];
         list = list.filter(i => (i.username || '').replace(/^@/, '') !== 'influencer-general');
+        list = shuffleArray(list);
         setInfluencers(list);
         setFilteredInfluencers(list);
         if (!ok && !data.message) setApiMessage('Error al cargar influencers. Comprueba la conexión y reintenta.');
@@ -163,6 +175,9 @@ export default function InfluencersMarketplace() {
 
     // Ordenamiento
     switch (filters.sortBy) {
+      case 'random':
+        // Conserva el orden aleatorio establecido al cargar (no re-ordena).
+        break;
       case 'trending':
         filtered = [...filtered].sort((a, b) => b.totalFollowers - a.totalFollowers);
         break;
@@ -307,6 +322,7 @@ export default function InfluencersMarketplace() {
               onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
               className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
+              <option value="random">Aleatorio</option>
               <option value="trending">Más Seguidores</option>
               <option value="engagement">Mayor Engagement</option>
               <option value="earnings">Mayores Ganancias</option>
@@ -452,7 +468,20 @@ export default function InfluencersMarketplace() {
             const cs = influencer.couponStats;
 
             return (
-            <div key={influencer.id} className="group bg-white rounded-2xl shadow-sm border border-gray-200/90 overflow-hidden hover:shadow-xl hover:border-purple-200/80 transition-all duration-300 ring-1 ring-transparent hover:ring-purple-100">
+            <div
+              key={influencer.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`Ver perfil de ${influencer.name}`}
+              onClick={() => navigate(profilePath(influencer))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(profilePath(influencer));
+                }
+              }}
+              className="group cursor-pointer bg-white rounded-2xl shadow-sm border border-gray-200/90 overflow-hidden hover:shadow-xl hover:border-purple-200/80 transition-all duration-300 ring-1 ring-transparent hover:ring-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400"
+            >
               <div className="h-1.5 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 opacity-90 group-hover:opacity-100 transition-opacity" />
               <div className="relative p-6 pb-4">
                 <div className="flex items-start justify-between mb-4">
@@ -600,6 +629,7 @@ export default function InfluencersMarketplace() {
                 {/* Botón de ver perfil */}
                                         <Link
                   to={profilePath(influencer)}
+                  onClick={(e) => e.stopPropagation()}
                   className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 px-4 rounded-xl font-medium hover:from-pink-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2 shadow-md shadow-purple-500/20"
                 >
                   <Eye className="w-5 h-5" />
@@ -608,15 +638,15 @@ export default function InfluencersMarketplace() {
 
                 {/* Acciones adicionales */}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                  <button className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <button type="button" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
                     <Heart className="w-4 h-4" />
                     <span className="text-sm">Guardar</span>
                   </button>
-                  <button className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <button type="button" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
                     <Share2 className="w-4 h-4" />
                     <span className="text-sm">Compartir</span>
                   </button>
-                  <button className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <button type="button" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors">
                     <Mail className="w-4 h-4" />
                     <span className="text-sm">Contactar</span>
                   </button>
