@@ -33,6 +33,18 @@ router.get('/marketplace', async (req, res) => {
     }
 });
 
+router.get('/influencer', async (req, res) => {
+    try {
+        const html = await seoPublicService.renderInfluencerIndexHtml();
+        res.type('text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+    } catch (err) {
+        console.error('prerender /influencer:', err);
+        res.status(500).type('text/plain').send('Error');
+    }
+});
+
 router.get('/promo/:slug', async (req, res) => {
     try {
         const html = await seoPublicService.renderPromoHtml(req.params.slug);
@@ -59,6 +71,58 @@ router.get('/promociones/:slug', async (req, res) => {
         res.send(html);
     } catch (err) {
         console.error('prerender /promociones:', err);
+        res.status(500).type('text/plain').send('Error');
+    }
+});
+
+// ===== Head-only SSR por página dinámica =====
+// Sirven el shell real de la SPA con un <head> dinámico (meta/OG/JSON-LD).
+// El body (#root + bundles) queda intacto: la SPA hidrata y renderiza el contenido.
+
+router.get('/promotion-details/:id', async (req, res) => {
+    try {
+        const html = await seoPublicService.renderPromoDetailsHeadHtml(req.params.id);
+        res.type('text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+    } catch (err) {
+        console.error('head-ssr /promotion-details:', err);
+        res.status(500).type('text/plain').send('Error');
+    }
+});
+
+router.get('/influencer/:slug', async (req, res) => {
+    try {
+        const html = await seoPublicService.renderInfluencerHeadHtml(req.params.slug);
+        res.type('text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+    } catch (err) {
+        console.error('head-ssr /influencer:', err);
+        res.status(500).type('text/plain').send('Error');
+    }
+});
+
+router.get('/brand/:brandId', async (req, res) => {
+    try {
+        const html = await seoPublicService.renderBrandHeadHtml(req.params.brandId);
+        res.type('text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+    } catch (err) {
+        console.error('head-ssr /brand:', err);
+        res.status(500).type('text/plain').send('Error');
+    }
+});
+
+router.get('/category/:slug', (req, res) => {
+    try {
+        const html = seoPublicService.renderCategoryHeadHtml(req.params.slug);
+        res.type('text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=600');
+        res.send(html);
+    } catch (err) {
+        console.error('head-ssr /category:', err);
         res.status(500).type('text/plain').send('Error');
     }
 });
