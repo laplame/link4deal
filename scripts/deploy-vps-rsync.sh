@@ -128,6 +128,8 @@ if [[ "$DO_NGINX" == true ]]; then
 fi
 
 if [[ "$DO_RESTART" == true ]]; then
+  # server/node_modules npm legacy rompe POST (iconv-lite); pnpm workspace usa la raíz.
+  ssh_remote "rm -rf ${DEPLOY_DIR}/server/node_modules"
   # Permisos dist (script subido con rsync; fallback chmod sin "find -type d")
   ssh_remote "cd ${DEPLOY_DIR} && if [ -f scripts/fix-dist-permissions.sh ]; then bash scripts/fix-dist-permissions.sh; elif [ -f dist/index.html ]; then chmod -R a+rX dist; else echo 'Falta dist/index.html' >&2; exit 1; fi"
   # Solo front (--dist-only): nginx sirve dist/; no hace falta reiniciar PM2

@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
-    "build:vps": "NODE_OPTIONS=--max-old-space-size=3072 vite build",
+    "build:vps": "NODE_OPTIONS=--max-old-space-size=1536 vite build --mode vps",
     "build:check": "tsc -b",
     "build:full": "pnpm run build:check && pnpm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -27,6 +27,7 @@
     "db:start": "mongod --dbpath ./data/db",
     "db:stop": "pkill mongod",
     "setup": "pnpm install && pnpm run python:install && mkdir -p data/db server/uploads server/uploads/promotions logs",
+    "postinstall": "node scripts/prune-legacy-server-node-modules.cjs",
     "verify-api": "node scripts/verify-api.js",
     "deploy:apk": "bash scripts/deploy-apk.sh",
     "deploy:vps": "bash scripts/deploy-vps-rsync.sh --skip-build",
