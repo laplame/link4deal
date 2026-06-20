@@ -36,13 +36,14 @@ else
   EMAIL_ARG=(--register-unsafely-without-email)
 fi
 
-# Incluye apex + www + comodín en la MISMA cert (ruta live/${DOMAIN} ya usada por nginx.conf).
+# Apex + comodín en la MISMA cert (ruta live/${DOMAIN} ya usada por nginx.conf).
+# OJO: NO incluir www.${DOMAIN}: es redundante con *.${DOMAIN} y Let's Encrypt rechaza el pedido.
+# El comodín ya cubre www.${DOMAIN}.
 sudo certbot certonly \
   --manual \
   --preferred-challenges dns \
   --cert-name "${DOMAIN}" \
   -d "${DOMAIN}" \
-  -d "www.${DOMAIN}" \
   -d "*.${DOMAIN}" \
   --agree-tos \
   --no-eff-email \
