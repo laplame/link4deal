@@ -98,11 +98,15 @@ export function InfluencerUgcEditor({ initial, publicProfilePath, onSaved }: Inf
           })),
         };
         setDraft({
-          enabled: next.enabled,
-          headline: next.headline,
-          intro: next.intro,
-          quotes: next.quotes,
-          videos: next.videos.map(({ url, platform, label }) => ({ url, platform, label })),
+          enabled: next.enabled ?? false,
+          headline: next.headline ?? '',
+          intro: next.intro ?? '',
+          quotes: (next.quotes ?? []).map((q) => ({ text: q.text ?? '' })),
+          videos: (next.videos ?? []).map((v) => ({
+            url: v.url ?? '',
+            platform: v.platform ?? 'other',
+            label: v.label ?? '',
+          })),
         });
         onSaved?.(next);
       }

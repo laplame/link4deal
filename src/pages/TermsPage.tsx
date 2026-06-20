@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ScrollText, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { safeInternalRedirectPath } from '../config/adminAccess';

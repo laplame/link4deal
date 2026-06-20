@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  Upload, 
   Camera, 
   Shield, 
   CheckCircle, 
@@ -10,11 +9,8 @@ import {
   User,
   CreditCard,
   Globe,
-  Building2,
   Camera as CameraIcon,
-  FileText,
-  Eye,
-  EyeOff
+  FileText
 } from 'lucide-react';
 
 interface KYCData {
@@ -51,6 +47,8 @@ interface KYCData {
     walletVerified: boolean;
   };
 }
+
+type KYCErrors = Partial<Record<keyof KYCData, Record<string, string | undefined>>>;
 
 export default function KYCForm() {
   const navigate = useNavigate();
@@ -90,7 +88,7 @@ export default function KYCForm() {
     }
   });
 
-  const [errors, setErrors] = useState<Partial<KYCData>>({});
+  const [errors, setErrors] = useState<KYCErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const steps = [
@@ -122,7 +120,7 @@ export default function KYCForm() {
     }
   };
 
-  const handleFileUpload = (field: string, file: File) => {
+  const handleFileUpload = (field: string, file: File | null) => {
     setKycData(prev => ({
       ...prev,
       documents: {
@@ -133,7 +131,7 @@ export default function KYCForm() {
   };
 
   const validateStep = (step: number): boolean => {
-    const newErrors: Partial<KYCData> = {};
+    const newErrors: KYCErrors = {};
 
     switch (step) {
       case 1:

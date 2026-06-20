@@ -1173,7 +1173,21 @@ class PromotionController {
 
                 if (this.isMongoConnected()) {
                     const slug = String(id).trim().toLowerCase();
-                    const bySlug = await Promotion.findOne({ publicSlug: slug });
+                    let bySlug = await Promotion.findOne({ publicSlug: slug });
+                    // Fallback: el publicSlug suele calcularse al vuelo (no siempre se
+                    // persiste). Comparar el slug calculado contra promociones activas.
+                    if (!bySlug) {
+                        const now = new Date();
+                        const candidates = await Promotion.find({
+                            status: 'active',
+                            validUntil: { $gte: now },
+                        }).limit(2000);
+                        bySlug = candidates.find((p) => {
+                            const obj = p.toObject ? p.toObject() : p;
+                            const enriched = enrichPromotionClientFields(obj);
+                            return (enriched.publicSlug || buildPromotionPublicSlug(enriched)) === slug;
+                        }) || null;
+                    }
                     if (bySlug) {
                         await bySlug.incrementViews();
                         const promoObj = bySlug.toObject ? bySlug.toObject() : bySlug;

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { NavigationHeader } from '../navigation/NavigationHeader';
 import { useAuth } from '../../context/AuthContext';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type ComponentProps } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -11,34 +11,11 @@ import {
   Eye,
   Heart,
   Share2,
-  Calendar,
   MapPin,
-  Tag,
-  Zap,
-  Award,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  ExternalLink,
-  Download,
-  Filter as FilterIcon,
-  Search as SearchIcon,
   Plus,
-  Settings,
-  Bell,
   Mail,
-  Phone,
   Globe,
-  MapPin as MapPinIcon,
-  Tag as TagIcon,
-  ShoppingBag,
-  CreditCard,
-  Wallet,
-  Gift,
-  Trophy,
   Flame,
-  Sparkles,
-  Edit,
   Star,
   Instagram,
   Youtube,
@@ -240,11 +217,6 @@ export default function InfluencersMarketplace() {
       case 'twitter': return <Twitter className="w-4 h-4" />;
       default: return <Globe className="w-4 h-4" />;
     }
-  };
-
-  const handleViewProfile = (influencer: Influencer) => {
-    setSelectedInfluencer(influencer);
-    setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
@@ -679,7 +651,7 @@ export default function InfluencersMarketplace() {
 
       {/* Modal de Perfil de Influencer */}
       <InfluencerProfileModal
-        influencer={selectedInfluencer}
+        influencer={selectedInfluencer as unknown as ComponentProps<typeof InfluencerProfileModal>['influencer']}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onContact={handleContactInfluencer}

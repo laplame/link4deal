@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, CheckCircle, MapPin, Store } from 'lucide-react';
 import type { BizneShop } from '../BizneShopCard';

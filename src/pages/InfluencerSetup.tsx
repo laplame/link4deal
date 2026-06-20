@@ -10,10 +10,6 @@ import {
     Upload, 
     Plus, 
     X,
-    Instagram,
-    Tiktok,
-    Youtube,
-    Twitter,
     CheckCircle,
     Sparkles,
     User,
@@ -180,7 +176,7 @@ const InfluencerSetup: React.FC = () => {
             const res = await fetch(apiUrl('/api/analyze-profile-image'), { method: 'POST', body: fd });
             const json = (await parseJsonBody(res)) as { message?: string; data?: Record<string, unknown> };
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
-            const d = json.data || {};
+            const d = (json.data || {}) as Record<string, any>;
             const social = Array.isArray(d.socialMedia)
                 ? d.socialMedia.map((s: { platform?: string; username?: string; followers?: number }) => ({
                     platform: s.platform || '',

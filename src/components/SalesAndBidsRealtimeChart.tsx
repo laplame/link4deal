@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   ComposedChart,
   Line,
@@ -25,9 +24,8 @@ interface SalesAndBidsRealtimeChartProps {
 }
 
 const formatVentas = (value: number) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value));
-const formatPujas = (value: number) => `$${value.toFixed(2)}`;
 
-export function SalesAndBidsRealtimeChart({ data, refreshIntervalMs = 0 }: SalesAndBidsRealtimeChartProps) {
+export function SalesAndBidsRealtimeChart({ data }: SalesAndBidsRealtimeChartProps) {
   const hasData = data.length > 0;
 
   if (!hasData) {

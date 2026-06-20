@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Users, User, LogOut, Home, ShoppingCart, Info, Gavel, Ticket, Store } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { MobileMenu } from './MobileMenu';

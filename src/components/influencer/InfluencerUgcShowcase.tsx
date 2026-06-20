@@ -1,4 +1,3 @@
-import React from 'react';
 import { ExternalLink, Quote, Sparkles } from 'lucide-react';
 
 export type UgcVideoItem = {

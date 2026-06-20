@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { QrCode, Share2, Phone, AlertCircle } from 'lucide-react';
 import { brands } from '../data/brands';
@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 export function PromotionPage() {
   const { brandId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, currentUser } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [qrCode, setQrCode] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -76,21 +76,6 @@ export function PromotionPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       <div className="container mx-auto px-4 py-8 max-w-lg">
-        {/* Influencer Info */}
-        {currentUser && (
-          <div className="bg-gray-800/50 rounded-xl p-4 mb-6 flex items-center space-x-4">
-            <img
-              src={currentUser.profileImage}
-              alt={currentUser.name}
-              className="w-12 h-12 rounded-full"
-            />
-            <div>
-              <h3 className="font-medium text-white">{currentUser.name}</h3>
-              <p className="text-sm text-gray-400">{currentUser.segment}</p>
-            </div>
-          </div>
-        )}
-
         {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden">

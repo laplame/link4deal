@@ -11,11 +11,9 @@ import {
     DollarSign,
     Calendar,
     Tag,
-    MapPin,
     Users,
     FileText,
     Smartphone,
-    Globe,
     Zap,
     Sparkles,
     Loader2

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Star, ShoppingCart, Eye, Share2, Truck, Shield, Clock, Tag, MapPin, FileText, ExternalLink, Flame, Zap, Target, Navigation, Info } from 'lucide-react';
+import { Heart, Star, Eye, Share2, Truck, Shield, Clock, Tag, MapPin, FileText, ExternalLink, Flame, Zap, Target, Navigation, Info } from 'lucide-react';
 import { formatPrice, calculateDiscountPercentage, shortenAddress } from '../utils/formatters';
 import CouponRequestForm from './CouponRequestForm';
 import { useAuth } from '../context/AuthContext';
@@ -69,18 +69,19 @@ interface ProductCardProps {
     onRequestCoupon?: (productId: string) => void;
     /** When set, image height and padding vary for masonry-style grids */
     masonryTier?: MasonryTier;
+    /** ObjectId del influencer al que atribuir el cupón (perfil/landing con código de creador). */
+    influencerProfileId?: string;
 }
 
 export default function ProductCard({ 
     product, 
-    onAddToCart, 
     onAddToWishlist, 
-    onViewDetails,
     onRequestCoupon,
     masonryTier,
+    influencerProfileId,
 }: ProductCardProps) {
     const { isAuthenticated } = useAuth();
-    const [isWishlisted, setIsWishlisted] = useState(false);
+    const [isWishlisted] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [imageError, setImageError] = useState(false);
     const [showCouponForm, setShowCouponForm] = useState(false);
@@ -284,7 +285,7 @@ export default function ProductCard({
                                         e.preventDefault();
                                         e.stopPropagation();
                                         window.open(
-                                            product.smartContract.blockchainExplorer,
+                                            product.smartContract?.blockchainExplorer,
                                             '_blank',
                                             'noopener,noreferrer'
                                         );
@@ -414,6 +415,7 @@ export default function ProductCard({
                     brandId={product.brand}
                     discountPercentage={product.originalPrice ? discountPercentage : undefined}
                     autoGenerateOnOpen={!product.activateByGps}
+                    influencerProfileId={influencerProfileId}
                     activateByGps={product.activateByGps}
                     gpsRadiusMeters={product.gpsRadiusMeters ?? 500}
                     promotionLat={product.storeLocation?.latitude}

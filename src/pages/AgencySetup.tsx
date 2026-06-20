@@ -6,13 +6,7 @@ import {
     Upload, 
     Plus, 
     X,
-    Users,
-    Globe,
-    DollarSign,
-    CheckCircle,
-    FileText,
-    Award,
-    Briefcase
+    FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
@@ -26,8 +20,16 @@ interface AgencyService {
 interface TeamMember {
     name: string;
     position: string;
-    expertise: string[];
+    expertise: string;
     experience: number;
+}
+
+interface AgencyClient {
+    name: string;
+    industry: string;
+    services: string;
+    duration: string;
+    results: string;
 }
 
 function mapEmployeesToSize(employees: string): string {
@@ -54,7 +56,7 @@ const AgencySetup: React.FC = () => {
         description: '',
         services: [] as string[],
         team: [] as TeamMember[],
-        clients: [] as string[],
+        clients: [] as AgencyClient[],
         documents: [] as File[],
         logo: null as File | null
     });

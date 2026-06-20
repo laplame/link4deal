@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search,
@@ -8,19 +8,13 @@ import {
   Users,
   DollarSign,
   Target,
-  BarChart3,
-  ArrowUp,
-  ArrowDown,
   Flame,
   Star,
   Eye,
   Heart,
   Share2,
-  Calendar,
   MapPin,
   Tag,
-  Zap,
-  Award,
   TrendingDown,
   TrendingUp as TrendingUpIcon,
   AlertCircle,
@@ -329,7 +323,6 @@ export default function PromotionsMarketplace() {
 
   const categories = ['Moda', 'Tecnología', 'Deportes', 'Belleza', 'Comida', 'Viajes', 'Automotriz'];
   const locations = ['Ciudad de México', 'Monterrey', 'Guadalajara', 'Puebla', 'Querétaro', 'Tijuana'];
-  const priceRanges = ['0-500', '500-1000', '1000-5000', '5000+'];
 
   // Sumas listadas desde la API (GET /api/promotions) — datos de la BD
   const statsPromocionesActivas = filteredPromotions.filter(p => p.status === 'active').length;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -272,7 +272,7 @@ export default function InfluencerPromoPage() {
             </div>
 
             <Link
-              to={`/influencer/${encodeURIComponent(influencerSlug || '')}/tienda`}
+              to={`/influencer/${encodeURIComponent(influencerSlug || '')}/deals`}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               <Store className="h-4 w-4" aria-hidden />

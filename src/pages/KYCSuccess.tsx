@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle, Shield, Clock, ArrowRight, Home, User } from 'lucide-react';
+import { CheckCircle, Shield, Clock, Home, User } from 'lucide-react';
 
 export default function KYCSuccess() {
   return (

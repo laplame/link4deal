@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { FileText, Copy, CheckCircle } from 'lucide-react';
 import {
     formatAttributionContractSignDate,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
     ArrowLeft, 
@@ -11,37 +11,16 @@ import {
     Eye,
     MessageCircle,
     Zap,
-    Star,
     Clock,
     CheckCircle,
     AlertCircle,
-    ExternalLink,
     Download,
     Search,
     Plus,
     Settings,
-    Building2,
-    MapPin,
-    Tag,
-    CreditCard,
-    Calendar,
-    Award,
-    Sparkles,
     Camera,
     Edit,
-    Filter,
-    PieChart,
-    Activity,
-    ShoppingCart,
-    Package,
-    Truck,
-    Heart,
-    Share2,
-    Briefcase,
-    Handshake,
-    FileText,
-    Phone,
-    Mail
+    Handshake
 } from 'lucide-react';
 
 interface Agency {
@@ -112,7 +91,7 @@ interface Commission {
 
 export default function AgencyDashboard() {
     const [agencies, setAgencies] = useState<Agency[]>([]);
-    const [clients, setClients] = useState<Client[]>([]);
+    const [, setClients] = useState<Client[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [commissions, setCommissions] = useState<Commission[]>([]);
     const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
@@ -323,12 +302,10 @@ export default function AgencyDashboard() {
     }, []);
 
     const totalAgencies = agencies.length;
-    const activeAgencies = agencies.filter(a => a.status === 'active' || a.status === 'verified').length;
     const totalRevenue = agencies.reduce((sum, a) => sum + a.totalRevenue, 0);
     const totalMonthlyRevenue = agencies.reduce((sum, a) => sum + a.monthlyRevenue, 0);
     const totalClients = agencies.reduce((sum, a) => sum + a.totalClients, 0);
     const totalActiveClients = agencies.reduce((sum, a) => sum + a.activeClients, 0);
-    const totalInfluencers = agencies.reduce((sum, a) => sum + a.totalInfluencers, 0);
     const totalActiveInfluencers = agencies.reduce((sum, a) => sum + a.activeInfluencers, 0);
     const activeServices = services.filter(s => s.status === 'active').length;
 

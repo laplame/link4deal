@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { CartProvider } from './context/CartContext';
@@ -40,6 +39,7 @@ import InfluencerAuthPage from './pages/InfluencerAuthPage';
 import FaqPage from './pages/FaqPage';
 import TermsPage from './pages/TermsPage';
 import InfluencerStorePage from './pages/InfluencerStorePage';
+import InfluencerTiendaRedirect from './components/routing/InfluencerTiendaRedirect';
 import InfluencerPromoPage from './pages/InfluencerPromoPage';
 import InfluencerAuctionsLivePage from './pages/InfluencerAuctionsLivePage';
 import RedemptionsLivePage from './pages/RedemptionsLivePage';
@@ -192,7 +192,8 @@ function App() {
                   <Route path="/influencer/:influencerSlug" element={<InfluencerProfilePage />} />
                   <Route path="/influencer/:influencerSlug/edit" element={<InfluencerProfileEditPage />} />
                   <Route path="/influencer/:influencerSlug/faq" element={<FaqPage />} />
-                  <Route path="/influencer/:influencerSlug/tienda" element={<InfluencerStorePage />} />
+                  <Route path="/influencer/:influencerSlug/deals" element={<InfluencerStorePage />} />
+                  <Route path="/influencer/:influencerSlug/tienda" element={<InfluencerTiendaRedirect />} />
                   <Route
                     path="/influencer/:influencerSlug/promo/:promotionId"
                     element={<InfluencerPromoPage />}

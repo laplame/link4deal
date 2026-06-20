@@ -270,8 +270,8 @@ export const brands = [
   }
 ];
 
-export const sortBrands = (brands: typeof brands) => {
-  return brands.sort((a, b) => {
+export const sortBrands = (brandsList: typeof brands) => {
+  return [...brandsList].sort((a, b) => {
     if (a.category === b.category) {
       return a.name.localeCompare(b.name);
     }

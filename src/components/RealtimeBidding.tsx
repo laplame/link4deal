@@ -1,4 +1,3 @@
-import React from 'react';
 import { Users, Info } from 'lucide-react';
 
 interface Props {

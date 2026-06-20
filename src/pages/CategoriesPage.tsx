@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ShoppingBag, Smartphone, Shirt, Home, Trophy, Camera } from 'lucide-react';
+import { ArrowLeft, ShoppingBag } from 'lucide-react';
 
 interface Category {
     name: string;

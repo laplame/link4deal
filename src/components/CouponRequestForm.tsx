@@ -65,8 +65,6 @@ function isServerIssuerQrString(qr: string): boolean {
 const CouponRequestForm: React.FC<CouponRequestFormProps> = ({ 
     productId, 
     productName, 
-    productPrice, 
-    productCurrency, 
     productImage,
     discountPercentage: discountPercentageProp,
     onClose,
@@ -205,7 +203,7 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                     const uLng = pos.coords.longitude;
 
                     if (branchesWithCoords.length > 0) {
-                        const nearest = findNearestChainBranch(uLat, uLng, branchesWithCoords);
+                        const nearest = findNearestChainBranch(uLat, uLng, branchesWithCoords as Parameters<typeof findNearestChainBranch>[2]);
                         if (!nearest) {
                             setGpsError('No hay sucursales con ubicación válida para esta promoción.');
                             resolve(false);

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Menu, X, ShoppingCart, User, Download, Store, Users, Loader2, AlertCircle, LogOut, Search } from 'lucide-react';
+import { ChevronDown, Menu, X, User, Download, Store, Users, Loader2, AlertCircle, LogOut, Search } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import CartIcon from '../components/CartIcon';
 import Toast from '../components/Toast';
@@ -17,363 +17,6 @@ import {
     mapPromoDocsToProductCards,
     type ProductCardItem as Product,
 } from '../utils/mapPromotionToProductCard';
-
-// Productos de ejemplo (fallback si no hay datos de la API)
-const fallbackProducts = [
-    {
-        id: "1",
-        name: "Smartphone Samsung Galaxy S23 Ultra",
-        price: 24999,
-        originalPrice: 29999,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
-        offer: "17% de descuento",
-        category: "electronicos",
-        brand: "Samsung",
-        rating: 4.8,
-        reviewCount: 1247,
-        stock: 45,
-        location: "CDMX",
-        shipping: "Envío gratis",
-        warranty: "2 años",
-        tags: ["5G", "256GB", "Cámara 200MP", "S Pen"],
-        description: "El smartphone más avanzado de Samsung con cámara de 200MP, S Pen integrado y procesador Snapdragon 8 Gen 2.",
-        features: [
-            "Pantalla Dynamic AMOLED 2X de 6.8 pulgadas",
-            "Cámara principal de 200MP",
-            "S Pen integrado",
-            "Procesador Snapdragon 8 Gen 2",
-            "Batería de 5000mAh"
-        ],
-        seller: {
-            name: "Samsung Store",
-            rating: 4.9,
-            verified: true
-        },
-        specifications: {
-            "Pantalla": "6.8\" Dynamic AMOLED 2X",
-            "Procesador": "Snapdragon 8 Gen 2",
-            "RAM": "12GB",
-            "Almacenamiento": "256GB",
-            "Cámara": "200MP + 12MP + 10MP + 10MP",
-            "Batería": "5000mAh"
-        },
-        smartContract: {
-            address: "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-            network: "Ethereum",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://etherscan.io"
-        },
-        // Oferta caliente
-        isHotOffer: true,
-        hotness: "fire" as const,
-        expiresIn: 6,
-        storeLocation: {
-            latitude: 19.4326,
-            longitude: -99.1332,
-            address: "Av. Insurgentes Sur 123, Del Valle",
-            storeName: "Samsung Store Del Valle"
-        },
-        distance: 1200
-    },
-    {
-        id: "2",
-        name: "Laptop MacBook Pro 16\" M2 Pro",
-        price: 89999,
-        originalPrice: 109999,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80",
-        offer: "18% de descuento",
-        category: "electronicos",
-        brand: "Apple",
-        rating: 4.9,
-        reviewCount: 892,
-        stock: 23,
-        location: "Monterrey",
-        shipping: "Envío gratis",
-        warranty: "1 año AppleCare+",
-        tags: ["M2 Pro", "16GB RAM", "512GB SSD", "Retina Display"],
-        description: "Potente laptop para profesionales con chip M2 Pro, pantalla Liquid Retina XDR y hasta 22 horas de batería.",
-        features: [
-            "Chip M2 Pro con 12 núcleos CPU y 19 núcleos GPU",
-            "Pantalla Liquid Retina XDR de 16.2 pulgadas",
-            "16GB de RAM unificada",
-            "512GB SSD",
-            "Hasta 22 horas de batería"
-        ],
-        seller: {
-            name: "Apple Store",
-            rating: 4.8,
-            verified: true
-        },
-        specifications: {
-            "Procesador": "Apple M2 Pro",
-            "RAM": "16GB unificada",
-            "Almacenamiento": "512GB SSD",
-            "Pantalla": "16.2\" Liquid Retina XDR",
-            "Batería": "Hasta 22 horas",
-            "Puertos": "3x Thunderbolt 4, HDMI, SDXC"
-        },
-        smartContract: {
-            address: "0x8f2a559d38bcd6337d00c07c0b063c7846a8a8e1",
-            network: "Ethereum",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://etherscan.io"
-        },
-        // Oferta caliente
-        isHotOffer: true,
-        hotness: "hot" as const,
-        expiresIn: 12,
-        storeLocation: {
-            latitude: 19.4205,
-            longitude: -99.1590,
-            address: "Av. Santa Fe 482, Santa Fe",
-            storeName: "Apple Store Santa Fe"
-        },
-        distance: 2500
-    },
-    {
-        id: "3",
-        name: "Cámara Sony A7 IV Mirrorless",
-        price: 45999,
-        originalPrice: 54999,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80",
-        offer: "16% de descuento",
-        category: "fotografia-y-video",
-        brand: "Sony",
-        rating: 4.7,
-        reviewCount: 567,
-        stock: 18,
-        location: "Guadalajara",
-        shipping: "Envío $299",
-        warranty: "2 años",
-        tags: ["Full Frame", "33MP", "4K 60p", "IBIS"],
-        description: "Cámara mirrorless full frame con sensor de 33MP, grabación 4K 60p y estabilización de imagen en el cuerpo.",
-        features: [
-            "Sensor full frame de 33MP",
-            "Grabación 4K 60p",
-            "Estabilización de imagen en el cuerpo (IBIS)",
-            "Autofocus híbrido de 759 puntos",
-            "Pantalla táctil articulada"
-        ],
-        seller: {
-            name: "Sony Store",
-            rating: 4.6,
-            verified: true
-        },
-        specifications: {
-            "Sensor": "Full Frame 33MP",
-            "Video": "4K 60p",
-            "Autofocus": "759 puntos híbridos",
-            "Pantalla": "3.0\" táctil articulada",
-            "Batería": "NP-FZ100",
-            "Conectividad": "WiFi, Bluetooth, USB-C"
-        },
-        smartContract: {
-            address: "0x9a3b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",
-            network: "Polygon",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://polygonscan.com"
-        }
-    },
-    {
-        id: "4",
-        name: "Zapatillas Nike Air Max 270",
-        price: 2499,
-        originalPrice: 3499,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80",
-        offer: "29% de descuento",
-        category: "moda-y-accesorios",
-        brand: "Nike",
-        rating: 4.6,
-        reviewCount: 2341,
-        stock: 156,
-        location: "CDMX",
-        shipping: "Envío gratis",
-        warranty: "30 días",
-        tags: ["Running", "Air Max", "Comfort", "Estilo"],
-        description: "Zapatillas deportivas con tecnología Air Max para máximo confort y estilo urbano.",
-        features: [
-            "Tecnología Air Max en el talón",
-            "Material transpirable",
-            "Suela de goma duradera",
-            "Diseño urbano moderno",
-            "Múltiples colores disponibles"
-        ],
-        seller: {
-            name: "Nike Store",
-            rating: 4.7,
-            verified: true
-        },
-        specifications: {
-            "Material": "Malla transpirable",
-            "Suela": "Goma duradera",
-            "Tecnología": "Air Max",
-            "Peso": "310g",
-            "Cierre": "Cordones",
-            "Uso": "Running, Casual"
-        },
-        smartContract: {
-            address: "0xb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0",
-            network: "Binance Smart Chain",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://bscscan.com"
-        }
-    },
-    {
-        id: "5",
-        name: "Sofá Modular 3 Plazas",
-        price: 12999,
-        originalPrice: 15999,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80",
-        offer: "19% de descuento",
-        category: "hogar-y-jardin",
-        brand: "IKEA",
-        rating: 4.4,
-        reviewCount: 892,
-        stock: 34,
-        location: "Monterrey",
-        shipping: "Envío $599",
-        warranty: "10 años",
-        tags: ["Modular", "3 Plazas", "Moderno", "Confortable"],
-        description: "Sofá modular moderno y confortable perfecto para salas de estar contemporáneas.",
-        features: [
-            "Diseño modular personalizable",
-            "Tela resistente y fácil de limpiar",
-            "Estructura de madera sólida",
-            "Asientos extra confortables",
-            "Múltiples configuraciones posibles"
-        ],
-        seller: {
-            name: "IKEA",
-            rating: 4.5,
-            verified: true
-        },
-        specifications: {
-            "Material": "Tela resistente, madera sólida",
-            "Dimensiones": "220x85x85 cm",
-            "Capacidad": "3 personas",
-            "Color": "Gris moderno",
-            "Garantía": "10 años",
-            "Ensamblaje": "Requiere montaje"
-        },
-        smartContract: {
-            address: "0xc2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1",
-            network: "Avalanche",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://snowtrace.io"
-        }
-    },
-    {
-        id: "6",
-        name: "Bicicleta de Montaña Trek Marlin 7",
-        price: 15999,
-        originalPrice: 18999,
-        currency: "MXN",
-        image: "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?auto=format&fit=crop&w=800&q=80",
-        offer: "16% de descuento",
-        category: "deportes-y-aire-libre",
-        brand: "Trek",
-        rating: 4.8,
-        reviewCount: 445,
-        stock: 12,
-        location: "Guadalajara",
-        shipping: "Envío $899",
-        warranty: "Lifetime frame",
-        tags: ["MTB", "29\"", "Shimano", "Suspensión"],
-        description: "Bicicleta de montaña profesional con cuadro de aluminio Alpha Gold y componentes Shimano de alta calidad.",
-        features: [
-            "Cuadro Alpha Gold de aluminio",
-            "Ruedas de 29 pulgadas",
-            "Suspensión delantera SR Suntour",
-            "Frenos de disco hidráulicos",
-            "21 velocidades Shimano"
-        ],
-        seller: {
-            name: "Trek Store",
-            rating: 4.9,
-            verified: true
-        },
-        specifications: {
-            "Cuadro": "Aluminio Alpha Gold",
-            "Talla": "M (17.5\")",
-            "Ruedas": "29\"",
-            "Velocidades": "21",
-            "Frenos": "Disco hidráulicos",
-            "Peso": "12.5 kg"
-        },
-        smartContract: {
-            address: "0xd3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2",
-            network: "Solana",
-            tokenStandard: "ERC-777",
-            blockchainExplorer: "https://solscan.io"
-        }
-    }
-];
-
-// Helper function to generate consistent slugs
-const generateSlug = (text: string): string => {
-    return text.toLowerCase()
-        .replace(/\s+/g, '-')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-};
-
-const categories = [
-    {
-        name: "Electrónica",
-        slug: "electronica",
-        subcategories: ["Smartphones", "Laptops", "Auriculares", "Smartwatches", "Tablets"]
-    },
-    {
-        name: "Moda",
-        slug: "moda",
-        subcategories: ["Ropa", "Zapatos", "Accesorios", "Bolsos", "Joyería"]
-    },
-    {
-        name: "Hogar",
-        slug: "hogar",
-        subcategories: ["Muebles", "Decoración", "Cocina", "Jardín", "Iluminación"]
-    },
-    {
-        name: "Deportes",
-        slug: "deportes",
-        subcategories: ["Fitness", "Running", "Fútbol", "Natación", "Ciclismo"]
-    },
-    {
-        name: "Fotografía",
-        slug: "fotografia",
-        subcategories: ["Cámaras", "Lentes", "Trípodes", "Iluminación", "Accesorios"]
-    },
-    {
-        name: "Comida y Bebidas",
-        slug: "comida",
-        subcategories: ["Restaurantes", "Delivery", "Bebidas", "Snacks", "Postres"]
-    },
-    {
-        name: "Servicios",
-        slug: "servicios",
-        subcategories: ["Educación", "Salud", "Belleza", "Transporte", "Entretenimiento"]
-    },
-    {
-        name: "Productos Digitales",
-        slug: "digital",
-        subcategories: ["Software", "Cursos Online", "E-books", "Música", "Streaming"]
-    },
-    {
-        name: "Viajes y Turismo",
-        slug: "viajes",
-        subcategories: ["Hoteles", "Vuelos", "Paquetes", "Actividades", "Seguros"]
-    },
-    {
-        name: "Belleza y Cuidado",
-        slug: "belleza",
-        subcategories: ["Cosméticos", "Skincare", "Perfumes", "Tratamientos", "Accesorios"]
-    }
-];
 
 // Tipo para producto transformado
 function normalizeShortCodeInput(raw: string): string {
@@ -413,6 +56,8 @@ export default function LandingPage() {
     /** Normalizado del último código con el que se cargó la lista desde GET /promotions/active?shortCode= */
     const [creatorCodeFilterNorm, setCreatorCodeFilterNorm] = useState<string | null>(null);
     const [shortCodeFilterLabel, setShortCodeFilterLabel] = useState<string | null>(null);
+    /** ObjectId del influencer resuelto por el código de creador; se usa para atribuir el cupón. */
+    const [creatorInfluencerId, setCreatorInfluencerId] = useState<string | null>(null);
     const [catalogSearchLoading, setCatalogSearchLoading] = useState(false);
     const [catalogSearchMessage, setCatalogSearchMessage] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -431,7 +76,7 @@ export default function LandingPage() {
                 const response = await fetch('/api/promotions/active?limit=50&page=1');
                 const contentType = response.headers.get('content-type') || '';
                 const text = await response.text();
-                let data: { success?: boolean; data?: { docs?: unknown[] }; message?: string };
+                let data: { success?: boolean; data?: { docs?: unknown[] }; docs?: unknown[]; message?: string; error?: string };
                 try {
                     if (!contentType.includes('application/json')) {
                         throw new Error('API_NO_JSON');
@@ -496,6 +141,7 @@ export default function LandingPage() {
     const resetShortCodeIdsOnly = () => {
         setShortCodeFilterLabel(null);
         setCreatorCodeFilterNorm(null);
+        setCreatorInfluencerId(null);
     };
 
     const clearShortCodeFilter = () => {
@@ -529,7 +175,7 @@ export default function LandingPage() {
                     shortCodeMeta?: {
                         lookupCode?: string;
                         resolvedVia?: string;
-                        influencer?: { username?: string | null; name?: string | null };
+                        influencer?: { id?: string | null; username?: string | null; name?: string | null };
                         catalogPromotionCount?: number;
                         activeMatchingCount?: number;
                     };
@@ -572,6 +218,11 @@ export default function LandingPage() {
             const meta = data.data?.shortCodeMeta;
             setProducts(mapPromoDocsToProductCards(data.success ? docs : []));
             setCreatorCodeFilterNorm(norm);
+            setCreatorInfluencerId(
+                meta?.influencer?.id && /^[a-f0-9]{24}$/i.test(String(meta.influencer.id))
+                    ? String(meta.influencer.id)
+                    : null
+            );
             setShortCodeFilterLabel(
                 meta?.influencer?.username
                     ? `@${meta.influencer.username}`
@@ -1188,6 +839,7 @@ export default function LandingPage() {
                                                     onAddToWishlist={handleAddToWishlist}
                                                     onViewDetails={handleViewDetails}
                                                     masonryTier={masonryTierFromId(product.id, index)}
+                                                    influencerProfileId={creatorInfluencerId ?? undefined}
                                                 />
                                             </div>
                                         ))}

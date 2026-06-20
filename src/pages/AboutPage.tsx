@@ -1,19 +1,13 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
     ArrowLeft, 
     Users, 
     Target, 
-    Award, 
-    Globe, 
     Shield, 
-    TrendingUp, 
     Heart, 
-    Zap, 
-    Star,
+    Zap,
     CheckCircle,
     Building2,
-    Lightbulb,
     Rocket
 } from 'lucide-react';
 

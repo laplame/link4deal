@@ -5,7 +5,6 @@ import {
     Smartphone, 
     MapPin, 
     Users, 
-    TrendingUp, 
     ArrowRight, 
     Download,
     Share2,

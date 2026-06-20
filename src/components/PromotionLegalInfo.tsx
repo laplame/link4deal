@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { FileCheck, DollarSign, Calendar, Package, Info } from 'lucide-react';
 
 /**

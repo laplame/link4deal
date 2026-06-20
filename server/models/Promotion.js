@@ -1,6 +1,31 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
 
+/**
+ * Contrato de atribución Cryptomarketing.
+ * Sub-schema independiente: si la promoción no incluye attributionContract (no es
+ * cryptomarketing), Mongoose NO valida estos campos required. Solo se validan cuando
+ * el contrato existe. _id: false para no inyectar un _id en el subdocumento.
+ */
+const attributionContractSchema = new mongoose.Schema({
+    type: {
+        type: String,
+        enum: ['cryptomarketing'],
+        required: true
+    },
+    clientName: { type: String, trim: true, required: true },
+    providerName: { type: String, trim: true, required: true },
+    signDate: { type: String, trim: true, required: true },
+    promotionValidFrom: { type: String, trim: true },
+    promotionValidUntil: { type: String, trim: true },
+    promotionTotalQuantity: { type: Number, min: 0 },
+    agreedRedemptionPercent: { type: Number, min: 0, max: 100 },
+    /** @deprecated Contratos anteriores con vigencia fija en meses */
+    contractMonths: { type: Number, min: 1, max: 120 },
+    renderedText: { type: String, maxlength: 50000, required: true },
+    createdAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const promotionSchema = new mongoose.Schema({
     // Información básica de la promoción
     title: {
@@ -263,24 +288,10 @@ const promotionSchema = new mongoose.Schema({
      * Contrato de atribución Cryptomarketing (opcional).
      * El texto renderizado se genera en servidor a partir de los metadatos.
      */
-    /** Solo se persiste cuando type === 'cryptomarketing' (sin defaults que generen stubs vacíos). */
+    /** Solo se persiste cuando type === 'cryptomarketing' (sub-schema sin default: si no se envía, no se valida). */
     attributionContract: {
-        type: {
-            type: String,
-            enum: ['cryptomarketing'],
-            required: true
-        },
-        clientName: { type: String, trim: true, required: true },
-        providerName: { type: String, trim: true, required: true },
-        signDate: { type: String, trim: true, required: true },
-        promotionValidFrom: { type: String, trim: true },
-        promotionValidUntil: { type: String, trim: true },
-        promotionTotalQuantity: { type: Number, min: 0 },
-        agreedRedemptionPercent: { type: Number, min: 0, max: 100 },
-        /** @deprecated Contratos anteriores con vigencia fija en meses */
-        contractMonths: { type: Number, min: 1, max: 120 },
-        renderedText: { type: String, maxlength: 50000, required: true },
-        createdAt: { type: Date, default: Date.now }
+        type: attributionContractSchema,
+        default: undefined
     },
 
     /** Si es true, al solicitar cupón no se genera QR; se redirige a redirectToUrl (ej. link de afiliado Amazon). */
@@ -466,15 +477,18 @@ promotionSchema.statics.findHotOffers = function() {
 };
 
 // Método de instancia para incrementar vistas
+// Usa $inc atómico (no this.save()) para no revalidar todo el documento:
+// promociones antiguas sin attributionContract completo fallarían la validación
+// required en una simple lectura. Además es seguro ante concurrencia.
 promotionSchema.methods.incrementViews = function() {
-    this.views += 1;
-    return this.save();
+    this.views = (this.views || 0) + 1;
+    return this.constructor.updateOne({ _id: this._id }, { $inc: { views: 1 } });
 };
 
-// Método de instancia para incrementar clicks
+// Método de instancia para incrementar clicks (mismo motivo: $inc atómico, sin save)
 promotionSchema.methods.incrementClicks = function() {
-    this.clicks += 1;
-    return this.save();
+    this.clicks = (this.clicks || 0) + 1;
+    return this.constructor.updateOne({ _id: this._id }, { $inc: { clicks: 1 } });
 };
 
 // Agregar plugin de paginación

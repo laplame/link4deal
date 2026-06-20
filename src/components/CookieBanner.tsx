@@ -17,8 +17,7 @@ const CookieBanner: React.FC = () => {
     hasConsented, 
     updatePreferences, 
     acceptAll, 
-    rejectAll,
-    getLastVisitInfo 
+    rejectAll
   } = useCookieConsent();
 
   const [isVisible, setIsVisible] = useState(!hasConsented);
@@ -38,20 +37,6 @@ const CookieBanner: React.FC = () => {
 
   const handleRejectAll = () => {
     rejectAll();
-  };
-
-  const enableGeolocation = () => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log('Geolocalización habilitada:', position.coords);
-          // Aquí puedes guardar la ubicación o enviarla a tu backend
-        },
-        (error) => {
-          console.log('Error al obtener ubicación:', error);
-        }
-      );
-    }
   };
 
   const togglePreference = (key: keyof CookiePreferences) => {

@@ -21,6 +21,7 @@ interface MapOfferPoint {
     storeLabel: string;
     timeLeftLabel?: string;
     hotness: Hotness;
+    distance?: number;
 }
 
 function discountToHotness(discount: number): Hotness {
@@ -142,8 +143,8 @@ function buildMapPointsFromPromo(promo: Record<string, unknown>): MapOfferPoint[
         return out;
     }
 
-    let plat: number | string | undefined = promo.storeLatitude as number | string | undefined;
-    let plng: number | string | undefined = promo.storeLongitude as number | string | undefined;
+    const plat: number | string | undefined = promo.storeLatitude as number | string | undefined;
+    const plng: number | string | undefined = promo.storeLongitude as number | string | undefined;
     const la = typeof plat === 'string' ? parseFloat(plat) : plat;
     const lo = typeof plng === 'string' ? parseFloat(plng) : plng;
     if (typeof la === 'number' && typeof lo === 'number' && Number.isFinite(la) && Number.isFinite(lo)) {

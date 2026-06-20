@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Store, Phone } from 'lucide-react';
 import type { BizneShop } from '../components/BizneShopCard';
@@ -125,13 +125,13 @@ export default function BizneShopProfilePage() {
               {(shop as { phone?: string; whatsapp?: string }).phone && (
                 <div className="flex items-center gap-3">
                   <Phone className="h-5 w-5 text-gray-400 shrink-0" />
-                  <span>{(shop as { phone: string }).phone}</span>
+                  <span>{(shop as { phone?: string }).phone}</span>
                 </div>
               )}
               {(shop as { whatsapp?: string }).whatsapp && (
                 <div className="flex items-center gap-3">
                   <Phone className="h-5 w-5 text-gray-400 shrink-0" />
-                  <span>WhatsApp: {(shop as { whatsapp: string }).whatsapp}</span>
+                  <span>WhatsApp: {(shop as { whatsapp?: string }).whatsapp}</span>
                 </div>
               )}
             </div>

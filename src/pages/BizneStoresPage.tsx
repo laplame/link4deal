@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, Store, Building2, ArrowLeft } from 'lucide-react';
 import { BizneShopCard } from '../components/BizneShopCard';

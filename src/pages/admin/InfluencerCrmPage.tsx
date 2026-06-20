@@ -8,8 +8,6 @@ import {
   Smartphone,
   Store,
   FileCheck,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Save,
   X,
@@ -37,7 +35,7 @@ import {
   isAdminPinUnlockSession,
   setAdminPinUnlockSession,
 } from '../../config/adminAccess';
-import { apiUrl, mediaUrl } from '../../utils/apiUrl';
+import { mediaUrl } from '../../utils/apiUrl';
 import {
   fetchCrmStats,
   fetchCrmInfluencers,
@@ -68,7 +66,6 @@ import {
   CRM_MONETIZATION_STAGES,
   type CrmInfluencerRow,
   type CrmInfluencerDetail,
-  type CrmRedirectPromotionApplication,
   type CrmStats,
   type CrmPipelineBoardData,
   type CrmInfluencerLiveActivity,

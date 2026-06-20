@@ -1,16 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  Plus, 
   Tag, 
   Calendar, 
   DollarSign, 
   Users, 
   Target,
   ShoppingCart,
-  MapPin,
-  Globe,
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
@@ -60,6 +57,8 @@ interface CouponData {
   };
 }
 
+type CouponErrors = Partial<Record<keyof CouponData, Record<string, string | undefined>>>;
+
 export default function CreateCoupon() {
   const [currentStep, setCurrentStep] = useState(1);
   const [couponData, setCouponData] = useState<CouponData>({
@@ -107,7 +106,7 @@ export default function CreateCoupon() {
     }
   });
 
-  const [errors, setErrors] = useState<Partial<CouponData>>({});
+  const [errors, setErrors] = useState<CouponErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const steps = [
@@ -177,7 +176,7 @@ export default function CreateCoupon() {
   };
 
   const validateStep = (step: number): boolean => {
-    const newErrors: Partial<CouponData> = {};
+    const newErrors: CouponErrors = {};
 
     switch (step) {
       case 1:

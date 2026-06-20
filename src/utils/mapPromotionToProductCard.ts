@@ -62,7 +62,7 @@ const CATEGORY_MAP: Record<string, string> = {
 };
 
 export function mapPromoDocsToProductCards(docs: unknown[]): ProductCardItem[] {
-    return (Array.isArray(docs) ? docs : []).map((promo: Record<string, unknown>) => {
+    return ((Array.isArray(docs) ? docs : []) as Record<string, unknown>[]).map((promo) => {
         const originalPrice = Number(promo.originalPrice) || 0;
         const currentPrice = Number(promo.currentPrice) || 0;
         const discountPercentage =

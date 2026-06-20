@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Clock, DollarSign, History, AlertCircle, Info, ArrowLeft, Users, Globe, TrendingUp } from 'lucide-react';
+import { Clock, DollarSign, History, Info, ArrowLeft, Globe, TrendingUp } from 'lucide-react';
 import { influencers } from '../data/influencers';
-import { useAuth } from '../context/AuthContext';
 import { RealtimeBidding } from '../components/RealtimeBidding';
 import { BidChart } from '../components/BidChart';
-import { TokenPurchase } from '../components/TokenPurchase';
 import { Bid, AuctionHistory } from '../types';
 
 // Mock data for bids and auction history
@@ -41,7 +39,6 @@ const mockMetrics = {
 export function BiddingPage() {
   const { influencerId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
   const [timeLeft, setTimeLeft] = useState('');
   const [currentBid, setCurrentBid] = useState('');
 

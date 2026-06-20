@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ExternalLink, Calendar, User, TrendingUp, Share2, Heart, MessageCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { ExternalLink, Calendar, TrendingUp, Share2, Heart, MessageCircle } from 'lucide-react';
 import { SITE_CONFIG } from '../config/site';
 
 /** URL del artículo: al hacer clic en la tarjeta o en "Ver en LinkedIn" se redirige aquí (nueva pestaña). */
@@ -35,7 +35,7 @@ function openArticleUrl(url: string | undefined): void {
 }
 
 const NewsSection: React.FC = () => {
-  const [newsPosts, setNewsPosts] = useState<NewsPost[]>([
+  const [newsPosts] = useState<NewsPost[]>([
     {
       id: "1",
       title: "Link4Deal revoluciona el marketing de influencers con blockchain",

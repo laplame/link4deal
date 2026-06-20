@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
     Store, 
     CheckCircle, 
@@ -10,16 +10,8 @@ import {
     ArrowLeft,
     CreditCard,
     Lock,
-    Globe,
-    Smartphone,
-    Target,
-    BarChart3,
-    Wallet,
     Rocket,
-    Clock,
-    DollarSign,
-    Euro,
-    Flag
+    Clock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SITE_CONFIG } from '../config/site';

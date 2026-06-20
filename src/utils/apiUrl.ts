@@ -12,7 +12,7 @@ export function getApiBase(): string {
 
   try {
     const pageHostNorm = window.location.hostname.replace(/^www\./i, '');
-    let apiUrlStr =
+    const apiUrlStr =
       trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : `${window.location.protocol}//${trimmed}`;

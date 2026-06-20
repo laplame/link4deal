@@ -1,4 +1,3 @@
-import React from 'react';
 import { Star, ChevronRight, Percent, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BrandCard as BrandCardType } from '../types';

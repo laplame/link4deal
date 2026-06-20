@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Ticket, CheckCircle, X, AlertCircle, Info, MapPin, Navigation } from 'lucide-react';
 import { useGeolocation } from '../context/GeolocationContext';
 
@@ -42,7 +42,7 @@ const CouponRedemption: React.FC<CouponRedemptionProps> = ({
     onCouponApplied,
     onCouponRemoved,
     appliedCoupon,
-    appliedDiscount
+    appliedDiscount = 0
 }) => {
     const [couponCode, setCouponCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +51,7 @@ const CouponRedemption: React.FC<CouponRedemptionProps> = ({
     const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     
-    const { location: geoLocation } = useGeolocation();
+    useGeolocation();
 
     // Mock de cupones disponibles (en una app real vendría de una API)
     const availableCoupons: Coupon[] = [
@@ -154,7 +154,7 @@ const CouponRedemption: React.FC<CouponRedemptionProps> = ({
                         longitude: position.coords.longitude
                     });
                 },
-                (error) => {
+                () => {
                     reject(new Error('No se pudo obtener tu ubicación'));
                 },
                 {

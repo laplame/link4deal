@@ -21,13 +21,6 @@ export interface CheckoutSession {
     status: string;
 }
 
-// Configuración por defecto (se reemplazará con variables de entorno)
-const defaultConfig: StripeConfig = {
-    publishableKey: process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || '',
-    secretKey: process.env.REACT_APP_STRIPE_SECRET_KEY || '',
-    webhookSecret: process.env.REACT_APP_STRIPE_WEBHOOK_SECRET || ''
-};
-
 // Precios por moneda (en centavos para Stripe)
 export const STRIPE_PRICES = {
     USD: {

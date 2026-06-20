@@ -85,6 +85,38 @@ function docMatchesPublicSlug(doc, slugParam) {
     return variants.has(wanted) || variants.has(wantedCompact);
 }
 
+/** Dominio raíz (apex) para los subdominios de influencer, sin protocolo ni www. */
+function resolvePublicApexHost() {
+    const raw = process.env.PUBLIC_SITE_URL || 'https://www.damecodigo.com';
+    return String(raw)
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .replace(/^www\./i, '')
+        .toLowerCase();
+}
+
+/**
+ * Host del subdominio del influencer: `<slug>.<apex>` (ej. luccy.damecodigo.com).
+ * Devuelve '' si no hay slug canónico.
+ */
+function buildInfluencerSubdomainHost(doc) {
+    const slug = resolveCanonicalPublicSlug(doc);
+    if (!slug) return '';
+    return `${slug}.${resolvePublicApexHost()}`;
+}
+
+/**
+ * URL pública del subdominio del influencer. El comodín de nginx redirige a /influencer/<slug>/deals.
+ * @param {object} doc influencer lean/plain
+ * @param {string} [path='/deals']
+ */
+function buildInfluencerSubdomainUrl(doc, path = '/deals') {
+    const host = buildInfluencerSubdomainHost(doc);
+    if (!host) return '';
+    const suffix = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+    return `https://${host}${suffix}`;
+}
+
 module.exports = {
     normalizeSlugInput,
     nameToSlug,
@@ -92,4 +124,7 @@ module.exports = {
     collectPublicSlugVariants,
     resolveCanonicalPublicSlug,
     docMatchesPublicSlug,
+    resolvePublicApexHost,
+    buildInfluencerSubdomainHost,
+    buildInfluencerSubdomainUrl,
 };

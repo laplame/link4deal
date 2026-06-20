@@ -26,9 +26,9 @@ export function buildInfluencerChannelLinks(
         },
         {
             channel: 'store',
-            label: 'Tienda',
+            label: 'Deals',
             description: 'Catálogo y productos disponibles',
-            path: `/influencer/${s}/tienda`,
+            path: `/influencer/${s}/deals`,
         },
         {
             channel: 'promo',

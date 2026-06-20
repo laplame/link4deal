@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getInfluencerOwnerEditHref } from '../config/roleNavigation';
@@ -13,11 +13,7 @@ import {
 } from '../components/SalesAndBidsRealtimeChart';
 import { CouponQrActivitySection } from '../components/CouponQrActivitySection';
 import { 
-  ArrowLeft,
-  Instagram, 
-  Youtube, 
-  Twitter, 
-  Globe, 
+  ArrowLeft, 
   MapPin, 
   Calendar, 
   DollarSign, 
@@ -30,8 +26,6 @@ import {
   Download, 
   Mail, 
   Heart, 
-  Share2, 
-  Eye, 
   BarChart3, 
   Target, 
   CreditCard, 
@@ -40,9 +34,7 @@ import {
   Plus,
   XCircle,
   Eye as EyeIcon,
-  Users as UsersIcon,
   TrendingUp as TrendingUpIcon,
-  DollarSign as DollarSignIcon,
   FileCode2,
   ExternalLink,
   Copy,
@@ -188,7 +180,7 @@ export default function InfluencerProfilePage() {
   const { influencerSlug } = useParams();
   const { hasRole, isAuthenticated, user } = useAuth();
   const isInfluencer = hasRole('influencer');
-  const isSuperAdmin = hasRole('super_admin') || hasRole('admin');
+  const isSuperAdmin = Boolean(user?.isSuperAdmin) || hasRole('admin');
   const [influencer, setInfluencer] = useState<Influencer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -418,7 +410,7 @@ export default function InfluencerProfilePage() {
           setInfluencer(null);
           return;
         }
-        setInfluencer(result.data as Influencer);
+        setInfluencer(result.data as unknown as Influencer);
         setError(null);
       } catch {
         if (!cancelled) {
@@ -880,12 +872,12 @@ export default function InfluencerProfilePage() {
                 </span>
               </Link>
               <Link
-                to={`/influencer/${encodeURIComponent(influencerSlug || '')}/tienda`}
+                to={`/influencer/${encodeURIComponent(influencerSlug || '')}/deals`}
                 className="flex w-full sm:w-auto items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm leading-tight bg-purple-600 text-white hover:bg-purple-700 transition-all min-w-0 shadow-sm"
-                title="Ver tienda con cupones disponibles (aprobados por la marca)"
+                title="Ver deals con cupones disponibles (aprobados por la marca)"
               >
                 <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden />
-                <span className="text-center">Ver tienda</span>
+                <span className="text-center">Ver deals</span>
               </Link>
               <Link
                 to={`/influencer/${encodeURIComponent(influencerSlug || '')}/faq`}
@@ -1302,7 +1294,7 @@ export default function InfluencerProfilePage() {
         </section>
 
         <InfluencerPublicDemandPanel
-          publicSlug={influencer.publicSlug || influencerSlug}
+          publicSlug={influencer.publicSlug || influencerSlug || ''}
           influencerName={influencer.name}
         />
 
@@ -1316,7 +1308,7 @@ export default function InfluencerProfilePage() {
             <InfluencerGtmSessionSnapshot
               influencerId={influencer.id}
               influencerName={influencer.name}
-              publicSlug={influencer.publicSlug || influencerSlug}
+              publicSlug={influencer.publicSlug || influencerSlug || ''}
             />
           </>
         )}
@@ -1365,7 +1357,7 @@ export default function InfluencerProfilePage() {
                 const justCopied = copiedPromoId === row.promotionId;
                 return (
                   <div key={row.cardKey} className="break-inside-avoid mb-6">
-                    <ProductCard product={product} masonryTier={masonryTierFromId(product.id, index)} />
+                    <ProductCard product={product} masonryTier={masonryTierFromId(product.id, index)} influencerProfileId={influencer?.id} />
                     <div className="mt-2 flex items-center gap-2">
                       <Link
                         to={promoPath}
@@ -2215,7 +2207,7 @@ export default function InfluencerProfilePage() {
             </div>
             
             <div className="space-y-3">
-              {selectedBid.bidHistory.map((history: any, index: number) => (
+              {selectedBid.bidHistory.map((history: any) => (
                 <div key={history.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${

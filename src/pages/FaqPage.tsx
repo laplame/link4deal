@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
@@ -80,7 +80,7 @@ const LANGUAGES: { code: Lang; label: string }[] = [
 ];
 
 const PROFILE_URL = 'https://damecodigo.com/influencer/TUUSUARIO';
-const STORE_URL = 'https://damecodigo.com/influencer/TUUSUARIO/tienda';
+const STORE_URL = 'https://damecodigo.com/influencer/TUUSUARIO/deals';
 const MARKET_URL = 'https://damecodigo.com/marketplace';
 /** Infografía ejemplo: comisión por venta verificada (FAQ pregunta 13 — ¿Cuánto puedo ganar?). */
 const FAQ_MONETIZE_PRODUCT_IMAGE = '/images/faq/monetiza-producto-ejemplo.png';
@@ -1790,7 +1790,7 @@ export default function FaqPage() {
 
     const slug = resolvedSlug || rawSlug || authSlug;
     const profilePath = slug ? `/influencer/${encodeURIComponent(slug)}` : '';
-    const storePath = slug ? `${profilePath}/tienda` : '';
+    const storePath = slug ? `${profilePath}/deals` : '';
     const influencerFaqPath = slug ? `${profilePath}/faq` : '';
     const profileUrl = slug ? `${PUBLIC_BASE}${profilePath}` : '';
     const storeUrl = slug ? `${PUBLIC_BASE}${storePath}` : '';

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Building2, Globe, DollarSign, MapPin, Tag } from 'lucide-react';
 import type { RegisteredBrand } from '../components/RegisteredBrandCard';

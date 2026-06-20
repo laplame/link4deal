@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { formatPrice, calculateDiscountPercentage } from '../utils/formatters';
@@ -140,7 +140,7 @@ export default function PromotionDetailsPage() {
     const [copiedAddress, setCopiedAddress] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [showCouponForm, setShowCouponForm] = useState(false);
-    const [showAddedToCart, setShowAddedToCart] = useState(false);
+    const [showAddedToCart] = useState(false);
     const [priceHistory, setPriceHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
@@ -152,7 +152,7 @@ export default function PromotionDetailsPage() {
         'idle' | 'loading' | 'ok' | 'denied' | 'unavailable'
     >('idle');
     const [shareCopied, setShareCopied] = useState(false);
-    const { addItem, state } = useCart();
+    const { state } = useCart();
 
     // Cargar promoción desde la API
     useEffect(() => {
@@ -362,11 +362,14 @@ export default function PromotionDetailsPage() {
     // Cargar historial de precios
     useEffect(() => {
         const fetchPriceHistory = async () => {
-            if (!id) return;
+            // Usar el id real de la promoción ya cargada (no el slug de la URL),
+            // porque el endpoint /history espera un ObjectId.
+            const historyId = product?.id || id;
+            if (!historyId) return;
 
             setIsLoadingHistory(true);
             try {
-                const response = await fetch(`/api/promotions/${id}/history`);
+                const response = await fetch(`/api/promotions/${historyId}/history`);
                 const data = await response.json();
 
                 if (data.success && data.data.history) {
@@ -507,20 +510,6 @@ export default function PromotionDetailsPage() {
         !!product.activateByGps &&
         chainBranchesWithCoords.length > 1 &&
         chainGeoStatus === 'loading';
-
-    const handleAddToCart = () => {
-        addItem({
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            currency: product.currency,
-            image: product.image
-        });
-        
-        // Mostrar feedback visual
-        setShowAddedToCart(true);
-        setTimeout(() => setShowAddedToCart(false), 3000);
-    };
 
     const renderStars = (rating: number) => {
         return Array.from({ length: 5 }, (_, i) => (

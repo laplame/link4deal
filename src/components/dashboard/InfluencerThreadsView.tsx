@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Bell, Paperclip, ImageIcon, HelpCircle, Circle } from 'lucide-react';
 
 export interface ThreadReply {

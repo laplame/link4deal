@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Instagram, Youtube, Twitter, Globe, MapPin, Calendar, DollarSign, Users, TrendingUp, Award, Clock, CheckCircle, AlertCircle, ExternalLink, Download, Mail, Phone, Heart, Share2, Eye, BarChart3, Target, CreditCard, Wallet, Gift, Trophy, Flame, Star } from 'lucide-react';
+import { useState } from 'react';
+import { X, Instagram, Youtube, Twitter, Globe, MapPin, Calendar, DollarSign, Users, Award, Download, Mail, Heart, Share2, Eye, BarChart3, Target, CreditCard, Gift, Flame, Star } from 'lucide-react';
 
 interface Influencer {
   id: string;

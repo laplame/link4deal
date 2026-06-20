@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link2, Loader2, ExternalLink } from 'lucide-react';
 import { apiUrl } from '../../utils/apiUrl';
 import { parseBizneShopUrl } from '../../utils/parseBizneShopUrl';

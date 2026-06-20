@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Building2, Wallet, Shield, CheckCircle, AlertCircle, Upload, Eye, EyeOff } from 'lucide-react';
+import { User, Building2, Shield, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 export interface KYCData {
     // Información básica
@@ -49,7 +49,7 @@ const KYCForm: React.FC<KYCFormProps> = ({
     const [step, setStep] = useState(1);
     const [entityType, setEntityType] = useState<'individual' | 'business'>(initialData?.entityType || 'individual');
     const [formData, setFormData] = useState<Partial<KYCData>>(initialData || {});
-    const [errors, setErrors] = useState<Partial<KYCData>>({});
+    const [errors, setErrors] = useState<Partial<Record<keyof KYCData, string>>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [showWallet, setShowWallet] = useState(false);
 
@@ -61,7 +61,7 @@ const KYCForm: React.FC<KYCFormProps> = ({
     };
 
     const validateStep = (currentStep: number): boolean => {
-        const newErrors: Partial<KYCData> = {};
+        const newErrors: Partial<Record<keyof KYCData, string>> = {};
 
         if (currentStep === 1) {
             if (!formData.entityType) newErrors.entityType = 'Selecciona el tipo de entidad';

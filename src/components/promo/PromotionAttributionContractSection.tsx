@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileText, ChevronDown, ChevronUp, Calendar, Package } from 'lucide-react';
 import {
     emptyPromotionAttributionContract,

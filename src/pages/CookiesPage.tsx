@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Cookie } from 'lucide-react';
 import { SITE_CONFIG } from '../config/site';

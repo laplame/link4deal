@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, ExternalLink, ScrollText, ShieldCheck, X } from 'lucide-react';
 import TermsContentBody from './TermsContentBody';

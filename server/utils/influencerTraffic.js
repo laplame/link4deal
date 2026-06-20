@@ -40,7 +40,7 @@ function extractPromoIdFromPath(urlPath) {
 function resolveVisitChannel(entryType, pagePath, entryPath) {
     const p = pathOnly(pagePath) || pathOnly(entryPath);
     if (/^\/coupon\//i.test(p)) return 'coupon';
-    if (entryType === 'store' || /\/tienda(?:\/|$)/i.test(p)) return 'store';
+    if (entryType === 'store' || /\/(?:deals|tienda)(?:\/|$)/i.test(p)) return 'store';
     if (entryType === 'promo' || /\/promo\//i.test(p)) return 'promo';
     if (entryType === 'coupon') return 'coupon';
     if (entryType === 'faq' || /\/faq(?:\/|$)/i.test(p)) return 'faq';
@@ -54,7 +54,7 @@ function buildChannelLinksForSlug(slug, influencerId) {
     const refQ = influencerId ? `?ref=${encodeURIComponent(influencerId)}` : '';
     return [
         { channel: 'profile', label: CHANNEL_LABELS.profile, path: `/influencer/${s}` },
-        { channel: 'store', label: CHANNEL_LABELS.store, path: `/influencer/${s}/tienda` },
+        { channel: 'store', label: CHANNEL_LABELS.store, path: `/influencer/${s}/deals` },
         { channel: 'promo', label: CHANNEL_LABELS.promo, path: `/influencer/${s}/promo/{promotionId}` },
         { channel: 'coupon', label: CHANNEL_LABELS.coupon, path: `/coupon/{couponId}${refQ}` },
         { channel: 'faq', label: CHANNEL_LABELS.faq, path: `/influencer/${s}/faq` },
@@ -73,7 +73,7 @@ function parseInfluencerPath(pathname) {
     if (!slug) return null;
     const rest = (m[2] || '').toLowerCase();
     let entryType = 'profile';
-    if (rest.startsWith('tienda')) entryType = 'store';
+    if (rest.startsWith('deals') || rest.startsWith('tienda')) entryType = 'store';
     else if (rest.startsWith('promo/')) entryType = 'promo';
     else if (rest.startsWith('faq')) entryType = 'faq';
     else if (rest.startsWith('edit')) entryType = 'edit';

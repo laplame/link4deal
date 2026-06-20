@@ -1,4 +1,3 @@
-import React from 'react';
 import { Globe, Users, TrendingUp, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Influencer } from '../types';
@@ -8,7 +7,7 @@ interface Props {
   viewMode: 'influencers' | 'market';
 }
 
-export function InfluencerCard({ influencer, viewMode }: Props) {
+export function InfluencerCard({ influencer }: Props) {
   const totalFollowers = Object.values(influencer.followers).reduce((a, b) => a + b, 0);
   const formattedFollowers = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';

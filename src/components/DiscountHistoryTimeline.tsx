@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock, TrendingDown, TrendingUp, DollarSign, Calendar, Tag } from 'lucide-react';
 import { formatPrice } from '../utils/formatters';
 
@@ -22,10 +21,7 @@ interface DiscountHistoryTimelineProps {
 }
 
 export default function DiscountHistoryTimeline({
-    promotionId,
     brand,
-    currentPrice,
-    originalPrice,
     currency,
     history = []
 }: DiscountHistoryTimelineProps) {

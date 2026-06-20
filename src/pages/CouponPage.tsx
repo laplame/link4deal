@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { 
     QrCode, 
-    Download, 
     Share2, 
     MessageCircle, 
     CheckCircle, 
     Clock, 
-    MapPin, 
-    Truck, 
     Shield,
     ArrowLeft,
     Star,

@@ -54,14 +54,6 @@ export interface MarketplaceInfluencer {
   publicSlug?: string;
 }
 
-const EMPTY_COUPON_STATS: CouponStats = {
-  totalCoupons: 0,
-  activeCoupons: 0,
-  totalSales: 0,
-  totalCommission: 0,
-  averageConversion: 0,
-};
-
 function safeNum(n: unknown, fallback = 0): number {
   const x = Number(n);
   return Number.isFinite(x) ? x : fallback;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { MapPin, ArrowLeft, Loader2, AlertCircle, Tag } from 'lucide-react';
 import PageSeo from '../components/seo/PageSeo';

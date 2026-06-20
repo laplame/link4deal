@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SITE_CONFIG } from '../config/site';
 import { 
     Building2, 
-    Users, 
     Star, 
     ArrowRight, 
     CheckCircle,

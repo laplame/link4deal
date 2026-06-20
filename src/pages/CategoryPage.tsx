@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Filter, Grid, List, Star, Heart, ShoppingCart, Eye, Share2, Truck, Shield, Clock, Tag, MapPin, FileText, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Filter, Grid, List, Star, Heart, ShoppingCart, Eye } from 'lucide-react';
 
 interface Product {
     id: string;
@@ -889,10 +889,6 @@ export default function CategoryPage() {
 
     const handleAddToWishlist = (productId: string) => {
         console.log('Agregando a favoritos:', productId);
-    };
-
-    const handleViewDetails = (productId: string) => {
-        console.log('Viendo detalles:', productId);
     };
 
     return (

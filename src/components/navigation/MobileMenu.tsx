@@ -5,7 +5,6 @@ import {
   User,
   LogOut,
   Home,
-  Tag,
   LayoutGrid,
   Building2,
   Store,

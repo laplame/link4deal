@@ -73,7 +73,7 @@ export function applyMobileWebAppHtmlFlags(ctx = getMobileWebAppContext()): void
 }
 
 export function isInfluencerStorePath(pathname: string): boolean {
-  return /^\/influencer\/[^/]+\/tienda\/?$/.test(pathname);
+  return /^\/influencer\/[^/]+\/(?:deals|tienda)\/?$/.test(pathname);
 }
 
 /** Path interno de la página de una sola promoción de un influencer. */

@@ -17,13 +17,8 @@ import {
     ArrowLeft, 
     Target, 
     Upload, 
-    Plus, 
     X,
-    Building2,
-    Globe,
-    Users,
     DollarSign,
-    CheckCircle,
     FileText,
     Sparkles
 } from 'lucide-react';
@@ -174,15 +169,6 @@ const BrandSetup: React.FC = () => {
         'event-marketing'
     ];
 
-    const incomeLevels = [
-        'low',
-        'medium-low',
-        'medium',
-        'medium-high',
-        'high',
-        'luxury'
-    ];
-
     const handleInputChange = (field: string, value: any) => {
         setFormData(prev => ({
             ...prev,
@@ -267,7 +253,7 @@ const BrandSetup: React.FC = () => {
             const res = await fetch(apiUrl('/api/analyze-profile-image'), { method: 'POST', body: fd });
             const json = (await parseJsonBody(res)) as { message?: string; data?: Record<string, unknown> };
             if (!res.ok) throw new Error(json.message || 'Error al analizar');
-            const d = json.data || {};
+            const d = (json.data || {}) as Record<string, any>;
             setFormData(prev => ({
                 ...prev,
                 companyName: d.companyName ?? prev.companyName,

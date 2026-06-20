@@ -6,7 +6,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Tag,
   AlertTriangle,
   Loader2,
   Package,

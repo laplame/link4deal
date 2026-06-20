@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Loader2,
   Save,
-  Upload,
   Instagram,
   Youtube,
   Twitter,
@@ -12,6 +11,9 @@ import {
   ImagePlus,
   ExternalLink,
   ShieldCheck,
+  Globe,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAdminCrm } from '../config/adminAccess';
@@ -85,6 +87,8 @@ export default function InfluencerProfileEditPage() {
   const [claiming, setClaiming] = useState(false);
   const [linkedProfileSlug, setLinkedProfileSlug] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string>('');
+  const [subdomainUrl, setSubdomainUrl] = useState<string>('');
+  const [copiedSubdomain, setCopiedSubdomain] = useState(false);
   const [editMode, setEditMode] = useState<'me' | 'admin' | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
 
@@ -122,6 +126,7 @@ export default function InfluencerProfileEditPage() {
         const target = result.data;
         const tId = asString(target.id);
         setTargetId(tId);
+        setSubdomainUrl(asString((target as Record<string, unknown>).subdomainUrl));
 
         // Superuser / super admin: edita cualquier perfil vía CRM (sin vincular cuenta influencer).
         if (isAdminEditor) {
@@ -184,6 +189,17 @@ export default function InfluencerProfileEditPage() {
       cancelled = true;
     };
   }, [influencerSlug, isAuthenticated, authLoading, token, isAdminEditor]);
+
+  const handleCopySubdomain = async () => {
+    if (!subdomainUrl) return;
+    try {
+      await navigator.clipboard.writeText(subdomainUrl);
+      setCopiedSubdomain(true);
+      window.setTimeout(() => setCopiedSubdomain(false), 2000);
+    } catch {
+      setCopiedSubdomain(false);
+    }
+  };
 
   const handleClaimProfile = async () => {
     if (!influencerSlug || !token) return;
@@ -543,6 +559,37 @@ export default function InfluencerProfileEditPage() {
           ))}
         </section>
 
+        {subdomainUrl && (
+          <section className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-purple-800">
+              <Globe className="h-4 w-4" aria-hidden />
+              Tu subdominio personal
+            </div>
+            <p className="mt-1 text-xs text-purple-700">
+              Comparte este enlace: lleva directo a tus deals.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <a
+                href={subdomainUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0 truncate rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:underline"
+                title={subdomainUrl}
+              >
+                {subdomainUrl.replace(/^https?:\/\//, '')}
+              </a>
+              <button
+                type="button"
+                onClick={handleCopySubdomain}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+              >
+                {copiedSubdomain ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+                {copiedSubdomain ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
+          </section>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -560,11 +607,11 @@ export default function InfluencerProfileEditPage() {
             Cancelar
           </Link>
           <Link
-            to={`/influencer/${encodeURIComponent(influencerSlug || '')}/tienda`}
+            to={`/influencer/${encodeURIComponent(influencerSlug || '')}/deals`}
             className="ml-auto inline-flex items-center gap-1.5 text-sm text-purple-700 hover:underline"
           >
             <ExternalLink className="h-4 w-4" aria-hidden />
-            Ver tienda
+            Ver deals
           </Link>
         </div>
       </div>

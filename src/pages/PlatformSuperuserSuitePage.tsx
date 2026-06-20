@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Sparkles,

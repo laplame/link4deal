@@ -2,12 +2,10 @@ import React, { useState, useRef, useCallback } from 'react';
 import { 
   Camera, 
   Upload, 
-  Download, 
   Trash2, 
   Eye, 
   CheckCircle, 
-  XCircle, 
-  AlertCircle,
+  XCircle,
   Instagram,
   Twitter,
   Youtube,
@@ -16,19 +14,12 @@ import {
   Globe,
   Users,
   Heart,
-  MessageCircle,
-  Share2,
   BarChart3,
   TrendingUp,
-  Target,
   Zap,
   ArrowLeft,
-  Plus,
-  Edit3,
   Save,
-  RefreshCw,
-  FileText,
-  Image as ImageIcon
+  RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -181,14 +172,14 @@ export default function InfluencerOCRProfile() {
     setOcrResults([]);
   };
 
-  const detectPlatform = (imageData: string): string => {
+  const detectPlatform = (_imageData: string): string => {
     // Simulación de detección de plataforma basada en características visuales
     // En producción, esto se haría con ML/Computer Vision
     const randomPlatforms = ['instagram', 'tiktok', 'youtube', 'twitter', 'facebook', 'linkedin'];
     return randomPlatforms[Math.floor(Math.random() * randomPlatforms.length)];
   };
 
-  const simulateOCR = async (file: File, platform: string): Promise<any> => {
+  const simulateOCR = async (_file: File, platform: string): Promise<any> => {
     // Simulación de OCR - en producción se usaría Tesseract.js o una API
     await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
 

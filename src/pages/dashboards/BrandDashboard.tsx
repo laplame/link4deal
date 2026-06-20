@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
     ArrowLeft, 
@@ -6,37 +6,18 @@ import {
     TrendingUp, 
     DollarSign, 
     Target, 
-    BarChart3, 
-    ShoppingBag,
+    BarChart3,
     Eye,
     MessageCircle,
     Zap,
-    Star,
     Clock,
     CheckCircle,
     AlertCircle,
-    ExternalLink,
     Download,
     Search,
     Plus,
     Settings,
-    Globe,
-    MapPin,
-    Tag,
-    CreditCard,
-    Users,
-    Calendar,
-    Award,
-    Sparkles,
     Edit,
-    Filter,
-    PieChart,
-    Activity,
-    ShoppingCart,
-    Package,
-    Truck,
-    Heart,
-    Share2,
     Camera,
 } from 'lucide-react';
 import { apiUrl } from '../../utils/apiUrl';
@@ -275,7 +256,6 @@ export default function BrandDashboard() {
     }, []);
 
     const totalBrands = brands.length;
-    const activeBrands = brands.filter(b => b.status === 'active' || b.status === 'verified').length;
     const totalRevenue = brands.reduce((sum, b) => sum + b.totalRevenue, 0);
     const totalMonthlyRevenue = brands.reduce((sum, b) => sum + b.monthlyRevenue, 0);
     const totalSpent = brands.reduce((sum, b) => sum + b.totalSpent, 0);
@@ -664,7 +644,7 @@ export default function BrandDashboard() {
                                                 {campaign.roi.toFixed(0)}% ROI
                                             </span>
                                         </div>
-                                        <p className="text-sm text-gray-600 mb-3">{campaign.influencer} • {campaign.brand}</p>
+                                        <p className="text-sm text-gray-600 mb-3">{campaign.influencer}</p>
                                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-500 mb-3">
                                             <div>
                                                 <span className="font-medium">Presupuesto:</span> ${campaign.budget.toLocaleString()}

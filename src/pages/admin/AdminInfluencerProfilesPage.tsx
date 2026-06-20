@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
-  clearAdminPinUnlockSession,
   getAdminAccessPin,
   isAdminPinUnlockSession,
   setAdminPinUnlockSession,

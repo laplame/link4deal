@@ -10,7 +10,7 @@ export const ROLE_ROUTES = {
         panel: '/influencer/panel',
         profile: (slug: string) => `/influencer/${encodeURIComponent(slug)}`,
         profileEdit: (slug: string) => `/influencer/${encodeURIComponent(slug)}/edit`,
-        store: (slug: string) => `/influencer/${encodeURIComponent(slug)}/tienda`,
+        store: (slug: string) => `/influencer/${encodeURIComponent(slug)}/deals`,
         faq: (slug: string) => `/influencer/${encodeURIComponent(slug)}/faq`,
         promo: (slug: string, promotionId: string) =>
             `/influencer/${encodeURIComponent(slug)}/promo/${promotionId}`,

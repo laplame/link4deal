@@ -12,7 +12,7 @@ export type TermsBlock =
 export interface TermsSection {
     n: number;
     title: string;
-    blocks: TBlock[];
+    blocks: TermsBlock[];
 }
 
 export const TERMS_SECTIONS: TermsSection[] = [

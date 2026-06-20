@@ -1,4 +1,4 @@
-import { isValidBizneShopObjectId, normalizeBizneShopId } from './bizneShopId';
+import { normalizeBizneShopId } from './bizneShopId';
 
 const PATH_MARKERS = new Set(['shop', 'shops', 'store', 'stores', 'tienda', 'tiendas', 'bizne', 'negocio', 'business']);
 

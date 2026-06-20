@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Upload, Calendar, Target, DollarSign, Users, Clock, CheckCircle, Sparkles } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Upload, Calendar, Target, DollarSign, Clock, CheckCircle, Sparkles } from 'lucide-react';
 import { apiUrl } from '../utils/apiUrl';
 import { LAST_COPIED_INFLUENCER_ID_KEY } from '../config/influencerApply';
 
@@ -252,7 +252,7 @@ export default function PromotionApplicationModal({
     setFormData(prev => ({
       ...prev,
       [parent]: {
-        ...prev[parent as keyof ApplicationData],
+        ...(prev[parent as keyof ApplicationData] as object),
         [field]: value
       }
     }));

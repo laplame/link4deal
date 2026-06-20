@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Globe, Users, Plus, AlertCircle } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Globe, Users, AlertCircle } from 'lucide-react';
 import { InfluencerCard } from '../components/InfluencerCard';
 import { influencers } from '../data/influencers';
 import { fetchChannels } from '../services/channels';
@@ -13,7 +12,6 @@ export function InfluencerPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -130,7 +128,7 @@ export function InfluencerPage() {
             {filteredInfluencers.map(influencer => (
               <InfluencerCard 
                 key={influencer.name} 
-                influencer={influencer} 
+                influencer={influencer as Influencer} 
                 viewMode="influencers" 
               />
             ))}

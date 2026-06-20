@@ -102,7 +102,6 @@ export interface CrmInfluencerDetail extends CrmInfluencerRow {
   socialMedia: Record<string, string | undefined>;
   followers: Record<string, number>;
   ugcEnabled: boolean;
-  identityVerificationStatus?: 'pending' | 'approved' | 'rejected';
   verification?: {
     screenshotUrl?: string;
     screenshotUploadedAt?: string | null;

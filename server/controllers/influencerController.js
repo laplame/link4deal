@@ -27,6 +27,8 @@ const {
     resolveCanonicalPublicSlug,
     docMatchesPublicSlug,
     normalizeSlugInput,
+    buildInfluencerSubdomainHost,
+    buildInfluencerSubdomainUrl,
 } = require('../utils/influencerSlug');
 const { collectHandlesFromBody, findUnclaimedInfluencer, linkInfluencerToUser } = require('../utils/influencerUserLink');
 const { isPlatformSuperuserEmail } = require('../utils/platformSuperuser');
@@ -135,6 +137,10 @@ class InfluencerController {
             profileShortCode: d.profileShortCode ? String(d.profileShortCode).trim() : '',
             /** Slug para /influencer/:slug (username, IG o nombre compacto). */
             publicSlug: resolveCanonicalPublicSlug(d),
+            /** Host del subdominio propio (slug.damecodigo.com); lo sirve el comodín de nginx. */
+            subdomain: buildInfluencerSubdomainHost(d),
+            /** URL pública lista para compartir: redirige a /influencer/<slug>/deals. */
+            subdomainUrl: buildInfluencerSubdomainUrl(d),
         };
     }
 

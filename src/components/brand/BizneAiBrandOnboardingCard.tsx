@@ -1,4 +1,3 @@
-import React from 'react';
 import { ExternalLink, Smartphone, Store } from 'lucide-react';
 import { SITE_CONFIG } from '../../config/site';
 

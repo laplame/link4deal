@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Users, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';

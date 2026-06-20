@@ -242,7 +242,7 @@ export default function CrmPipelineBoard({
                     const isDragging = draggingId === card.influencerId;
                     const isMoving = movingId === card.influencerId;
                     const href = profileHref(card as CrmPipelineCard);
-                    const mCard = card as CrmMonetizationCard;
+                    const mCard = card as unknown as CrmMonetizationCard;
                     const stageLabel = cardStageLabel(card, boardKind);
                     return (
                       <div

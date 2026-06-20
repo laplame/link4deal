@@ -240,7 +240,6 @@ export default function PromotionSmartContractPage() {
   // Backend calcula valuePerCouponUsd y maxEmissionUsd (incluye conversión MXN→USD si aplica)
   const valuePerCouponUsd = promotion.valuePerCouponUsd ?? promotion.promotionalValueUsd ?? (totalCupones && totalCupones > 0 && promotion.maxEmissionUsd ? promotion.maxEmissionUsd / totalCupones : null);
   const maxEmissionUsd = promotion.maxEmissionUsd ?? (valuePerCouponUsd != null && totalCupones != null && totalCupones > 0 ? valuePerCouponUsd * totalCupones : promotion.promotionalValueUsd ?? null);
-  const emisionUsd = maxEmissionUsd;
   // LUXAE = USD (PSCS-1); emisión máxima en tokens = maxEmissionUsd
   const luxaeCreados = maxEmissionUsd;
   const offerTypeLabel = OFFER_TYPE_LABELS[promotion.offerType || 'percentage'] || promotion.offerType || 'Descuento';

@@ -65,7 +65,7 @@ export function resolveCanonicalPublicSlug(inf: {
   if (inf.publicSlug?.trim()) return normalizeSlugInput(inf.publicSlug);
   const u = normalizeSlugInput((inf.username || '').replace(/^@/, ''));
   if (u) return u;
-  const ig = normalizeSlugInput(inf.socialMedia?.instagram);
+  const ig = normalizeSlugInput(inf.socialMedia?.instagram || '');
   if (ig) return ig;
   const compact = nameToCompactSlug(inf.name || '');
   if (compact) return compact;
@@ -96,7 +96,7 @@ export function parseInfluencerPublicPath(pathname: string): {
   if (!slug) return null;
   const rest = (m[2] || '').toLowerCase();
   let entryType: InfluencerPublicEntryType = 'profile';
-  if (rest.startsWith('tienda')) entryType = 'store';
+  if (rest.startsWith('deals') || rest.startsWith('tienda')) entryType = 'store';
   else if (rest.startsWith('promo/')) entryType = 'promo';
   else if (rest.startsWith('faq')) entryType = 'faq';
   else if (rest.startsWith('edit')) entryType = 'edit';
