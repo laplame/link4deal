@@ -1,0 +1,38 @@
+---
+description: Flujo de despliegue al VPS (build del front SIEMPRE en local)
+alwaysApply: true
+---
+
+# Despliegue al VPS (damecodigo.com)
+
+El VPS NO tiene RAM suficiente para compilar el front: `pnpm build` falla allí.
+**Siempre compila en local y sube el `dist/` ya generado.** Nunca corras `pnpm build`/`build:full` en el servidor.
+
+## Front (build local + subida)
+
+```bash
+pnpm run build:full                 # tsc -b + vite build (en local)
+pnpm run deploy:vps:dist            # rsync dist/ + permisos (sin reiniciar PM2)
+```
+
+## Front + backend
+
+```bash
+export DEPLOY_SSH="cto@damecodigo.com"
+pnpm run deploy:vps:build           # build:full local + rsync src/server/.env/dist + pm2 restart
+```
+
+Scripts en `scripts/deploy-vps-rsync.sh` (usa key auth; `sudo` remoto pide contraseña aparte).
+
+## Nginx (en el servidor)
+
+```bash
+cd ~/project/link4deal && git pull
+./scripts/update-nginx-conf.sh --install     # cp + nginx -t + reload (pide sudo)
+```
+
+## Notas
+
+- `dist/` y `*.tsbuildinfo` están en `.gitignore`: el front viaja por rsync, no por git.
+- Backend: `pm2 restart link4deal-backend` tras `git pull`/rsync de `server/`.
+- Imágenes subidas (`server/uploads/`) NO se versionan ni se borran en deploy.
