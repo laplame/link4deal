@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { NavigationHeader } from '../navigation/NavigationHeader';
+import { SiteFooter } from './SiteFooter';
+import { FloatingDownloadAppButton } from './FloatingDownloadAppButton';
 import { useAuth } from '../../context/AuthContext';
-import { getMobileWebAppContext, isInfluencerStorePath } from '../../utils/mobileWebApp';
+import { SITE_SHELL_PAGE, shouldHideGlobalNav } from '../../config/siteShell';
 
 const pathTitles: Record<string, string> = {
   '/': 'Inicio',
@@ -27,6 +29,8 @@ const pathTitles: Record<string, string> = {
   '/tiendas': 'Tiendas BizneAI',
   '/referral-system': 'Referidos',
   '/quick-promotion': 'Crear oferta',
+  '/empezar': 'Empezar',
+  '/user-type-selector': 'Empezar',
   '/create-promotion': 'Crear promoción',
   '/importar-sucursales': 'Importar sucursales',
   '/admin': 'Admin',
@@ -35,7 +39,11 @@ const pathTitles: Record<string, string> = {
   '/admin/brands': 'Panel marcas',
   '/admin/agencies': 'Panel agencias',
   '/dashboard/suite': 'Multi-panel (superusuario)',
-  '/demo/influencer-dashboard': 'Demo panel influencer'
+  '/demo/influencer-dashboard': 'Demo panel influencer',
+  '/landing': 'Para negocios',
+  '/landing-a': 'Creadores',
+  '/landing-b': 'Negocios',
+  '/landing-c': 'Agencias',
 };
 
 function getTitle(pathname: string): string | undefined {
@@ -55,36 +63,28 @@ function getTitle(pathname: string): string | undefined {
   return undefined;
 }
 
-/** Rutas que tienen su propia barra de navegación; no mostrar navbar global para evitar duplicado. */
-const ROUTES_WITH_OWN_NAV = ['/', '/landing', '/comisionista-digital'];
-
-/** Panel hub sin navbar global solo para influencer en estas rutas. */
-const INFLUENCER_HUB_PATHS_HIDE_NAV = ['/dashboard/panel', '/influencer/panel', '/admin/influencers'];
-const DEMO_INFLUENCER_HUB_PATH = '/demo/influencer-dashboard';
-
 export function MainLayout() {
   const location = useLocation();
   const { primaryRole, user } = useAuth();
   const pathname = location.pathname;
-  const mobileWebApp = useMemo(() => getMobileWebAppContext(), []);
-  const isPlatformSuper = Boolean(user?.isPlatformSuperuser);
-  const hideGlobalNavForInAppStore =
-    isInfluencerStorePath(pathname) && mobileWebApp.isMobileInApp;
-  const hideGlobalNav =
-    ROUTES_WITH_OWN_NAV.includes(pathname) ||
-    pathname === DEMO_INFLUENCER_HUB_PATH ||
-    pathname === '/dashboard/suite' ||
-    hideGlobalNavForInAppStore ||
-    (INFLUENCER_HUB_PATHS_HIDE_NAV.includes(pathname) &&
-      (primaryRole === 'influencer' || isPlatformSuper));
+  const hideGlobalNav = useMemo(
+    () =>
+      shouldHideGlobalNav(pathname, {
+        primaryRole,
+        isPlatformSuperuser: Boolean(user?.isPlatformSuperuser),
+      }),
+    [pathname, primaryRole, user?.isPlatformSuperuser],
+  );
   const title = getTitle(pathname);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`${SITE_SHELL_PAGE} flex flex-col`}>
       {!hideGlobalNav && <NavigationHeader title={title} />}
       <main className="flex-1">
         <Outlet />
       </main>
+      {!hideGlobalNav && <SiteFooter />}
+      <FloatingDownloadAppButton />
     </div>
   );
 }

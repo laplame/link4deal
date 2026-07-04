@@ -15,6 +15,10 @@ const Influencer = require('../models/Influencer');
 const InfluencerPromoShortCode = require('../models/InfluencerPromoShortCode');
 const Promotion = require('../models/Promotion');
 const { createRegistryEntry } = require('./influencerPromoShortCodes');
+const {
+    findOpenLivePromotionsForCategories,
+    normalizeInfluencerCategories,
+} = require('./influencerAvailableProducts');
 
 const INFLUENCER_GENERAL_USERNAME = 'influencer-general';
 
@@ -55,13 +59,27 @@ async function collectPromotionIdsForInfluencer(influencerIdStr) {
         if (a.promotion) set.add(String(a.promotion));
     }
 
-    const inf = await Influencer.findById(oid).select('recentPromotions').lean();
+    const inf = await Influencer.findById(oid).select('recentPromotions categories username').lean();
     if (inf?.recentPromotions?.length) {
         for (const p of inf.recentPromotions) {
             const raw = p.id != null ? p.id : p._id;
             if (raw != null && mongoose.Types.ObjectId.isValid(String(raw))) {
                 set.add(String(raw));
             }
+        }
+    }
+
+    // Promociones abiertas (a todos o por temas del influencer): mismo trato que aprobadas.
+    if (inf && inf.username !== INFLUENCER_GENERAL_USERNAME) {
+        try {
+            const openPromos = await findOpenLivePromotionsForCategories(
+                normalizeInfluencerCategories(inf),
+            );
+            for (const p of openPromos) {
+                if (p?._id) set.add(String(p._id));
+            }
+        } catch (e) {
+            console.warn('[ensurePromoShortCodes] open promos:', e.message);
         }
     }
 

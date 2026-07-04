@@ -1,28 +1,25 @@
 import React, { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import {
   X,
   User,
   LogOut,
   Home,
-  LayoutGrid,
-  Building2,
-  Store,
-  Share2,
-  Sparkles,
-  Info,
   ShoppingCart,
-  Gavel,
-  Ticket,
+  Download,
 } from 'lucide-react';
 import { MobileMenuButton } from './MobileMenuButton';
 import { useAuth } from '../../context/AuthContext';
+import { apkDownloadAnchorProps } from '../../utils/appDownload';
+import {
+  NAV_DIRECTORY_ITEMS,
+  NAV_JOIN_ITEMS,
+  NAV_SHOP_ITEMS,
+} from '../../config/mainNavigation';
 import {
   getAccountHref,
   getAccountLabel,
   getPublishNavItems,
   getRoleWorkspaceItems,
-  SHARED_STORE_ROUTE,
   shouldShowJoinNav,
 } from '../../config/roleNavigation';
 
@@ -71,7 +68,7 @@ export function MobileMenu({ isOpen, onClose }: Props) {
 
   return (
     <div
-      className={`fixed inset-0 bg-black/70 transition-opacity duration-300 xl:hidden ${
+      className={`fixed inset-0 bg-black/70 transition-opacity duration-300 2xl:hidden ${
         isOpen ? 'opacity-100 z-[100]' : 'opacity-0 pointer-events-none invisible'
       }`}
       aria-hidden={!isOpen}
@@ -129,16 +126,14 @@ export function MobileMenu({ isOpen, onClose }: Props) {
               </>
             ) : (
               <>
-                <MobileMenuButton to="/signin" onClick={onClose}>
-                  Iniciar sesión
-                </MobileMenuButton>
-                <Link
-                  to="/signup"
+                <a
+                  {...apkDownloadAnchorProps()}
                   onClick={onClose}
-                  className="block w-full min-h-[44px] px-4 py-3 text-center text-white font-semibold bg-green-600 hover:bg-green-500 rounded-lg transition-colors shadow-sm"
+                  className="flex items-center justify-center gap-2 w-full min-h-[44px] px-4 py-3 text-center text-white font-semibold bg-green-600 hover:bg-green-500 rounded-lg transition-colors shadow-sm"
                 >
-                  Registrarse
-                </Link>
+                  <Download className="h-4 w-4" />
+                  Descargar app
+                </a>
                 <MobileMenuButton to="/cart" onClick={onClose}>
                   <span className="flex items-center gap-2">
                     <ShoppingCart className="h-4 w-4" /> Carrito
@@ -153,55 +148,20 @@ export function MobileMenu({ isOpen, onClose }: Props) {
                 <Home className="h-4 w-4" /> Inicio
               </span>
             </MobileMenuButton>
-            <MobileMenuButton to="/about" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Info className="h-4 w-4" /> Nosotros
-              </span>
-            </MobileMenuButton>
 
-            <SectionLabel>Explorar</SectionLabel>
-            <MobileMenuButton to={SHARED_STORE_ROUTE} onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Store className="h-4 w-4" /> Tienda
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/categories" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <LayoutGrid className="h-4 w-4" /> Categorías
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/subastas" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Gavel className="h-4 w-4" /> Subastas en vivo
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/redenciones-en-vivo" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Ticket className="h-4 w-4" /> Cupones redimidos
-              </span>
-            </MobileMenuButton>
+            <SectionLabel>Tienda y explorar</SectionLabel>
+            {NAV_SHOP_ITEMS.map((item) => (
+              <MobileMenuButton key={item.to} to={item.to} onClick={onClose}>
+                {item.label}
+              </MobileMenuButton>
+            ))}
 
             <SectionLabel>Directorio</SectionLabel>
-            <MobileMenuButton to="/brands" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" /> Marcas y negocios
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/tiendas" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Store className="h-4 w-4" /> Tiendas BizneAI
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/influencer" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" /> Influencers
-              </span>
-            </MobileMenuButton>
-            <MobileMenuButton to="/referral-system" onClick={onClose}>
-              <span className="flex items-center gap-2">
-                <Share2 className="h-4 w-4" /> Referidos
-              </span>
-            </MobileMenuButton>
+            {NAV_DIRECTORY_ITEMS.map((item) => (
+              <MobileMenuButton key={item.to} to={item.to} onClick={onClose}>
+                {item.label}
+              </MobileMenuButton>
+            ))}
 
             {publishItems.length > 0 ? (
               <>
@@ -217,12 +177,11 @@ export function MobileMenu({ isOpen, onClose }: Props) {
             {showJoin ? (
               <>
                 <SectionLabel>Únete</SectionLabel>
-                <MobileMenuButton to="/brands/setup" onClick={onClose}>
-                  Registrar marca
-                </MobileMenuButton>
-                <MobileMenuButton to="/influencer/setup" onClick={onClose}>
-                  Ser influencer
-                </MobileMenuButton>
+                {NAV_JOIN_ITEMS.map((item) => (
+                  <MobileMenuButton key={item.to} to={item.to} onClick={onClose}>
+                    {item.label}
+                  </MobileMenuButton>
+                ))}
               </>
             ) : null}
           </nav>

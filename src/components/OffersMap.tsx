@@ -4,6 +4,12 @@ import { MapPin, Navigation, Zap, Clock, Eye, Flame, Target } from 'lucide-react
 import { formatPrice } from '../utils/formatters';
 import { getPromotionImageUrl } from '../utils/promotionImage';
 import { loadGoogleMapsApi } from '../utils/googleMapsLoader';
+import { SITE_SHELL_CARD } from '../config/siteShell';
+
+const TEXT_HIGHLIGHT =
+    'box-decoration-clone bg-amber-100/95 text-gray-900 px-2 py-0.5 rounded-sm shadow-sm';
+const TEXT_HIGHLIGHT_PANEL =
+    'rounded-xl bg-amber-50/95 backdrop-blur-sm border border-amber-200/70 shadow-md';
 
 type Hotness = 'fire' | 'hot' | 'warm';
 
@@ -436,16 +442,18 @@ const OffersMap: React.FC = () => {
     const renderMapView = () => {
         if (loading) {
             return (
-                <div className="flex flex-col items-center justify-center min-h-[420px] rounded-2xl bg-gray-100">
-                    <p className="text-gray-600">Cargando ofertas para el mapa…</p>
+                <div className={`flex flex-col items-center justify-center min-h-[420px] ${SITE_SHELL_CARD}`}>
+                    <p className="text-gray-300">Cargando ofertas para el mapa…</p>
                 </div>
             );
         }
 
         if (mapPoints.length === 0) {
             return (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-gray-600">
-                    No hay promociones activas con ubicación (GPS o sucursales) para mostrar en el mapa.
+                <div className={`rounded-2xl border border-dashed border-white/20 p-10 text-center ${SITE_SHELL_CARD}`}>
+                    <p className="text-gray-300">
+                        No hay promociones activas con ubicación (GPS o sucursales) para mostrar en el mapa.
+                    </p>
                     <p className="text-sm mt-2 text-gray-500">
                         Activa ubicación al crear la promoción o importa sucursales con coordenadas.
                     </p>
@@ -456,16 +464,16 @@ const OffersMap: React.FC = () => {
         if (GOOGLE_MAPS_KEY && mapPoints.length > 0) {
             return (
                 <div className="space-y-4">
-                    <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-lg bg-white">
-                        <div ref={mapContainerRef} className="w-full h-[480px] bg-gray-100" aria-label="Mapa de ofertas" />
+                    <div className={`rounded-2xl overflow-hidden border border-white/10 shadow-lg ${SITE_SHELL_CARD}`}>
+                        <div ref={mapContainerRef} className="w-full h-[480px] bg-gray-900" aria-label="Mapa de ofertas" />
                     </div>
                     {mapInitError && (
-                        <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                        <p className="text-sm text-red-300 bg-red-950/40 border border-red-500/30 rounded-lg px-3 py-2">
                             {mapInitError}
                         </p>
                     )}
                     {selectedPoint && (
-                        <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-blue-500">
+                        <div className={`rounded-xl p-6 shadow-lg border-l-4 border-violet-500 ${SITE_SHELL_CARD}`}>
                             <div className="flex items-start gap-4">
                                 <img
                                     src={selectedPoint.image}
@@ -473,10 +481,10 @@ const OffersMap: React.FC = () => {
                                     className="w-20 h-20 object-cover rounded-lg"
                                 />
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-lg text-gray-900">{selectedPoint.title}</h4>
-                                    <p className="text-sm text-gray-600 mt-1">{selectedPoint.storeLabel}</p>
+                                    <h4 className="font-bold text-lg text-white">{selectedPoint.title}</h4>
+                                    <p className="text-sm text-gray-400 mt-1">{selectedPoint.storeLabel}</p>
                                     <div className="flex flex-wrap items-center gap-3 mt-2">
-                                        <span className="text-xl font-bold text-green-600">
+                                        <span className="text-xl font-bold text-emerald-400">
                                             {formatPrice(selectedPoint.price, selectedPoint.currency)}
                                         </span>
                                         {selectedPoint.discount > 0 && (
@@ -487,7 +495,7 @@ const OffersMap: React.FC = () => {
                                     </div>
                                     <Link
                                         to={`/promotion-details/${encodeURIComponent(selectedPoint.promotionId)}`}
-                                        className="inline-flex mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                        className="inline-flex mt-3 bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-500 transition-colors text-sm"
                                     >
                                         Ver oferta
                                     </Link>
@@ -500,16 +508,16 @@ const OffersMap: React.FC = () => {
         }
 
         return (
-            <div className="relative bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 min-h-[520px]">
+            <div className={`relative rounded-2xl p-6 sm:p-8 min-h-[520px] ${SITE_SHELL_CARD}`}>
                 {!GOOGLE_MAPS_KEY && (
-                    <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                    <p className="text-sm text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg px-3 py-2 mb-4">
                         Añade <code className="font-mono">google_maps</code> o{' '}
                         <code className="font-mono">VITE_GOOGLE_MAPS_API_KEY</code> en <code>.env</code> y reinicia{' '}
                         <code>npm run dev</code> para ver el mapa de Google. Vista previa con posiciones reales:
                     </p>
                 )}
-                <div className="relative w-full h-96 bg-gray-200 rounded-xl overflow-hidden mb-6">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-green-100">
+                <div className="relative w-full h-96 bg-gray-900 rounded-xl overflow-hidden mb-6 border border-white/10">
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-gray-900">
                         <div
                             className="absolute inset-0 opacity-20"
                             style={{
@@ -557,13 +565,13 @@ const OffersMap: React.FC = () => {
                         )}
                     </div>
                 </div>
-                {mapInitError && <p className="text-sm text-red-600 mb-4">{mapInitError}</p>}
+                {mapInitError && <p className="text-sm text-red-300 mb-4">{mapInitError}</p>}
                 <div className="flex justify-center mb-6">
                     <button
                         type="button"
                         onClick={getUserLocation}
                         disabled={isGettingLocation}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-2 bg-violet-600 text-white px-6 py-3 rounded-lg hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         {isGettingLocation ? (
                             <>
@@ -579,7 +587,7 @@ const OffersMap: React.FC = () => {
                     </button>
                 </div>
                 {selectedPoint && (
-                    <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-blue-500">
+                    <div className={`rounded-xl p-6 shadow-lg border-l-4 border-violet-500 ${SITE_SHELL_CARD}`}>
                         <div className="flex items-start gap-4">
                             <img
                                 src={selectedPoint.image}
@@ -588,7 +596,7 @@ const OffersMap: React.FC = () => {
                             />
                             <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <h4 className="font-bold text-lg text-gray-900">{selectedPoint.title}</h4>
+                                    <h4 className="font-bold text-lg text-white">{selectedPoint.title}</h4>
                                     <span
                                         className={`inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r ${getHotnessColor(selectedPoint.hotness)} text-white text-xs rounded-full`}
                                     >
@@ -597,11 +605,11 @@ const OffersMap: React.FC = () => {
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-4 mb-2">
-                                    <span className="text-2xl font-bold text-green-600">
+                                    <span className="text-2xl font-bold text-emerald-400">
                                         {formatPrice(selectedPoint.price, selectedPoint.currency)}
                                     </span>
                                     {selectedPoint.originalPrice > 0 && (
-                                        <span className="text-lg text-gray-400 line-through">
+                                        <span className="text-lg text-gray-500 line-through">
                                             {formatPrice(selectedPoint.originalPrice, selectedPoint.currency)}
                                         </span>
                                     )}
@@ -609,7 +617,7 @@ const OffersMap: React.FC = () => {
                                         -{selectedPoint.discount}%
                                     </span>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-3">
+                                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 mb-3">
                                     <div className="flex items-center gap-1">
                                         <MapPin className="h-4 w-4" />
                                         {selectedPoint.storeLabel}
@@ -629,7 +637,7 @@ const OffersMap: React.FC = () => {
                                 </div>
                                 <Link
                                     to={`/promotion-details/${encodeURIComponent(selectedPoint.promotionId)}`}
-                                    className="inline-flex bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                                    className="inline-flex bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-500 transition-colors"
                                 >
                                     Ver oferta
                                 </Link>
@@ -643,15 +651,15 @@ const OffersMap: React.FC = () => {
 
     const renderListView = () =>
         loading ? (
-            <div className="text-center py-12 text-gray-600">Cargando…</div>
+            <div className="text-center py-12 text-gray-400">Cargando…</div>
         ) : listOffers.length === 0 ? (
-            <p className="text-center text-gray-600 py-12">No hay ofertas con ubicación para listar.</p>
+            <p className="text-center text-gray-400 py-12">No hay ofertas con ubicación para listar.</p>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {listOffers.map((offer) => (
                     <div
                         key={offer.promotionId}
-                        className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group"
+                        className={`${SITE_SHELL_CARD} overflow-hidden hover:border-violet-500/30 transition-all duration-300 group`}
                     >
                         <div className="relative">
                             <img
@@ -676,18 +684,18 @@ const OffersMap: React.FC = () => {
                             )}
                         </div>
                         <div className="p-4">
-                            <h3 className="font-bold text-lg text-gray-900 mb-2">{offer.title}</h3>
+                            <h3 className="font-bold text-lg text-white mb-2">{offer.title}</h3>
                             <div className="flex items-center gap-3 mb-3">
-                                <span className="text-2xl font-bold text-green-600">
+                                <span className="text-2xl font-bold text-emerald-400">
                                     {formatPrice(offer.price, offer.currency)}
                                 </span>
                                 {offer.originalPrice > 0 && (
-                                    <span className="text-lg text-gray-400 line-through">
+                                    <span className="text-lg text-gray-500 line-through">
                                         {formatPrice(offer.originalPrice, offer.currency)}
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                            <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
                                 <MapPin className="h-4 w-4" />
                                 <span>{offer.storeLabel}</span>
                                 {offer.distance != null && (
@@ -699,7 +707,7 @@ const OffersMap: React.FC = () => {
                             </div>
                             <Link
                                 to={`/promotion-details/${encodeURIComponent(offer.promotionId)}`}
-                                className="block text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                className="block text-center bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-500 transition-colors text-sm"
                             >
                                 Ver oferta
                             </Link>
@@ -713,38 +721,41 @@ const OffersMap: React.FC = () => {
     const maxDiscount = statCount ? Math.max(...listOffers.map((o) => o.discount)) : 0;
 
     return (
-        <section className="py-20 bg-gradient-to-br from-gray-50 via-white to-blue-50 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-5">
-                <div className="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-3xl" />
-                <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500 rounded-full blur-3xl" />
-            </div>
-
+        <section className="py-20 relative overflow-hidden border-t border-white/10">
             <div className="max-w-7xl mx-auto px-4 relative z-10">
                 <div className="text-center mb-12">
                     <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-full text-sm font-bold mb-4">
                         <Flame className="h-4 w-4" />
                         OFERTAS CON UBICACIÓN
                     </div>
-                    <h2 className="text-4xl font-bold text-gray-900 mb-4">Ofertas cerca de ti</h2>
-                    <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                        Promociones activas con tienda o sucursal en mapa. Permite tu ubicación para ordenar por distancia y
-                        ver la sucursal más cercana en cadenas.
-                    </p>
+                    <div className={`max-w-3xl mx-auto ${TEXT_HIGHLIGHT_PANEL} px-6 py-5 sm:px-8`}>
+                        <h2 className="text-4xl font-bold mb-4">
+                            <span className={TEXT_HIGHLIGHT}>Ofertas cerca de ti</span>
+                        </h2>
+                        <p className="text-xl leading-relaxed">
+                            <span className={TEXT_HIGHLIGHT}>
+                                Promociones activas con tienda o sucursal en mapa. Permite tu ubicación para ordenar por
+                                distancia y ver la sucursal más cercana en cadenas.
+                            </span>
+                        </p>
+                    </div>
                 </div>
 
                 {loadError && (
-                    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                    <div className="mb-6 rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
                         {loadError}
                     </div>
                 )}
 
                 <div className="flex justify-center mb-8">
-                    <div className="bg-white rounded-lg p-1 shadow-md">
+                    <div className={`${SITE_SHELL_CARD} p-1 inline-flex`}>
                         <button
                             type="button"
                             onClick={() => setViewMode('map')}
-                            className={`px-6 py-2 rounded-md transition-colors ${
-                                viewMode === 'map' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600'
+                            className={`px-6 py-2 rounded-lg transition-colors ${
+                                viewMode === 'map'
+                                    ? 'bg-violet-600 text-white'
+                                    : 'text-gray-400 hover:text-white'
                             }`}
                         >
                             <MapPin className="h-4 w-4 inline mr-2" />
@@ -753,8 +764,10 @@ const OffersMap: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setViewMode('list')}
-                            className={`px-6 py-2 rounded-md transition-colors ${
-                                viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600'
+                            className={`px-6 py-2 rounded-lg transition-colors ${
+                                viewMode === 'list'
+                                    ? 'bg-violet-600 text-white'
+                                    : 'text-gray-400 hover:text-white'
                             }`}
                         >
                             <Eye className="h-4 w-4 inline mr-2" />
@@ -769,7 +782,7 @@ const OffersMap: React.FC = () => {
                             type="button"
                             onClick={getUserLocation}
                             disabled={isGettingLocation}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            className="flex items-center gap-2 bg-violet-600 text-white px-6 py-3 rounded-lg hover:bg-violet-500 disabled:opacity-50 transition-colors"
                         >
                             {isGettingLocation ? (
                                 <>
@@ -789,23 +802,23 @@ const OffersMap: React.FC = () => {
                 {viewMode === 'map' ? renderMapView() : renderListView()}
 
                 <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div className="text-center bg-white rounded-xl p-6 shadow-md">
-                        <div className="text-3xl font-bold text-red-500 mb-2">{statCount}</div>
-                        <div className="text-gray-600">Ofertas geolocalizadas</div>
+                    <div className={`text-center p-6 ${SITE_SHELL_CARD}`}>
+                        <div className="text-3xl font-bold text-red-400 mb-2">{statCount}</div>
+                        <div className="text-gray-400 text-sm">Ofertas geolocalizadas</div>
                     </div>
-                    <div className="text-center bg-white rounded-xl p-6 shadow-md">
-                        <div className="text-3xl font-bold text-orange-500 mb-2">{maxDiscount}%</div>
-                        <div className="text-gray-600">Descuento máximo</div>
+                    <div className={`text-center p-6 ${SITE_SHELL_CARD}`}>
+                        <div className="text-3xl font-bold text-orange-400 mb-2">{maxDiscount}%</div>
+                        <div className="text-gray-400 text-sm">Descuento máximo</div>
                     </div>
-                    <div className="text-center bg-white rounded-xl p-6 shadow-md">
-                        <div className="text-3xl font-bold text-green-500 mb-2">{mapPoints.length}</div>
-                        <div className="text-gray-600">Marcadores (sucursales)</div>
+                    <div className={`text-center p-6 ${SITE_SHELL_CARD}`}>
+                        <div className="text-3xl font-bold text-emerald-400 mb-2">{mapPoints.length}</div>
+                        <div className="text-gray-400 text-sm">Marcadores (sucursales)</div>
                     </div>
-                    <div className="text-center bg-white rounded-xl p-6 shadow-md">
-                        <div className="text-3xl font-bold text-blue-500 mb-2">
+                    <div className={`text-center p-6 ${SITE_SHELL_CARD}`}>
+                        <div className="text-3xl font-bold text-violet-400 mb-2">
                             {GOOGLE_MAPS_KEY ? 'Maps' : 'Preview'}
                         </div>
-                        <div className="text-gray-600">{GOOGLE_MAPS_KEY ? 'Google activo' : 'Sin clave API'}</div>
+                        <div className="text-gray-400 text-sm">{GOOGLE_MAPS_KEY ? 'Google activo' : 'Sin clave API'}</div>
                     </div>
                 </div>
             </div>

@@ -20,7 +20,7 @@ export default function InfluencerDashboardPage() {
   }
 
   if (!canAccessRolePanel(user, 'influencer')) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/marketplace" replace />;
   }
 
   return <InfluencerDashboard />;

@@ -10,6 +10,7 @@ import {
   Loader2,
   Radio,
   FileCheck,
+  Globe2,
   ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +36,13 @@ const tiles = [
     to: '/admin/crm/applications',
     icon: FileCheck,
     color: 'from-emerald-600 to-teal-800',
+  },
+  {
+    title: 'Promociones accesibles',
+    description: 'Abrir una promoción a todos los influencers o por temas (categorías).',
+    to: '/admin/crm/open-promotions',
+    icon: Globe2,
+    color: 'from-sky-600 to-indigo-800',
   },
   {
     title: 'Perfiles y fotos',

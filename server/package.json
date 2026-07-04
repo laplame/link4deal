@@ -29,6 +29,8 @@
   "author": "Link4Deal Team",
   "license": "MIT",
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.8.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.0",
     "compression": "^1.7.4",
@@ -46,6 +48,7 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.7",
     "sharp": "^0.34.5",
+    "stripe": "^22.3.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

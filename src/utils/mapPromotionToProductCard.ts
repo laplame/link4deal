@@ -1,6 +1,7 @@
 import { getPromotionImageUrl } from './promotionImage';
 import { normalizeChainBranchesFromApi } from './geo';
 import { getDisplayContractAddress, getPolygonscanAddressUrl } from './polygonContract';
+import { isAmazonPromotion } from './amazonPromotion';
 
 /** Shape expected by `ProductCard` (promotion id as `id` for /promotion-details). */
 export interface ProductCardItem {
@@ -48,18 +49,13 @@ export interface ProductCardItem {
     gpsRadiusMeters?: number;
     isChainStore?: boolean;
     chainLocations?: ReturnType<typeof normalizeChainBranchesFromApi>;
+    isAmazonMx?: boolean;
+    redirectToUrl?: string;
 }
 
-const CATEGORY_MAP: Record<string, string> = {
-    electronics: 'electronicos',
-    fashion: 'moda',
-    sports: 'deportes',
-    beauty: 'belleza',
-    home: 'hogar',
-    books: 'libros',
-    food: 'comida',
-    other: 'otros',
-};
+import {
+    resolveCategoryBySlug,
+} from '../data/productCategories';
 
 export function mapPromoDocsToProductCards(docs: unknown[]): ProductCardItem[] {
     return ((Array.isArray(docs) ? docs : []) as Record<string, unknown>[]).map((promo) => {
@@ -89,7 +85,7 @@ export function mapPromoDocsToProductCards(docs: unknown[]): ProductCardItem[] {
             currency: String(promo.currency || 'USD'),
             image: getPromotionImageUrl(promo.images as Parameters<typeof getPromotionImageUrl>[0]),
             offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : 'Oferta especial',
-            category: CATEGORY_MAP[String(promo.category)] || String(promo.category || 'otros'),
+            category: resolveCategoryBySlug(String(promo.category))?.slug || String(promo.category || 'other'),
             brand: String(promo.brand || 'Sin marca'),
             rating: 4.5,
             reviewCount: Number(promo.views) || 0,
@@ -142,6 +138,11 @@ export function mapPromoDocsToProductCards(docs: unknown[]): ProductCardItem[] {
                       : 500,
             isChainStore: !!promo.isChainStore,
             chainLocations: normalizeChainBranchesFromApi(promo.chainLocations),
+            isAmazonMx: isAmazonPromotion({
+                redirectInsteadOfQr: !!promo.redirectInsteadOfQr,
+                redirectToUrl: promo.redirectToUrl as string | undefined,
+            }),
+            redirectToUrl: promo.redirectToUrl ? String(promo.redirectToUrl) : '',
         };
     });
 }
@@ -235,7 +236,7 @@ export function mapInfluencerAvailableRowToProductCard(row: InfluencerAvailableP
         currency: prod.currency || base.currency,
         image,
         offer: discountPercentage > 0 ? `${discountPercentage}% de descuento` : base.offer,
-        category: CATEGORY_MAP[String(prod.category)] || String(prod.category || base.category),
+        category: resolveCategoryBySlug(String(prod.category))?.slug || String(prod.category || base.category),
         brand: prod.brand || base.brand,
         stock: prod.stock != null ? Math.max(0, Number(prod.stock)) : base.stock,
         description: prod.description || base.description,

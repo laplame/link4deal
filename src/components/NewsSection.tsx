@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { ExternalLink, Calendar, TrendingUp, Share2, Heart, MessageCircle } from 'lucide-react';
 import { SITE_CONFIG } from '../config/site';
+import {
+  SITE_SHELL_CARD,
+  SITE_SHELL_SECTION,
+  SITE_SHELL_TEXT_HIGHLIGHT,
+  SITE_SHELL_TEXT_HIGHLIGHT_PANEL,
+} from '../config/siteShell';
 
 /** URL del artículo: al hacer clic en la tarjeta o en "Ver en LinkedIn" se redirige aquí (nueva pestaña). */
 export interface NewsPost {
@@ -191,56 +197,53 @@ const NewsSection: React.FC = () => {
   };
 
   return (
-    <section className="py-20 bg-gradient-to-br from-gray-50 via-white to-blue-50 relative overflow-hidden">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-blue-600 rounded-full -translate-x-48 -translate-y-48"></div>
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-600 rounded-full translate-x-32 translate-y-32"></div>
-      </div>
-
+    <section className={SITE_SHELL_SECTION}>
       <div className="max-w-7xl mx-auto px-4 relative z-10">
         {/* Header */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-full text-lg font-semibold mb-6">
+          <div className="inline-flex items-center gap-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-full text-lg font-semibold mb-6">
             <span className="text-2xl">📰</span>
             Noticias y Actualizaciones
           </div>
-          <h2 className="text-5xl font-bold text-gray-900 mb-6">
-            Mantente Informado
-          </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Las últimas noticias sobre Link4Deal, blockchain, marketing digital y el ecosistema 
-            de influencers. Conecta con nuestra comunidad en LinkedIn.
-          </p>
+          <div className={`max-w-3xl mx-auto ${SITE_SHELL_TEXT_HIGHLIGHT_PANEL} px-6 py-6 sm:px-8`}>
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">
+              <span className={SITE_SHELL_TEXT_HIGHLIGHT}>Mantente Informado</span>
+            </h2>
+            <p className="text-xl leading-relaxed">
+              <span className={SITE_SHELL_TEXT_HIGHLIGHT}>
+                Las últimas noticias sobre Link4Deal, blockchain, marketing digital y el ecosistema de influencers.
+                Conecta con nuestra comunidad en LinkedIn.
+              </span>
+            </p>
+          </div>
         </div>
 
         {/* Filters and Controls */}
         <div className="flex flex-col lg:flex-row justify-between items-center gap-6 mb-12">
-          {/* Category Filter */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
             {categories.map((category) => (
               <button
                 key={category.id}
+                type="button"
                 onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 rounded-full font-medium transition-all duration-300 ${
+                className={`px-4 py-2 rounded-full font-medium transition-all duration-300 text-sm ${
                   selectedCategory === category.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/30'
+                    : `${SITE_SHELL_CARD} text-gray-300 hover:text-white hover:border-violet-500/30`
                 }`}
               >
-                <span className="mr-2">{category.icon}</span>
+                <span className="mr-1.5">{category.icon}</span>
                 {category.name}
               </button>
             ))}
           </div>
 
-          {/* Sort Control */}
           <div className="flex items-center gap-3">
-            <span className="text-gray-600 font-medium">Ordenar por:</span>
+            <span className="text-gray-400 font-medium text-sm">Ordenar por:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'date' | 'engagement')}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2 border border-white/10 bg-gray-950/60 text-gray-200 rounded-lg focus:ring-2 focus:ring-violet-500/50 focus:border-transparent text-sm"
             >
               <option value="date">Fecha</option>
               <option value="engagement">Engagement</option>
@@ -253,7 +256,7 @@ const NewsSection: React.FC = () => {
           {filteredAndSortedPosts.map((post) => (
             <article
               key={post.id}
-              className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 overflow-hidden group cursor-pointer"
+              className={`${SITE_SHELL_CARD} hover:border-violet-500/30 transition-all duration-300 transform hover:-translate-y-1 overflow-hidden group cursor-pointer`}
               onClick={() => handleArticleClick(post.linkedinUrl)}
               role="link"
               aria-label={`Ver artículo: ${post.title}`}
@@ -272,8 +275,8 @@ const NewsSection: React.FC = () => {
                       Trending
                     </div>
                   )}
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <ExternalLink className="w-4 h-4 text-gray-600" />
+                  <div className="absolute top-4 right-4 bg-gray-900/80 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <ExternalLink className="w-4 h-4 text-gray-200" />
                   </div>
                 </div>
               )}
@@ -282,45 +285,41 @@ const NewsSection: React.FC = () => {
               <div className="p-6">
                 {/* Category */}
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                  <span className="text-xs font-semibold text-violet-300 bg-violet-950/50 border border-violet-500/30 px-2 py-1 rounded-full">
                     {post.category}
                   </span>
                   {post.isTrending && (
-                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                    <span className="text-xs font-semibold text-orange-300 bg-orange-950/40 border border-orange-500/30 px-2 py-1 rounded-full">
                       🔥 Trending
                     </span>
                   )}
                 </div>
 
-                {/* Title */}
-                <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-300">
+                <h3 className="text-xl font-bold text-white mb-3 line-clamp-2 group-hover:text-violet-200 transition-colors duration-300">
                   {post.title}
                 </h3>
 
-                {/* Excerpt */}
-                <p className="text-gray-600 mb-4 line-clamp-3 leading-relaxed">
+                <p className="text-gray-400 mb-4 line-clamp-3 leading-relaxed">
                   {post.excerpt}
                 </p>
 
-                {/* Author and Date */}
                 <div className="flex items-center gap-3 mb-4">
                   <img
                     src={post.authorAvatar}
                     alt={post.author}
-                    className="w-10 h-10 rounded-full object-cover"
+                    className="w-10 h-10 rounded-full object-cover border border-white/10"
                   />
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900 text-sm">{post.author}</p>
+                    <p className="font-semibold text-gray-200 text-sm">{post.author}</p>
                     <p className="text-gray-500 text-xs">{post.company}</p>
                   </div>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs">
+                  <div className="flex items-center gap-1 text-gray-500 text-xs">
                     <Calendar className="w-3 h-3" />
                     {formatDate(post.publishDate)}
                   </div>
                 </div>
 
-                {/* Engagement Stats */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between pt-4 border-t border-white/10">
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <div className="flex items-center gap-1">
                       <Heart className="w-4 h-4" />
@@ -343,7 +342,7 @@ const NewsSection: React.FC = () => {
                       e.stopPropagation();
                       handleArticleClick(post.linkedinUrl);
                     }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-300 flex items-center gap-2"
+                    className="bg-violet-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-violet-500 transition-colors duration-300 flex items-center gap-2"
                     aria-label={`Ver artículo en LinkedIn: ${post.title}`}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -359,17 +358,16 @@ const NewsSection: React.FC = () => {
 
         {/* Call to Action */}
         <div className="text-center mt-16">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white">
-            <h3 className="text-2xl font-bold mb-4">
-              ¿Te gusta lo que ves?
-            </h3>
-            <p className="text-blue-100 mb-6 max-w-2xl mx-auto">
-              Síguenos en LinkedIn para recibir las últimas noticias, actualizaciones y insights 
-              sobre el futuro del marketing digital y blockchain.
+          <div className={`${SITE_SHELL_CARD} p-8 border-violet-500/20 max-w-3xl mx-auto`}>
+            <h3 className="text-2xl font-bold text-white mb-4">¿Te gusta lo que ves?</h3>
+            <p className="text-gray-400 mb-6">
+              Síguenos en LinkedIn para recibir las últimas noticias, actualizaciones e insights sobre el futuro del
+              marketing digital y blockchain.
             </p>
             <button
+              type="button"
               onClick={() => window.open(SITE_CONFIG.linkedinUrl, '_blank')}
-              className="bg-white text-blue-600 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center gap-3 mx-auto"
+              className="bg-violet-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-violet-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-violet-900/30 flex items-center gap-3 mx-auto"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.047-1.032-3.047-1.032 0-1.26 1.317-1.26 3.047v5.569H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>

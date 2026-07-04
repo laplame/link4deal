@@ -1,16 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Menu, X, User, Download, Store, Users, Loader2, AlertCircle, LogOut, Search } from 'lucide-react';
+import { Loader2, AlertCircle, Search, X } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import CartIcon from '../components/CartIcon';
 import Toast from '../components/Toast';
 import DownloadApp from '../components/DownloadApp';
 import NewsSection from '../components/NewsSection';
 import SpotifyPodcastEmbed from '../components/SpotifyPodcastEmbed';
-import LocationSelector from '../components/LocationSelector';
 import OffersMap from '../components/OffersMap';
 import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 import { masonryTierFromId } from '../utils/masonryVariant';
 import {
@@ -18,7 +15,12 @@ import {
     type ProductCardItem as Product,
 } from '../utils/mapPromotionToProductCard';
 
-// Tipo para producto transformado
+/** Resaltador claro sobre fondo oscuro del shell (estilo marcador). */
+const LANDING_HIGHLIGHT =
+    'box-decoration-clone bg-amber-100/95 text-gray-900 px-2 py-0.5 rounded-sm shadow-sm';
+const LANDING_HIGHLIGHT_PANEL =
+    'rounded-xl bg-amber-50/95 backdrop-blur-sm border border-amber-200/70 shadow-md';
+
 function normalizeShortCodeInput(raw: string): string {
     const s = String(raw || '')
         .trim()
@@ -45,10 +47,8 @@ function productMatchesTextQuery(p: Product, q: string): boolean {
 }
 
 export default function LandingPage() {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
-    const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoadingProducts, setIsLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
@@ -60,9 +60,7 @@ export default function LandingPage() {
     const [creatorInfluencerId, setCreatorInfluencerId] = useState<string | null>(null);
     const [catalogSearchLoading, setCatalogSearchLoading] = useState(false);
     const [catalogSearchMessage, setCatalogSearchMessage] = useState<string | null>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
     const { addItem } = useCart();
-    const { user, isAuthenticated, logout } = useAuth();
 
     const reloadFeaturedRef = useRef<() => Promise<void>>(async () => {});
 
@@ -245,20 +243,6 @@ export default function LandingPage() {
         }
     };
 
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setMarketplaceDropdownOpen(false);
-            }
-        }
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
     const handleAddToCart = (productId: string) => {
         const product = products.find(p => p.id === productId);
         if (product) {
@@ -284,206 +268,7 @@ export default function LandingPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Navigation */}
-            <nav className="bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-4">
-                    <div className="flex justify-between items-center h-16">
-                        {/* Logo */}
-                        <Link to="/" className="flex items-center space-x-3">
-                            <img 
-                                src="/logo.png" 
-                                alt="DameCódigo" 
-                                className="w-8 h-8 object-contain"
-                            />
-                            <span className="text-xl font-bold text-gray-900">{SITE_CONFIG.name}</span>
-                        </Link>
-
-                        {/* Desktop Navigation */}
-                        <div className="hidden md:flex items-center space-x-6">
-                            <LocationSelector />
-                            <CartIcon />
-                            {/* Marketplace Dropdown */}
-                            <div className="relative" ref={dropdownRef}>
-                                <button
-                                    onClick={() => setMarketplaceDropdownOpen(!marketplaceDropdownOpen)}
-                                    className="flex items-center gap-1 text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                                >
-                                    Marketplace
-                                    <ChevronDown className={`w-4 h-4 transition-transform ${marketplaceDropdownOpen ? 'rotate-180' : ''}`} />
-                                </button>
-                                
-                                {marketplaceDropdownOpen && (
-                                    <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                                        <div className="py-2">
-                                            <Link
-                                                to="/marketplace"
-                                                className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                onClick={() => setMarketplaceDropdownOpen(false)}
-                                            >
-                                                <div className="p-2 bg-purple-100 rounded-lg">
-                                                    <Store className="w-4 h-4 text-purple-600" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">Promociones</div>
-                                                    <div className="text-sm text-gray-500">Descubre ofertas de marcas</div>
-                                                </div>
-                                            </Link>
-                                            <Link
-                                                to="/influencer"
-                                                className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                onClick={() => setMarketplaceDropdownOpen(false)}
-                                            >
-                                                <div className="p-2 bg-pink-100 rounded-lg">
-                                                    <Users className="w-4 h-4 text-pink-600" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">Influencers</div>
-                                                    <div className="text-sm text-gray-500">Encuentra creadores de contenido</div>
-                                                </div>
-                                            </Link>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-
-                            <Link 
-                                to="/landing" 
-                                className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                            >
-                                Para Negocios
-                            </Link>
-                            <a
-                                href={SITE_CONFIG.apkDownloadUrl}
-                                download="damecodigo-link4deal.apk"
-                                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
-                            >
-                                <Download className="w-4 h-4" />
-                                Descargar App
-                            </a>
-                            {isAuthenticated && user ? (
-                                <>
-                                    <span className="text-gray-600 font-medium">Hola, {user.firstName}</span>
-                                    <Link to="/dashboard" className="flex items-center gap-1.5 text-gray-700 hover:text-blue-600 font-medium transition-colors">
-                                        <User className="w-4 h-4" />
-                                        Mi cuenta
-                                    </Link>
-                                    <button type="button" onClick={() => logout()} className="flex items-center gap-1.5 text-gray-700 hover:text-red-600 font-medium transition-colors">
-                                        <LogOut className="w-4 h-4" />
-                                        Salir
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <Link to="/signin" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
-                                        Iniciar Sesión
-                                    </Link>
-                                    <Link to="/signup" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg">
-                                        Registrarse
-                                    </Link>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Mobile menu button */}
-                        <div className="md:hidden">
-                            <button
-                                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                                className="text-gray-700 hover:text-blue-600 transition-colors"
-                            >
-                                {mobileMenuOpen ? (
-                                    <X className="w-6 h-6" />
-                                ) : (
-                                    <Menu className="w-6 h-6" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Mobile Navigation */}
-                    {mobileMenuOpen && (
-                        <div className="md:hidden py-4 border-t border-gray-200">
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-center">
-                                    <LocationSelector />
-                                </div>
-                                <div className="flex items-center justify-center">
-                                    <CartIcon />
-                                </div>
-                                {/* Marketplace Options for Mobile */}
-                                <div className="space-y-2">
-                                    <Link
-                                        to="/marketplace"
-                                        className="flex items-center justify-center gap-3 text-gray-700 hover:text-blue-600 font-medium transition-colors py-2"
-                                        onClick={() => setMobileMenuOpen(false)}
-                                    >
-                                        <div className="p-1.5 bg-purple-100 rounded-lg">
-                                            <Store className="w-4 h-4 text-purple-600" />
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="font-medium">Promociones</div>
-                                            <div className="text-xs text-gray-500">Ofertas de marcas</div>
-                                        </div>
-                                    </Link>
-                                    <Link
-                                        to="/influencer"
-                                        className="flex items-center justify-center gap-3 text-gray-700 hover:text-blue-600 font-medium transition-colors py-2"
-                                        onClick={() => setMobileMenuOpen(false)}
-                                    >
-                                        <div className="p-1.5 bg-pink-100 rounded-lg">
-                                            <Users className="w-4 h-4 text-pink-600" />
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="font-medium">Influencers</div>
-                                            <div className="text-xs text-gray-500">Creadores de contenido</div>
-                                        </div>
-                                    </Link>
-                                </div>
-
-
-                                <Link
-                                    to="/landing"
-                                    className="block text-gray-700 hover:text-blue-600 font-medium transition-colors"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                >
-                                    Para Negocios
-                                </Link>
-                                <a
-                                    href={SITE_CONFIG.apkDownloadUrl}
-                                    download="damecodigo-link4deal.apk"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-medium text-center hover:from-green-600 hover:to-green-700 transition-all duration-300 flex items-center justify-center gap-2"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    Descargar App
-                                </a>
-                                {isAuthenticated && user ? (
-                                    <>
-                                        <div className="text-gray-600 font-medium text-center">Hola, {user.firstName}</div>
-                                        <Link to="/dashboard" className="flex items-center justify-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2" onClick={() => setMobileMenuOpen(false)}>
-                                            <User className="w-4 h-4" /> Mi cuenta
-                                        </Link>
-                                        <button type="button" onClick={() => { setMobileMenuOpen(false); logout(); }} className="flex items-center justify-center gap-2 w-full text-gray-700 hover:text-red-600 font-medium py-2">
-                                            <LogOut className="w-4 h-4" /> Salir
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Link to="/signin" className="block text-gray-700 hover:text-blue-600 font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
-                                            Iniciar Sesión
-                                        </Link>
-                                        <Link to="/signup" className="block bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium text-center hover:from-blue-600 hover:to-purple-700 transition-all duration-300" onClick={() => setMobileMenuOpen(false)}>
-                                            Registrarse
-                                        </Link>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </nav>
-
+        <>
             {/* Main Content */}
             <main className="relative">
                 {/* Hero Section with Background */}
@@ -509,18 +294,12 @@ export default function LandingPage() {
                         </p>
                         
                         {/* CTA Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+                        <div className="flex justify-center mb-16">
                             <Link 
-                                to="/signup" 
+                                to="/empezar" 
                                 className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-2xl"
                             >
                                 🚀 Empezar Ahora
-                            </Link>
-                            <Link 
-                                to="/about" 
-                                className="bg-white border-2 border-gray-900 text-gray-900 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-900 hover:text-white transition-all duration-300 transform hover:scale-105 shadow-lg"
-                            >
-                                📖 Saber Más
                             </Link>
                         </div>
                     </div>
@@ -673,14 +452,16 @@ export default function LandingPage() {
                 </section>
 
                 {/* Products Section Header */}
-                <section className="text-center mb-16">
-                    <div className="max-w-4xl mx-auto">
-                        <h3 className="text-4xl font-bold text-gray-900 mb-6">
-                            🎯 Ofertas Destacadas
+                <section className="text-center mb-16 px-4">
+                    <div className={`max-w-4xl mx-auto ${LANDING_HIGHLIGHT_PANEL} px-6 py-6 sm:px-8 sm:py-7`}>
+                        <h3 className="text-4xl font-bold mb-4">
+                            <span className={LANDING_HIGHLIGHT}>🎯 Ofertas Destacadas</span>
                         </h3>
-                        <p className="text-xl text-gray-600 leading-relaxed">
-                            Productos seleccionados con descuentos exclusivos respaldados por smart contracts. 
-                            ¡No te los pierdas!
+                        <p className="text-xl leading-relaxed">
+                            <span className={LANDING_HIGHLIGHT}>
+                                Productos seleccionados con descuentos exclusivos respaldados por smart contracts.
+                                ¡No te los pierdas!
+                            </span>
                         </p>
                     </div>
                 </section>
@@ -697,40 +478,54 @@ export default function LandingPage() {
 
                 {/* Estado de carga */}
                 {isLoadingProducts ? (
-                    <div className="flex flex-col items-center justify-center py-12">
+                    <div className="flex flex-col items-center justify-center py-12 px-4">
                         <Loader2 className="w-12 h-12 text-purple-600 animate-spin mb-4" />
-                        <p className="text-gray-600">Cargando promociones...</p>
+                        <p className="text-lg">
+                            <span className={LANDING_HIGHLIGHT}>Cargando promociones...</span>
+                        </p>
                     </div>
                 ) : (
-                    <section id="ofertas">
+                    <section id="ofertas" className="max-w-7xl mx-auto px-4">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-                            <div>
-                                <h3 className="text-xl font-semibold text-gray-900">Promociones activas</h3>
-                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                                    <Link
-                                        to="/marketplace"
-                                        className="text-purple-600 hover:text-purple-800 font-medium"
-                                    >
-                                        Marketplace de ofertas
-                                    </Link>
-                                    <span className="text-gray-300 hidden sm:inline" aria-hidden>
-                                        ·
+                            <div className={`${LANDING_HIGHLIGHT_PANEL} px-4 py-3 inline-block max-w-full`}>
+                                <h3 className="text-xl font-semibold">
+                                    <span className={LANDING_HIGHLIGHT}>Promociones activas</span>
+                                </h3>
+                                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+                                    <span className={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 ${LANDING_HIGHLIGHT}`}>
+                                        <Link
+                                            to="/marketplace"
+                                            className="text-purple-800 hover:text-purple-950 font-semibold underline-offset-2 hover:underline"
+                                        >
+                                            Marketplace de ofertas
+                                        </Link>
+                                        <span className="text-gray-500" aria-hidden>
+                                            ·
+                                        </span>
+                                        <Link
+                                            to="/brands"
+                                            className="text-violet-800 hover:text-violet-950 font-semibold underline-offset-2 hover:underline"
+                                        >
+                                            Marcas y negocios
+                                        </Link>
+                                        <span className="text-gray-500" aria-hidden>
+                                            ·
+                                        </span>
+                                        <Link
+                                            to="/tiendas"
+                                            className="text-indigo-800 hover:text-indigo-950 font-semibold underline-offset-2 hover:underline"
+                                        >
+                                            Tiendas BizneAI
+                                        </Link>
                                     </span>
-                                    <Link to="/brands" className="text-violet-600 hover:text-violet-800">
-                                        Marcas y negocios
-                                    </Link>
-                                    <span className="text-gray-300 hidden sm:inline" aria-hidden>
-                                        ·
-                                    </span>
-                                    <Link to="/tiendas" className="text-indigo-600 hover:text-indigo-800">
-                                        Tiendas BizneAI
-                                    </Link>
                                 </div>
                             </div>
-                            <span className="text-sm text-gray-500 shrink-0 text-right">
-                                {filteredProducts.length === products.length
-                                    ? `${products.length} ofertas desde la API`
-                                    : `${filteredProducts.length} mostradas · ${products.length} en portada`}
+                            <span className="text-sm shrink-0 text-right sm:text-left">
+                                <span className={LANDING_HIGHLIGHT}>
+                                    {filteredProducts.length === products.length
+                                        ? `${products.length} ofertas desde la API`
+                                        : `${filteredProducts.length} mostradas · ${products.length} en portada`}
+                                </span>
                             </span>
                         </div>
                         {products.length > 0 ? (
@@ -902,66 +697,6 @@ export default function LandingPage() {
                 {/* News Section */}
                 <NewsSection />
             </main>
-            {/* Footer */}
-            <footer className="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white relative">
-                {/* Main Footer Content */}
-                <div className="max-w-7xl mx-auto px-4 py-16">
-                    {/* Company Info */}
-                    <div className="text-center mb-12">
-                        <div className="flex items-center justify-center space-x-3 mb-6">
-                            <img 
-                                src="/logo.png" 
-                                alt="DameCódigo" 
-                                className="w-12 h-12 object-contain"
-                            />
-                            <span className="text-3xl font-bold">{SITE_CONFIG.name}</span>
-                        </div>
-                        <p className="text-blue-100 text-lg max-w-2xl mx-auto leading-relaxed">
-                            Conectamos marcas con influencers a través de tecnología blockchain, 
-                            creando promociones auténticas y descuentos exclusivos.
-                        </p>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="border-t border-blue-800 mb-8"></div>
-
-                    {/* Bottom Section */}
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="text-gray-400 text-sm">
-                {SITE_CONFIG.copyright}
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
-                            <Link to="/privacy" className="text-blue-200 hover:text-white transition-colors">Privacidad</Link>
-                            <span className="text-gray-500">•</span>
-                            <Link to="/cookies" className="text-blue-200 hover:text-white transition-colors">Cookies</Link>
-                            <span className="text-gray-500">•</span>
-                            <span className="text-gray-400">Tecnología Blockchain</span>
-                            <span className="text-gray-500">•</span>
-                            <span className="text-gray-400">Promociones Inteligentes</span>
-                        </div>
-                    </div>
-                </div>
-            </footer>
-            {/* Floating Download App Button */}
-            <div className="fixed bottom-6 left-6 z-50">
-                <a
-                    href={SITE_CONFIG.apkDownloadUrl}
-                    download="damecodigo-link4deal.apk"
-                    className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-full shadow-2xl hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-110 flex items-center space-x-2 group"
-                >
-                    <Download className="w-6 h-6" />
-                    <span className="font-medium">App</span>
-                    <div className="w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-bold text-yellow-800">📱</span>
-                    </div>
-                </a>
-                
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                    ¡Descarga nuestra app móvil!
-                    <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                </div>
-            </div>
 
             {/* Toast Notification */}
             <Toast 
@@ -969,6 +704,6 @@ export default function LandingPage() {
                 isVisible={showToast}
                 onClose={() => setShowToast(false)}
             />
-        </div>
+        </>
     );
 }

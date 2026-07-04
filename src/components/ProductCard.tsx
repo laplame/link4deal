@@ -10,6 +10,7 @@ import {
     PRODUCT_CARD_IMAGE_BY_TIER,
     contentPaddingByTier,
 } from '../utils/masonryVariant';
+import { AMAZON_MX_STORE_LABEL, buildAmazonRedirectUrl } from '../utils/amazonPromotion';
 
 interface ProductCardProps {
     product: {
@@ -56,12 +57,16 @@ interface ProductCardProps {
         distance?: number; // en metros
         activateByGps?: boolean;
         gpsRadiusMeters?: number;
-        isChainStore?: boolean;
-        chainLocations?: Array<{
-            branchName?: string;
-            coordinates?: { latitude?: number; longitude?: number };
-        }>;
-    };
+    isChainStore?: boolean;
+    chainLocations?: Array<{
+        branchName?: string;
+        coordinates?: { latitude?: number; longitude?: number };
+    }>;
+    /** Promoción que redirige a Amazon México (quick-promotion / afiliado). */
+    isAmazonMx?: boolean;
+    /** URL de producto Amazon (opcional; vacío = enlace de afiliado por defecto). */
+    redirectToUrl?: string;
+};
     onAddToCart?: (productId: string) => void;
     onAddToWishlist?: (productId: string) => void;
     onViewDetails?: (productId: string) => void;
@@ -211,9 +216,16 @@ export default function ProductCard({
                     </button>
                 </div>
 
-                {/* Category Badge */}
-                <div className="absolute bottom-3 left-3 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-                    {product.category}
+                {/* Category + store badges */}
+                <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1.5 max-w-[calc(100%-1.5rem)]">
+                    {product.isAmazonMx && (
+                        <div className="bg-[#FF9900] text-black px-2.5 py-1 rounded-full text-xs font-bold shadow-sm">
+                            {AMAZON_MX_STORE_LABEL}
+                        </div>
+                    )}
+                    <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                        {product.category}
+                    </div>
                 </div>
             </div>
 
@@ -368,16 +380,37 @@ export default function ProductCard({
                     <button
                         type="button"
                         onClick={() => {
+                            if (product.isAmazonMx) {
+                                window.open(
+                                    buildAmazonRedirectUrl(product.redirectToUrl),
+                                    '_blank',
+                                    'noopener,noreferrer',
+                                );
+                                return;
+                            }
                             if (onRequestCoupon) {
                                 onRequestCoupon(product.id);
                                 return;
                             }
                             setShowCouponForm(true);
                         }}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 shadow-lg"
+                        className={`w-full py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 shadow-lg ${
+                            product.isAmazonMx
+                                ? 'bg-[#FF9900] text-black hover:bg-[#e88b00] font-semibold'
+                                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
+                        }`}
                     >
-                        <Tag className="w-4 h-4" />
-                        <span>Pedir Cupón</span>
+                        {product.isAmazonMx ? (
+                            <>
+                                <ExternalLink className="w-4 h-4" />
+                                <span>Ir a {AMAZON_MX_STORE_LABEL}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Tag className="w-4 h-4" />
+                                <span>Pedir Cupón</span>
+                            </>
+                        )}
                     </button>
                     
                     <Link
@@ -389,10 +422,16 @@ export default function ProductCard({
                 </div>
 
                 {/* Info Message: estado usuario logueado para acceso a cupones */}
-                <div className={`mt-3 p-2 rounded-lg border ${isAuthenticated ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                    <div className={`flex items-center gap-2 text-xs ${isAuthenticated ? 'text-green-700' : 'text-blue-700'}`}>
-                        <Info className="w-3 h-3" />
-                        <span>{isAuthenticated ? 'Tienes acceso a cupones. Pide tu cupón y guárdalo en tu perfil.' : 'Inicia sesión o regístrate para guardar tus cupones y acceder al carrito'}</span>
+                <div className={`mt-3 p-2 rounded-lg border ${product.isAmazonMx ? 'bg-amber-50 border-amber-200' : isAuthenticated ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className={`flex items-center gap-2 text-xs ${product.isAmazonMx ? 'text-amber-900' : isAuthenticated ? 'text-green-700' : 'text-blue-700'}`}>
+                        <Info className="w-3 h-3 shrink-0" />
+                        <span>
+                            {product.isAmazonMx
+                                ? 'Sin cupón guardable: te redirigimos a Amazon Mx. El precio puede cambiar según disponibilidad en la tienda.'
+                                : isAuthenticated
+                                  ? 'Tienes acceso a cupones. Pide tu cupón y guárdalo en tu perfil.'
+                                  : 'Inicia sesión o regístrate para guardar tus cupones y acceder al carrito'}
+                        </span>
                     </div>
                 </div>
 
@@ -405,7 +444,7 @@ export default function ProductCard({
                     ))}
                 </div>
             </div>
-            {showCouponForm && (
+            {showCouponForm && !product.isAmazonMx && (
                 <CouponRequestForm
                     productId={product.id}
                     productName={product.name}

@@ -14,19 +14,14 @@ import {
     Wallet,
     Rocket,
     CreditCard,
-    User,
-    LogOut
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { SITE_CONFIG } from '../config/site';
 import SpotifyPodcastEmbed from '../components/SpotifyPodcastEmbed';
 
 const BusinessLanding: React.FC = () => {
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [activeTestimonial, setActiveTestimonial] = useState(0);
-    const [isSticky, setIsSticky] = useState(false);
-    const { user, isAuthenticated, logout } = useAuth();
 
     // Testimonios de negocios exitosos
     const testimonials = [
@@ -168,15 +163,6 @@ const BusinessLanding: React.FC = () => {
     ];
 
     useEffect(() => {
-        const handleScroll = () => {
-            setIsSticky(window.scrollY > 100);
-        };
-
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
-    useEffect(() => {
         const interval = setInterval(() => {
             setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
         }, 5000);
@@ -185,57 +171,9 @@ const BusinessLanding: React.FC = () => {
     }, [testimonials.length]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-            {/* Header Sticky */}
-            <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-                isSticky ? 'bg-white/95 backdrop-blur-md shadow-lg' : 'bg-transparent'
-            }`}>
-                <div className="max-w-7xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <Link to="/" className={`flex items-center space-x-3 transition-colors ${isSticky ? 'text-gray-900' : 'text-white'}`}>
-                            <img 
-                                src="/logo.png" 
-                                alt="DameCódigo" 
-                                className="w-10 h-10 object-contain"
-                            />
-                            <span className="text-xl font-bold">{SITE_CONFIG.name}</span>
-                        </Link>
-                        
-                        <nav className="hidden md:flex items-center space-x-8">
-                            <a href="#beneficios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Beneficios</a>
-                            <a href="#proceso" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Proceso</a>
-                            <a href="#testimonios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Casos de Éxito</a>
-                            <a href="#precios" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>Precios</a>
-                        </nav>
-
-                        <div className="flex items-center space-x-4">
-                            {isAuthenticated && user ? (
-                                <>
-                                    <span className={`text-sm font-medium ${isSticky ? 'text-gray-600' : 'text-white/90'}`}>Hola, {user.firstName}</span>
-                                    <Link to="/dashboard" className={`flex items-center gap-1.5 transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>
-                                        <User className="w-4 h-4" /> Mi cuenta
-                                    </Link>
-                                    <button type="button" onClick={() => logout()} className={`flex items-center gap-1.5 transition-colors ${isSticky ? 'text-gray-600 hover:text-red-600' : 'text-white/80 hover:text-white'}`}>
-                                        <LogOut className="w-4 h-4" /> Salir
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <Link to="/signin" className={`transition-colors ${isSticky ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-white/90'}`}>
-                                        Iniciar Sesión
-                                    </Link>
-                                    <Link to="/checkout" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105">
-                                        Contratar Ahora
-                                    </Link>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </header>
-
+        <>
             {/* Hero Section */}
-            <section className="pt-32 pb-20 relative overflow-hidden">
+            <section className="pt-12 pb-20 relative overflow-hidden">
                 {/* Background image (solo aquí en /landing) */}
                 <div className="absolute inset-0 z-0">
                     <img
@@ -646,7 +584,7 @@ const BusinessLanding: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Filter, Grid, List, Star, Heart, ShoppingCart, Eye } from 'lucide-react';
+import { MARKETPLACE_CATEGORIES_BY_SLUG, resolveCategoryBySlug } from '../data/productCategories';
+import { SITE_SHELL_CARD } from '../config/siteShell';
 
 interface Product {
     id: string;
@@ -35,76 +37,6 @@ interface Product {
     };
 }
 
-interface Category {
-    name: string;
-    subcategories: string[];
-    description: string;
-    icon: string;
-}
-
-const categories: Record<string, Category> = {
-    "electronica": {
-        name: "Electrónica",
-        subcategories: ["Smartphones", "Laptops", "Auriculares", "Smartwatches", "Tablets"],
-        description: "Descubre las mejores ofertas en tecnología y dispositivos electrónicos",
-        icon: "📱"
-    },
-    "moda": {
-        name: "Moda",
-        subcategories: ["Ropa", "Zapatos", "Accesorios", "Bolsos", "Joyería"],
-        description: "Ofertas exclusivas en moda y accesorios de las mejores marcas",
-        icon: "👗"
-    },
-    "hogar": {
-        name: "Hogar",
-        subcategories: ["Muebles", "Decoración", "Cocina", "Jardín", "Iluminación"],
-        description: "Transforma tu hogar con nuestras ofertas en decoración y mobiliario",
-        icon: "🏠"
-    },
-    "deportes": {
-        name: "Deportes",
-        subcategories: ["Fitness", "Running", "Fútbol", "Natación", "Ciclismo"],
-        description: "Equípate para tus actividades deportivas con descuentos increíbles",
-        icon: "⚽"
-    },
-    "fotografia": {
-        name: "Fotografía",
-        subcategories: ["Cámaras", "Lentes", "Trípodes", "Iluminación", "Accesorios"],
-        description: "Captura momentos especiales con equipos profesionales a precios únicos",
-        icon: "📸"
-    },
-    "comida": {
-        name: "Comida y Bebidas",
-        subcategories: ["Restaurantes", "Delivery", "Bebidas", "Snacks", "Postres"],
-        description: "Disfruta de las mejores ofertas en comida, bebidas y experiencias gastronómicas",
-        icon: "🍕"
-    },
-    "servicios": {
-        name: "Servicios",
-        subcategories: ["Educación", "Salud", "Belleza", "Transporte", "Entretenimiento"],
-        description: "Accede a servicios premium con descuentos exclusivos y promociones especiales",
-        icon: "🛠️"
-    },
-    "digital": {
-        name: "Productos Digitales",
-        subcategories: ["Software", "Cursos Online", "E-books", "Música", "Streaming"],
-        description: "Descubre ofertas en productos y servicios digitales de alta calidad",
-        icon: "💻"
-    },
-    "viajes": {
-        name: "Viajes y Turismo",
-        subcategories: ["Hoteles", "Vuelos", "Paquetes", "Actividades", "Seguros"],
-        description: "Explora el mundo con las mejores ofertas en viajes y experiencias turísticas",
-        icon: "✈️"
-    },
-    "belleza": {
-        name: "Belleza y Cuidado",
-        subcategories: ["Cosméticos", "Skincare", "Perfumes", "Tratamientos", "Accesorios"],
-        description: "Cuida tu belleza con productos premium y tratamientos especializados",
-        icon: "💄"
-    }
-};
-
 // Mock products data - in a real app this would come from an API
 const allProducts: Product[] = [
     // Electrónica
@@ -116,7 +48,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=500&q=80",
         offer: "20% OFF",
-        category: "electronica",
+        category: "electronics",
         brand: "Apple",
         rating: 4.8,
         reviewCount: 1247,
@@ -153,7 +85,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=500&q=80",
         offer: "15% OFF",
-        category: "electronica",
+        category: "electronics",
         brand: "Apple",
         rating: 4.9,
         reviewCount: 892,
@@ -190,7 +122,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=500&q=80",
         offer: "14% OFF",
-        category: "electronica",
+        category: "electronics",
         brand: "Samsung",
         rating: 4.7,
         reviewCount: 756,
@@ -227,7 +159,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?auto=format&fit=crop&w=500&q=80",
         offer: "20% OFF",
-        category: "electronica",
+        category: "electronics",
         brand: "Apple",
         rating: 4.6,
         reviewCount: 432,
@@ -265,7 +197,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=500&q=80",
         offer: "40% OFF",
-        category: "moda",
+        category: "fashion",
         brand: "Nike",
         rating: 4.6,
         reviewCount: 567,
@@ -302,7 +234,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=500&q=80",
         offer: "51% OFF",
-        category: "moda",
+        category: "fashion",
         brand: "H&M",
         rating: 4.3,
         reviewCount: 234,
@@ -339,7 +271,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=500&q=80",
         offer: "55% OFF",
-        category: "moda",
+        category: "fashion",
         brand: "Coach",
         rating: 4.5,
         reviewCount: 189,
@@ -377,7 +309,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=500&q=80",
         offer: "33% OFF",
-        category: "hogar",
+        category: "home",
         brand: "IKEA",
         rating: 4.4,
         reviewCount: 234,
@@ -414,7 +346,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80",
         offer: "45% OFF",
-        category: "hogar",
+        category: "home",
         brand: "Philips",
         rating: 4.2,
         reviewCount: 156,
@@ -452,7 +384,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1579952363873-27d3badeef2f?auto=format&fit=crop&w=500&q=80",
         offer: "44% OFF",
-        category: "deportes",
+        category: "sports",
         brand: "Adidas",
         rating: 4.7,
         reviewCount: 189,
@@ -489,7 +421,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=500&q=80",
         offer: "39% OFF",
-        category: "deportes",
+        category: "sports",
         brand: "Bowflex",
         rating: 4.5,
         reviewCount: 98,
@@ -527,7 +459,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=500&q=80",
         offer: "28% OFF",
-        category: "fotografia",
+        category: "photography",
         brand: "Canon",
         rating: 4.9,
         reviewCount: 342,
@@ -565,7 +497,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=500&q=80",
         offer: "47% OFF",
-        category: "comida",
+        category: "food",
         brand: "Gourmet Express",
         rating: 4.8,
         reviewCount: 156,
@@ -602,7 +534,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=500&q=80",
         offer: "75% OFF",
-        category: "comida",
+        category: "food",
         brand: "Chef Academy",
         rating: 4.7,
         reviewCount: 89,
@@ -640,7 +572,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?auto=format&fit=crop&w=500&q=80",
         offer: "50% OFF",
-        category: "servicios",
+        category: "services",
         brand: "Life Coach Pro",
         rating: 4.9,
         reviewCount: 234,
@@ -677,7 +609,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=500&q=80",
         offer: "51% OFF",
-        category: "servicios",
+        category: "services",
         brand: "Beauty Spa Elite",
         rating: 4.6,
         reviewCount: 167,
@@ -790,7 +722,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=500&q=80",
         offer: "50% OFF",
-        category: "viajes",
+        category: "travel",
         brand: "Travel Dreams",
         rating: 4.6,
         reviewCount: 178,
@@ -828,7 +760,7 @@ const allProducts: Product[] = [
         currency: "USD",
         image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=500&q=80",
         offer: "51% OFF",
-        category: "belleza",
+        category: "beauty",
         brand: "SkinCare Pro",
         rating: 4.8,
         reviewCount: 234,
@@ -861,22 +793,36 @@ const allProducts: Product[] = [
 
 export default function CategoryPage() {
     const { categorySlug } = useParams<{ categorySlug: string }>();
+    const [searchParams] = useSearchParams();
+    const subFromUrl = searchParams.get('sub');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<string>('relevance');
     const [priceRange, setPriceRange] = useState<[number, number]>([0, 2000]);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-    const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
+    const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>(
+        () => (subFromUrl ? [subFromUrl] : []),
+    );
 
-    const category = categories[categorySlug || ''];
-    const categoryProducts = allProducts.filter(product => product.category === categorySlug);
+    const category =
+        MARKETPLACE_CATEGORIES_BY_SLUG[categorySlug || ''] ||
+        resolveCategoryBySlug(categorySlug || '');
+    const categoryProducts = allProducts.filter((product) => {
+        const productCat = resolveCategoryBySlug(product.category);
+        return productCat?.id === category?.id || product.category === category?.id;
+    });
 
     if (!category) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">Categoría no encontrada</h1>
-                    <Link to="/" className="text-blue-600 hover:text-blue-700">
-                        Volver al inicio
+            <div className="min-h-[50vh] flex items-center justify-center px-4">
+                <div className={`${SITE_SHELL_CARD} text-center p-10 max-w-md`}>
+                    <h1 className="text-2xl font-bold text-white mb-3">Categoría no encontrada</h1>
+                    <p className="text-gray-400 text-sm mb-6">La categoría que buscas no existe o fue movida.</p>
+                    <Link
+                        to="/categories"
+                        className="inline-flex items-center gap-2 text-violet-300 hover:text-violet-200 font-medium"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Ver todas las categorías
                     </Link>
                 </div>
             </div>
@@ -892,42 +838,72 @@ export default function CategoryPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                    <div className="flex items-center gap-4 mb-4">
-                        <Link to="/" className="text-blue-200 hover:text-white transition-colors">
-                            <ArrowLeft className="h-6 w-6" />
-                        </Link>
-                        <span className="text-2xl">{category.icon}</span>
-                        <h1 className="text-3xl font-bold">{category.name}</h1>
+        <>
+            <div className="relative overflow-hidden border-b border-white/10 min-h-[220px] sm:min-h-[280px]">
+                <img
+                    src={category.image}
+                    alt={category.imageAlt}
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-950/35 to-transparent" />
+                <div className="relative max-w-7xl mx-auto px-4 py-10 sm:py-14">
+                    <Link
+                        to="/categories"
+                        className="inline-flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors mb-6"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Todas las categorías
+                    </Link>
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-violet-300 mb-2">Categoría</p>
+                            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">{category.name}</h1>
+                            <p className="text-gray-300 max-w-2xl text-sm sm:text-base">{category.description}</p>
+                        </div>
+                        <span className="text-xs font-semibold uppercase tracking-wide bg-black/40 backdrop-blur-sm text-white px-3 py-1.5 rounded-full border border-white/15">
+                            {categoryProducts.length} ofertas
+                        </span>
                     </div>
-                    <p className="text-xl text-blue-100 max-w-2xl">
-                        {category.description}
-                    </p>
+                    <div className="flex flex-wrap gap-2 mt-6">
+                        {category.subcategories.map((sub) => {
+                            const active = selectedSubcategories.includes(sub);
+                            return (
+                                <Link
+                                    key={sub}
+                                    to={`/category/${category.slug}?sub=${encodeURIComponent(sub)}`}
+                                    className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                                        active
+                                            ? 'bg-violet-600/80 border-violet-400/50 text-white'
+                                            : 'bg-white/10 text-gray-200 border-white/15 hover:border-violet-500/40'
+                                    }`}
+                                >
+                                    {sub}
+                                </Link>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="max-w-7xl mx-auto px-4 py-8 pb-16">
                 <div className="flex flex-col lg:flex-row gap-8">
                     {/* Sidebar Filters */}
                     <div className="lg:w-1/4">
-                        <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <Filter className="h-5 w-5" />
+                        <div className={`${SITE_SHELL_CARD} p-6 sticky top-24`}>
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
+                                <Filter className="h-5 w-5 text-violet-400" />
                                 Filtros
                             </h3>
 
                             {/* Sort By */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
                                     Ordenar por
                                 </label>
                                 <select
                                     value={sortBy}
                                     onChange={(e) => setSortBy(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full border border-white/10 bg-gray-950/60 text-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                                 >
                                     <option value="relevance">Relevancia</option>
                                     <option value="price-low">Precio: Menor a Mayor</option>
@@ -939,7 +915,7 @@ export default function CategoryPage() {
 
                             {/* Price Range */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
                                     Rango de Precio
                                 </label>
                                 <div className="flex gap-2">
@@ -948,21 +924,21 @@ export default function CategoryPage() {
                                         placeholder="Min"
                                         value={priceRange[0]}
                                         onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
-                                        className="w-1/2 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-1/2 border border-white/10 bg-gray-950/60 text-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                                     />
                                     <input
                                         type="number"
                                         placeholder="Max"
                                         value={priceRange[1]}
                                         onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
-                                        className="w-1/2 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-1/2 border border-white/10 bg-gray-950/60 text-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                                     />
                                 </div>
                             </div>
 
                             {/* Subcategories */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
                                     Subcategorías
                                 </label>
                                 <div className="space-y-2">
@@ -978,9 +954,9 @@ export default function CategoryPage() {
                                                         setSelectedSubcategories(selectedSubcategories.filter(s => s !== subcategory));
                                                     }
                                                 }}
-                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="rounded border-white/20 bg-gray-950/60 text-violet-500 focus:ring-violet-500/50"
                                             />
-                                            <span className="ml-2 text-sm text-gray-700">{subcategory}</span>
+                                            <span className="ml-2 text-sm text-gray-300">{subcategory}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -988,7 +964,7 @@ export default function CategoryPage() {
 
                             {/* Brands */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
                                     Marcas
                                 </label>
                                 <div className="space-y-2">
@@ -1004,9 +980,9 @@ export default function CategoryPage() {
                                                         setSelectedBrands(selectedBrands.filter(b => b !== brand));
                                                     }
                                                 }}
-                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="rounded border-white/20 bg-gray-950/60 text-violet-500 focus:ring-violet-500/50"
                                             />
-                                            <span className="ml-2 text-sm text-gray-700">{brand}</span>
+                                            <span className="ml-2 text-sm text-gray-300">{brand}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1021,18 +997,18 @@ export default function CategoryPage() {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setViewMode('grid')}
-                                    className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}
+                                    className={`p-2 rounded-lg border transition-colors ${viewMode === 'grid' ? 'bg-violet-600/30 border-violet-500/40 text-violet-200' : 'border-white/10 text-gray-400 hover:text-gray-200'}`}
                                 >
                                     <Grid className="h-5 w-5" />
                                 </button>
                                 <button
                                     onClick={() => setViewMode('list')}
-                                    className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}
+                                    className={`p-2 rounded-lg border transition-colors ${viewMode === 'list' ? 'bg-violet-600/30 border-violet-500/40 text-violet-200' : 'border-white/10 text-gray-400 hover:text-gray-200'}`}
                                 >
                                     <List className="h-5 w-5" />
                                 </button>
                             </div>
-                            <p className="text-gray-600">
+                            <p className="text-gray-400 text-sm">
                                 {categoryProducts.length} productos encontrados
                             </p>
                         </div>
@@ -1040,7 +1016,7 @@ export default function CategoryPage() {
                         {/* Products */}
                         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
                             {categoryProducts.map((product) => (
-                                <div key={product.id} className={`bg-white rounded-lg shadow-md overflow-hidden ${viewMode === 'list' ? 'flex' : ''}`}>
+                                <div key={product.id} className={`${SITE_SHELL_CARD} overflow-hidden ${viewMode === 'list' ? 'flex' : ''}`}>
                                     {/* Product Image */}
                                     <div className={`${viewMode === 'list' ? 'w-48 flex-shrink-0' : ''}`}>
                                         <img
@@ -1053,31 +1029,31 @@ export default function CategoryPage() {
                                     {/* Product Info */}
                                     <div className={`p-4 ${viewMode === 'list' ? 'flex-1' : ''}`}>
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                            <span className="bg-rose-500/20 text-rose-300 text-xs font-medium px-2.5 py-0.5 rounded-lg border border-rose-500/30">
                                                 {product.offer}
                                             </span>
                                             <button
                                                 onClick={() => handleAddToWishlist(product.id)}
-                                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                                className="text-gray-500 hover:text-rose-400 transition-colors"
                                             >
                                                 <Heart className="h-5 w-5" />
                                             </button>
                                         </div>
 
-                                        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                                        <h3 className="font-semibold text-white mb-2 line-clamp-2">
                                             {product.name}
                                         </h3>
 
                                         <div className="flex items-center gap-2 mb-2">
                                             <div className="flex items-center">
-                                                <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                                                <span className="text-sm text-gray-600 ml-1">{product.rating}</span>
+                                                <Star className="h-4 w-4 text-amber-400 fill-current" />
+                                                <span className="text-sm text-gray-300 ml-1">{product.rating}</span>
                                             </div>
                                             <span className="text-sm text-gray-500">({product.reviewCount})</span>
                                         </div>
 
                                         <div className="flex items-center gap-2 mb-3">
-                                            <span className="text-2xl font-bold text-gray-900">
+                                            <span className="text-2xl font-bold text-white">
                                                 ${product.price}
                                             </span>
                                             {product.originalPrice && (
@@ -1088,22 +1064,22 @@ export default function CategoryPage() {
                                         </div>
 
                                         <div className="flex items-center gap-2 mb-3">
-                                            <span className="text-sm text-gray-600">{product.brand}</span>
-                                            <span className="text-sm text-gray-500">•</span>
-                                            <span className="text-sm text-gray-600">{product.location}</span>
+                                            <span className="text-sm text-gray-400">{product.brand}</span>
+                                            <span className="text-sm text-gray-600">•</span>
+                                            <span className="text-sm text-gray-400">{product.location}</span>
                                         </div>
 
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleAddToCart(product.id)}
-                                                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                                className="flex-1 bg-violet-600 text-white py-2 px-4 rounded-lg hover:bg-violet-500 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <ShoppingCart className="h-4 w-4" />
                                                 Agregar
                                             </button>
                                             <Link
                                                 to={`/promotion-details/${product.id}`}
-                                                className="bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                                                className="border border-white/15 text-gray-300 py-2 px-4 rounded-lg hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <Eye className="h-4 w-4" />
                                                 Ver
@@ -1115,13 +1091,13 @@ export default function CategoryPage() {
                         </div>
 
                         {categoryProducts.length === 0 && (
-                            <div className="text-center py-12">
-                                <p className="text-gray-500 text-lg">No se encontraron productos en esta categoría</p>
+                            <div className={`${SITE_SHELL_CARD} text-center py-12 px-6`}>
+                                <p className="text-gray-400 text-lg">No se encontraron productos en esta categoría</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }

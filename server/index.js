@@ -355,6 +355,19 @@ app.use('/api/geo', strictLimiter, geoToolsRoutes);
 const luxaeComplianceRoutes = require('./routes/luxaeCompliance');
 app.use('/api/compliance/luxae-installations', strictLimiter, luxaeComplianceRoutes);
 
+// ─── Marketplace de productos ────────────────────────────────────────────────
+const productRoutes = require('./routes/products');
+const categoryRoutes = require('./routes/categories');
+app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+
+const orderRoutes = require('./routes/orders');
+app.use('/api/orders', orderRoutes);
+
+const stripeRoutes = require('./routes/stripe');
+// El webhook de Stripe necesita el body raw ANTES de express.json(); se registra sin limitador de rate
+app.use('/api/stripe', stripeRoutes);
+
 // ===== MANEJO DE ERRORES =====
 
 // 404 handler

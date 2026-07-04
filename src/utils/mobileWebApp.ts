@@ -72,8 +72,10 @@ export function applyMobileWebAppHtmlFlags(ctx = getMobileWebAppContext()): void
   else delete el.dataset.inAppId;
 }
 
+import { isInfluencerWalledGardenPath } from '../config/siteShell';
+
 export function isInfluencerStorePath(pathname: string): boolean {
-  return /^\/influencer\/[^/]+\/(?:deals|tienda)\/?$/.test(pathname);
+  return isInfluencerWalledGardenPath(pathname);
 }
 
 /** Path interno de la página de una sola promoción de un influencer. */

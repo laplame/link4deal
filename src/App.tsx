@@ -12,7 +12,7 @@ import LandingPage from './pages/landing';
 import AboutPage from './pages/AboutPage';
 import PrivacyPage from './pages/PrivacyPage';
 import CookiesPage from './pages/CookiesPage';
-import UserTypeSelector from './pages/UserTypeSelector';
+import GetStartedPage from './pages/GetStartedPage';
 import InfluencerSetup from './pages/InfluencerSetup';
 import BrandSetup from './pages/BrandSetup';
 import AgencySetup from './pages/AgencySetup';
@@ -58,12 +58,19 @@ import CartPage from './pages/CartPage';
 import BusinessLanding from './pages/BusinessLanding';
 import DigitalCommissionerLanding from './pages/DigitalCommissionerLanding';
 import Link4DealEconomyLanding from './pages/Link4DealEconomyLanding';
+import LandingA from './pages/landing/LandingA';
+import LandingB from './pages/landing/LandingB';
+import LandingC from './pages/landing/LandingC';
 import CheckoutPage from './pages/CheckoutPage';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import InfluencerHubDemoPage from './pages/demo/InfluencerHubDemoPage';
 import InfluencerDashboardPage from './pages/InfluencerDashboardPage';
 import BrandDashboardPage from './pages/BrandDashboardPage';
 import AgencyDashboardPage from './pages/AgencyDashboardPage';
+import ShopPage from './pages/ShopPage';
+import ProductDetailPage from './pages/ProductDetailPage';
+import ShopCheckoutPage from './pages/ShopCheckoutPage';
+import ShopOrderSuccessPage from './pages/ShopOrderSuccessPage';
 import AdminInfluencersPage from './pages/admin/AdminInfluencersPage';
 import AdminBrandsPage from './pages/admin/AdminBrandsPage';
 import AdminAgenciesPage from './pages/admin/AdminAgenciesPage';
@@ -73,6 +80,7 @@ import PromotionsManagePage from './pages/dashboards/PromotionsManagePage';
 import SuperAdminDashboardPage from './pages/dashboards/SuperAdminDashboardPage';
 import AdminCrmHubPage from './pages/admin/AdminCrmHubPage';
 import AdminPromotionApplicationsPage from './pages/admin/AdminPromotionApplicationsPage';
+import AdminOpenPromotionsPage from './pages/admin/AdminOpenPromotionsPage';
 import InfluencerCrmPage from './pages/admin/InfluencerCrmPage';
 import AdminInfluencerProfilesPage from './pages/admin/AdminInfluencerProfilesPage';
 import InstagramLeadsCrmPage from './pages/admin/InstagramLeadsCrmPage';
@@ -80,6 +88,7 @@ import ApiDocsPage from './pages/ApiDocsPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import { useLocation, Link } from 'react-router-dom';
 import { Home, AlertCircle } from 'lucide-react';
+import { SITE_SHELL_PAGE } from './config/siteShell';
 
 // Componente para página 404
 function NotFoundPage() {
@@ -111,16 +120,16 @@ function NotFoundPage() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className={`${SITE_SHELL_PAGE} flex items-center justify-center px-4`}>
       <div className="text-center">
-        <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
-        <h2 className="text-2xl font-semibold text-gray-700 mb-2">Página no encontrada</h2>
-        <p className="text-gray-600 mb-6">
+        <h1 className="text-6xl font-bold text-white mb-4">404</h1>
+        <h2 className="text-2xl font-semibold text-gray-300 mb-2">Página no encontrada</h2>
+        <p className="text-gray-400 mb-6">
           La página que buscas no existe o ha sido movida.
         </p>
         <Link
           to="/"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors"
         >
           <Home className="w-4 h-4" />
           Ir al Inicio
@@ -145,13 +154,17 @@ function App() {
                   <Route path="/landing" element={<BusinessLanding />} />
                   <Route path="/comisionista-digital" element={<DigitalCommissionerLanding />} />
                   <Route path="/economia" element={<Link4DealEconomyLanding />} />
+                  <Route path="/landing-a" element={<LandingA />} />
+                  <Route path="/landing-b" element={<LandingB />} />
+                  <Route path="/landing-c" element={<LandingC />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
                   <Route path="/checkout/success" element={<CheckoutSuccess />} />
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/cookies" element={<CookiesPage />} />
                   <Route path="/demo/influencer-dashboard" element={<InfluencerHubDemoPage />} />
-                  <Route path="/user-type-selector" element={<UserTypeSelector />} />
+                  <Route path="/empezar" element={<GetStartedPage />} />
+                  <Route path="/user-type-selector" element={<GetStartedPage />} />
                   <Route path="/influencer-setup" element={<Navigate to="/influencer/setup" replace />} />
                   <Route path="/brand-setup" element={<Navigate to="/brands/setup" replace />} />
                   <Route path="/agency-setup" element={<Navigate to="/agency/setup" replace />} />
@@ -203,6 +216,7 @@ function App() {
                   <Route path="/admin/crm" element={<AdminCrmHubPage />} />
                   <Route path="/admin/crm/pipeline" element={<InfluencerCrmPage />} />
                   <Route path="/admin/crm/applications" element={<AdminPromotionApplicationsPage />} />
+                  <Route path="/admin/crm/open-promotions" element={<AdminOpenPromotionsPage />} />
                   <Route path="/admin/crm/influencers" element={<AdminInfluencerProfilesPage />} />
                   <Route path="/admin/crm/instagram-leads" element={<InstagramLeadsCrmPage />} />
                   <Route path="/dashboard/crm" element={<Navigate to="/admin/crm" replace />} />
@@ -233,9 +247,20 @@ function App() {
                       </SuperuserOnlyRoute>
                     }
                   />
-                  <Route path="/dashboard/suite" element={<PlatformSuperuserSuitePage />} />
+                  <Route
+                    path="/dashboard/suite"
+                    element={
+                      <SuperuserOnlyRoute>
+                        <PlatformSuperuserSuitePage />
+                      </SuperuserOnlyRoute>
+                    }
+                  />
                   <Route path="/dashboard/panel" element={<ProfileDashboardByRole />} />
                   <Route path="/cart" element={<CartPage />} />
+                  <Route path="/tienda" element={<ShopPage />} />
+                  <Route path="/producto/:id" element={<ProductDetailPage />} />
+                  <Route path="/tienda/checkout" element={<ShopCheckoutPage />} />
+                  <Route path="/pedido/:orderId" element={<ShopOrderSuccessPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>
               </Routes>

@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
+const {
+    amazonCommissionCategoryIds,
+    DEFAULT_AMAZON_COMMISSION_CATEGORY,
+} = require('../utils/amazonCommission');
 
 /**
  * Contrato de atribución Cryptomarketing.
@@ -63,7 +67,19 @@ const promotionSchema = new mongoose.Schema({
     category: {
         type: String,
         default: 'other',
-        enum: ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other']
+        trim: true,
+        lowercase: true,
+        index: true
+    },
+    /**
+     * Categoría de comisión de Amazon (Fixed Commission Income Rate). Define el % de comisión
+     * de la promoción; el influencer recibe el neto tras retener el 20% de la plataforma.
+     * Ver server/utils/amazonCommission.js.
+     */
+    amazonCommissionCategory: {
+        type: String,
+        enum: amazonCommissionCategoryIds(),
+        default: DEFAULT_AMAZON_COMMISSION_CATEGORY
     },
     
     // Precios y descuentos
@@ -146,6 +162,25 @@ const promotionSchema = new mongoose.Schema({
     }],
     /** IDs de productos a los que aplica la promoción (si está vacío, aplica a todos) */
     allowedProductIds: [{
+        type: String,
+        trim: true
+    }],
+
+    /**
+     * Accesibilidad para influencers (CRM): si es true, la promoción es visible para
+     * TODOS los influencers sin necesidad de una PromotionApplication aprobada.
+     */
+    openToAllInfluencers: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    /**
+     * Temas (categorías del influencer, ej. 'fashion', 'beauty', ...) a los que se abre la
+     * promoción. Un influencer cuya `categories` intersecte esta lista la verá automáticamente.
+     * Vacío = sin apertura por temas. Ignorado si openToAllInfluencers es true (ya aplica a todos).
+     */
+    openToInfluencerCategories: [{
         type: String,
         trim: true
     }],

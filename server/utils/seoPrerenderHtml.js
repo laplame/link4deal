@@ -5,6 +5,10 @@ const {
     normalizeSlugInput,
     resolveCanonicalPublicSlug,
 } = require('./influencerSlug');
+const {
+    getCategorySeoMeta,
+    listCategorySeoSlugs: listProductCategorySeoSlugs,
+} = require('./productCategories');
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -541,60 +545,16 @@ function buildBrandHead(doc) {
     };
 }
 
-// Catálogo SEO de categorías (espejo de src/pages/CategoryPage.tsx).
-const CATEGORY_SEO = Object.freeze({
-    electronica: {
-        name: 'Electrónica',
-        description:
-            'Ofertas y cupones en tecnología y dispositivos electrónicos: smartphones, laptops, audio y más.',
-    },
-    moda: {
-        name: 'Moda',
-        description:
-            'Descuentos exclusivos en moda y accesorios: ropa, zapatos, bolsos y joyería de las mejores marcas.',
-    },
-    hogar: {
-        name: 'Hogar',
-        description:
-            'Promociones en decoración y mobiliario para transformar tu hogar: muebles, cocina, jardín e iluminación.',
-    },
-    deportes: {
-        name: 'Deportes',
-        description:
-            'Descuentos en equipamiento deportivo: fitness, running, fútbol, natación y ciclismo.',
-    },
-    fotografia: {
-        name: 'Fotografía',
-        description:
-            'Ofertas en equipo fotográfico profesional: cámaras, lentes, trípodes e iluminación.',
-    },
-    comida: {
-        name: 'Comida y Bebidas',
-        description:
-            'Cupones y promociones en restaurantes, delivery, bebidas, snacks y experiencias gastronómicas.',
-    },
-    servicios: {
-        name: 'Servicios',
-        description:
-            'Servicios premium con descuentos exclusivos: educación, salud, belleza, transporte y entretenimiento.',
-    },
-    digital: {
-        name: 'Productos Digitales',
-        description: 'Ofertas en productos y servicios digitales con descuentos exclusivos.',
-    },
-});
-
 function listCategorySeoSlugs() {
-    return Object.keys(CATEGORY_SEO);
+    return listProductCategorySeoSlugs();
 }
 
 /** Construye el head dinámico para /category/:slug (catálogo estático). */
 function buildCategoryHead(slug) {
-    const key = String(slug || '').trim().toLowerCase();
-    const cat = CATEGORY_SEO[key];
+    const cat = getCategorySeoMeta(slug);
     if (!cat) return null;
     const baseUrl = siteBaseUrl();
-    const canonicalUrl = `${baseUrl}/category/${encodeURIComponent(key)}`;
+    const canonicalUrl = `${baseUrl}/category/${encodeURIComponent(cat.slug)}`;
     return {
         title: `${cat.name} — Ofertas y descuentos | DameCodigo`,
         description: cat.description,

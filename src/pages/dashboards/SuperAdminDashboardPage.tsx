@@ -21,6 +21,17 @@ import {
   setAdminPinUnlockSession,
 } from '../../config/adminAccess';
 import { getPromotionImageUrl } from '../../utils/promotionImage';
+import {
+  AMAZON_COMMISSION_CATEGORIES,
+  DEFAULT_AMAZON_COMMISSION_CATEGORY,
+  amazonCommissionRate,
+  influencerNetCommissionRate,
+  formatCommissionPct,
+} from '../../utils/amazonCommission';
+import {
+  PRODUCT_CATEGORY_OPTIONS,
+  getProductCategoryLabel,
+} from '../../data/productCategories';
 
 interface PromotionDoc {
   _id: string;
@@ -40,6 +51,7 @@ interface PromotionDoc {
   images?: { url?: string; filename?: string; cloudinaryUrl?: string }[];
   redirectInsteadOfQr?: boolean;
   redirectToUrl?: string;
+  amazonCommissionCategory?: string;
 }
 
 interface PaginatedData {
@@ -52,7 +64,6 @@ interface PaginatedData {
   hasPrevPage: boolean;
 }
 
-const CATEGORIES = ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'];
 const STATUSES = ['draft', 'active', 'paused', 'expired', 'deleted'];
 
 export default function SuperAdminDashboardPage() {
@@ -196,6 +207,7 @@ export default function SuperAdminDashboardPage() {
       validUntil: p.validUntil ? (typeof p.validUntil === 'string' ? p.validUntil : new Date(p.validUntil).toISOString().slice(0, 10)) : undefined,
       redirectInsteadOfQr: p.redirectInsteadOfQr ?? false,
       redirectToUrl: p.redirectToUrl ?? '',
+      amazonCommissionCategory: p.amazonCommissionCategory ?? DEFAULT_AMAZON_COMMISSION_CATEGORY,
     });
   };
 
@@ -396,7 +408,7 @@ export default function SuperAdminDashboardPage() {
                     <tr key={p._id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{p.title || p.productName || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{p.storeName || p.brand || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{p.category || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{getProductCategoryLabel(p.category || '') || '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                           p.status === 'active' ? 'bg-green-100 text-green-800' :
@@ -579,9 +591,10 @@ export default function SuperAdminDashboardPage() {
                     onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                    {PRODUCT_CATEGORY_OPTIONS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
+                    <option value="other">Otros</option>
                   </select>
                 </div>
               </div>
@@ -675,15 +688,37 @@ export default function SuperAdminDashboardPage() {
                   </label>
                 </div>
                 {editForm.redirectInsteadOfQr && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">URL de redirección (vacío = Amazon por defecto)</label>
-                    <input
-                      type="url"
-                      value={editForm.redirectToUrl ?? ''}
-                      onChange={(e) => setEditForm((f) => ({ ...f, redirectToUrl: e.target.value }))}
-                      placeholder="https://amzn.to/... o https://www.adidas.mx/..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">URL de redirección (vacío = Amazon por defecto)</label>
+                      <input
+                        type="url"
+                        value={editForm.redirectToUrl ?? ''}
+                        onChange={(e) => setEditForm((f) => ({ ...f, redirectToUrl: e.target.value }))}
+                        placeholder="https://amzn.to/... o https://www.adidas.mx/..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Categoría de comisión Amazon</label>
+                      <select
+                        value={editForm.amazonCommissionCategory ?? DEFAULT_AMAZON_COMMISSION_CATEGORY}
+                        onChange={(e) => setEditForm((f) => ({ ...f, amazonCommissionCategory: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        {AMAZON_COMMISSION_CATEGORIES.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {formatCommissionPct(c.rate)} — {c.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-emerald-700">
+                        Comisión Amazon{' '}
+                        <strong>{formatCommissionPct(amazonCommissionRate(editForm.amazonCommissionCategory))}</strong>
+                        {' · '}plataforma 20%{' · '}influencer{' '}
+                        <strong>{formatCommissionPct(influencerNetCommissionRate(editForm.amazonCommissionCategory))}</strong>
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

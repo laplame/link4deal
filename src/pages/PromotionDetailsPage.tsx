@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { apiUrl } from '../utils/apiUrl';
 import { formatPrice, calculateDiscountPercentage } from '../utils/formatters';
 import { 
     ArrowLeft, 
@@ -45,6 +46,12 @@ import PromotionAttributionContractDisplay, {
     PromotionAttributionContractEmptyState,
     type AttributionContractView
 } from '../components/promo/PromotionAttributionContractDisplay';
+import AmazonAffiliateComplianceNotice from '../components/promo/AmazonAffiliateComplianceNotice';
+import {
+    AMAZON_MX_STORE_LABEL,
+    buildAmazonRedirectUrl,
+    isAmazonPromotion,
+} from '../utils/amazonPromotion';
 
 interface SmartContract {
     address: string;
@@ -100,6 +107,7 @@ interface ProductDetails {
     isExpired?: boolean;
     status?: string;
     redirectInsteadOfQr?: boolean;
+    redirectToUrl?: string;
     specifications: Record<string, string | undefined>;
     smartContract: SmartContract;
     promotionDetails: {
@@ -152,7 +160,8 @@ export default function PromotionDetailsPage() {
         'idle' | 'loading' | 'ok' | 'denied' | 'unavailable'
     >('idle');
     const [shareCopied, setShareCopied] = useState(false);
-    const { state } = useCart();
+    const [linkedProduct, setLinkedProduct] = useState<{ _id: string; name: string; price: number; originalPrice?: number; currency: string; images: Array<{ path: string; isPrimary?: boolean }>; brand?: { name?: string } } | null>(null);
+    const { state, addItem } = useCart();
 
     // Cargar promoción desde la API
     useEffect(() => {
@@ -241,6 +250,7 @@ export default function PromotionDetailsPage() {
                     isExpired,
                     status: promo.status,
                     redirectInsteadOfQr: !!promo.redirectInsteadOfQr,
+                    redirectToUrl: promo.redirectToUrl ? String(promo.redirectToUrl) : '',
                     specifications: promo.specifications || {
                         'Categoría': categoryMap[promo.category] || promo.category,
                         'Marca': promo.brand,
@@ -359,6 +369,17 @@ export default function PromotionDetailsPage() {
         );
     }, [product?.id, chainBranchesWithCoords]);
 
+    // Buscar producto de nuestra tienda vinculado a esta promoción
+    useEffect(() => {
+        if (!product?.id) return;
+        fetch(apiUrl(`/api/products/by-promotion/${product.id}`))
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.data?.length > 0) setLinkedProduct(d.data[0]);
+            })
+            .catch(() => {});
+    }, [product?.id]);
+
     // Cargar historial de precios
     useEffect(() => {
         const fetchPriceHistory = async () => {
@@ -449,7 +470,45 @@ export default function PromotionDetailsPage() {
 
     const isVerificationOnly =
         product.promotionKind === 'verification_only' || product.hasDeal === false;
+    const isAmazon = isAmazonPromotion(product);
     const canRedeemCoupon = product.showRedeemButton !== false && !product.isExpired;
+    const dameCodigoSlotsRemaining = Math.max(
+        0,
+        (product.promotionDetails.maxQuantity || 0) - (product.promotionDetails.soldQuantity || 0),
+    );
+    const amazonSlotsExhausted = isAmazon && dameCodigoSlotsRemaining <= 0;
+
+    const handleAmazonRedirect = () => {
+        const url = buildAmazonRedirectUrl(product.redirectToUrl);
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
+    // Agrega el producto vinculado al carrito y lleva al checkout de la tienda
+    const handleAddLinkedToCart = () => {
+        if (!product) return;
+        const cartItem = linkedProduct
+            ? {
+                id: linkedProduct._id,
+                name: linkedProduct.name,
+                price: linkedProduct.price,
+                currency: linkedProduct.currency,
+                image: linkedProduct.images?.find(i => i.isPrimary)?.path || linkedProduct.images?.[0]?.path || product.image,
+                originalPrice: linkedProduct.originalPrice,
+                brand: linkedProduct.brand?.name,
+            }
+            : {
+                // fallback: usar datos de la promoción directamente
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                currency: product.currency,
+                image: product.image,
+                originalPrice: product.originalPrice,
+                brand: product.brand !== 'Sin marca' ? product.brand : undefined,
+            };
+        addItem(cartItem);
+        navigate('/tienda/checkout');
+    };
 
     const seoInput = {
         id: product.id,
@@ -569,6 +628,13 @@ export default function PromotionDetailsPage() {
                 </div>
             )}
 
+            {isAmazon && (
+                <AmazonAffiliateComplianceNotice
+                    variant="banner"
+                    dameCodigoSlotsRemaining={dameCodigoSlotsRemaining}
+                />
+            )}
+
             {/* Header */}
             <div className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 py-4">
@@ -625,7 +691,12 @@ export default function PromotionDetailsPage() {
                                     </button>
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-2 mb-4 flex-wrap">
+                                        {isAmazon && (
+                                            <span className="bg-[#FF9900] text-black px-3 py-1 rounded-full text-sm font-bold">
+                                                {AMAZON_MX_STORE_LABEL}
+                                            </span>
+                                        )}
                                         <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                                             {product.category}
                                         </span>
@@ -643,7 +714,7 @@ export default function PromotionDetailsPage() {
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center gap-4 mb-6">
+                                    <div className="flex items-center gap-4 mb-2 flex-wrap">
                                         <span className="text-4xl font-bold text-blue-600">
                                             {formatPrice(product.price, product.currency)}
                                         </span>
@@ -652,11 +723,22 @@ export default function PromotionDetailsPage() {
                                                 {formatPrice(product.originalPrice, product.currency)}
                                             </span>
                                         )}
-                                        <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                            -{discountPercentage}%
-                                        </span>
+                                        {discountPercentage > 0 && (
+                                            <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                -{discountPercentage}%
+                                            </span>
+                                        )}
                                     </div>
+                                    {isAmazon && (
+                                        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                                            <AmazonAffiliateComplianceNotice
+                                                variant="priceNote"
+                                                dameCodigoSlotsRemaining={dameCodigoSlotsRemaining}
+                                            />
+                                        </div>
+                                    )}
                                     
+                                    {!isAmazon && (
                                     <div className="space-y-3 mb-6">
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             <MapPin className="h-4 w-4" />
@@ -675,8 +757,10 @@ export default function PromotionDetailsPage() {
                                             <span>Stock: {product.stock} unidades disponibles</span>
                                         </div>
                                     </div>
+                                    )}
 
-                                    {(product.isChainStore || chainBranchesWithCoords.length > 0) &&
+                                    {!isAmazon &&
+                                    (product.isChainStore || chainBranchesWithCoords.length > 0) &&
                                         product.chainLocations &&
                                         product.chainLocations.length > 0 && (
                                             <div className="mb-6 p-4 rounded-lg border border-indigo-200 bg-indigo-50/90">
@@ -732,7 +816,7 @@ export default function PromotionDetailsPage() {
                                             </div>
                                         )}
 
-                                    {product.activateByGps && (
+                                    {!isAmazon && product.activateByGps && (
                                         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                                             <div className="flex items-start gap-2">
                                                 <MapPin className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
@@ -753,7 +837,26 @@ export default function PromotionDetailsPage() {
                                     )}
                                     
                                     <div className="flex gap-3">
-                                        {canRedeemCoupon ? (
+                                        {isAmazon ? (
+                                            canRedeemCoupon && !amazonSlotsExhausted ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAmazonRedirect}
+                                                    className="flex-1 bg-[#FF9900] text-black py-3 px-6 rounded-lg font-semibold hover:bg-[#e88b00] transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <ExternalLink className="h-5 w-5" />
+                                                    Ir a {AMAZON_MX_STORE_LABEL}
+                                                </button>
+                                            ) : (
+                                                <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 text-center">
+                                                    {product.isExpired
+                                                        ? 'Promoción no vigente'
+                                                        : amazonSlotsExhausted
+                                                          ? 'Cupo de accesos DameCodigo agotado para esta campaña'
+                                                          : 'Enlace no disponible'}
+                                                </div>
+                                            )
+                                        ) : canRedeemCoupon ? (
                                             <button
                                                 type="button"
                                                 disabled={waitingForNearest}
@@ -807,17 +910,36 @@ export default function PromotionDetailsPage() {
                                     )}
                                     
                                     {/* Información sobre el proceso de compra */}
-                                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <div className={`mt-4 p-4 rounded-lg border ${isAmazon ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200'}`}>
                                         <div className="flex items-start gap-3">
                                             <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
                                             <div>
-                                                <p className="text-blue-800 font-medium mb-1">
-                                                    Proceso de Compra
-                                                </p>
-                                                <p className="text-blue-700 text-sm">
-                                                    Para comprar este producto, primero solicita tu cupón de descuento. 
-                                                    Después del registro, podrás agregar el producto al carrito con el cupón aplicado.
-                                                </p>
+                                                {isAmazon ? (
+                                                    <AmazonAffiliateComplianceNotice
+                                                        variant="redirectNote"
+                                                        dameCodigoSlotsRemaining={dameCodigoSlotsRemaining}
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        <p className="text-blue-800 font-medium mb-1">
+                                                            {linkedProduct ? 'Disponible en nuestra tienda' : 'Proceso de Compra'}
+                                                        </p>
+                                                        <p className="text-blue-700 text-sm">
+                                                            {linkedProduct
+                                                                ? 'Solicita tu cupón y desde ahí podrás agregarlo directamente al carrito para comprarlo en nuestra tienda con el descuento ya aplicado.'
+                                                                : 'Para comprar este producto, primero solicita tu cupón de descuento. Después del registro, podrás agregar el producto al carrito con el cupón aplicado.'}
+                                                        </p>
+                                                        {linkedProduct && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setShowCouponForm(true)}
+                                                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 underline hover:text-blue-900"
+                                                            >
+                                                                Solicitar cupón y comprar →
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -884,6 +1006,14 @@ export default function PromotionDetailsPage() {
                                     <div>
                                         <h3 className="text-xl font-semibold text-gray-900 mb-4">Descripción del Producto</h3>
                                         <p className="text-gray-700 mb-6 leading-relaxed">{product.description}</p>
+
+                                        {isAmazon && (
+                                            <AmazonAffiliateComplianceNotice
+                                                variant="full"
+                                                className="mb-6"
+                                                dameCodigoSlotsRemaining={dameCodigoSlotsRemaining}
+                                            />
+                                        )}
                                         
                                         <h4 className="text-lg font-semibold text-gray-900 mb-3">Características Principales</h4>
                                         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -1348,17 +1478,33 @@ export default function PromotionDetailsPage() {
                             </div>
                             
                             <div className="border-t pt-4">
-                                <div className="text-sm text-gray-600 mb-2">Progreso de venta</div>
+                                <div className="text-sm text-gray-600 mb-2">
+                                    {isAmazon ? 'Cupo DameCodigo (no excedible)' : 'Progreso de venta'}
+                                </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                                     <div 
                                         className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                                        style={{ width: `${(product.promotionDetails.soldQuantity / product.promotionDetails.maxQuantity) * 100}%` }}
+                                        style={{ width: `${product.promotionDetails.maxQuantity > 0 ? (product.promotionDetails.soldQuantity / product.promotionDetails.maxQuantity) * 100 : 0}%` }}
                                     ></div>
                                 </div>
                                 <div className="flex justify-between text-xs text-gray-500">
-                                    <span>{product.promotionDetails.soldQuantity} vendidos</span>
-                                    <span>{product.promotionDetails.maxQuantity - product.promotionDetails.soldQuantity} disponibles</span>
+                                    <span>
+                                        {isAmazon
+                                            ? `${product.promotionDetails.soldQuantity} accesos usados`
+                                            : `${product.promotionDetails.soldQuantity} vendidos`}
+                                    </span>
+                                    <span>
+                                        {isAmazon
+                                            ? `${dameCodigoSlotsRemaining} disponibles en DameCodigo`
+                                            : `${dameCodigoSlotsRemaining} disponibles`}
+                                    </span>
                                 </div>
+                                {isAmazon && (
+                                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                        Este límite lo define DameCodigo para la campaña. No refleja el stock de Amazon
+                                        ni garantiza precio ni disponibilidad en la tienda.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -1397,8 +1543,8 @@ export default function PromotionDetailsPage() {
                 </div>
             </div>
 
-            {/* Coupon Request Form Modal */}
-            {showCouponForm && product && (
+            {/* Coupon Request Form Modal — no aplica a promociones Amazon (solo redirección) */}
+            {showCouponForm && product && !isAmazon && (
                 <CouponRequestForm
                     productId={product.id}
                     productName={product.name}
@@ -1416,6 +1562,9 @@ export default function PromotionDetailsPage() {
                     promotionLng={couponLng}
                     chainLocations={chainBranchesWithCoords}
                     onClose={() => setShowCouponForm(false)}
+                    onAddToCart={handleAddLinkedToCart}
+                    promoPrice={linkedProduct ? linkedProduct.price : product.price}
+                    promoCurrency={linkedProduct ? linkedProduct.currency : product.currency}
                 />
             )}
 

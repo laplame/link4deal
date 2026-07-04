@@ -20,7 +20,8 @@ const flyerLimiter = rateLimit({
  *  - image (opcional): foto del producto (se usa como héroe del flyer)
  *  - productName, originalPrice, finalPrice, currency, discountPercentage,
  *    cashbackText, platform, headline, extraNotes
- * Genera un flyer vertical 9:16 (fondo para video móvil) con Nano Banana.
+ * Genera un flyer vertical 9:16 (fondo para video móvil) con IA.
+ * Revisa ortografía y gramática (es-MX) antes de generar copy e imagen.
  */
 router.post(
     '/generate',

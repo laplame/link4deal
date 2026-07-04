@@ -1,6 +1,6 @@
-# 🚀 Link4Deal - Sistema de Promociones con OCR
+# 🚀 Link4Deal (DameCodigo) — Promociones, Marketplace e Influencers
 
-Sistema completo para crear y gestionar promociones con captura de cámara, OCR automático y almacenamiento en MongoDB y Cloudinary.
+Plataforma para crear promociones (OCR, quick-promotion), marketplace por categorías, tiendas de influencers, comisiones Amazon y checkout con Stripe. Frontend React + TypeScript; backend Node.js + MongoDB.
 
 ## ✨ Características Principales
 
@@ -9,16 +9,61 @@ Sistema completo para crear y gestionar promociones con captura de cámara, OCR 
 - 🗄️ **Base de datos MongoDB** con fallback a Atlas
 - ☁️ **Almacenamiento en la nube** con Cloudinary
 - 💾 **Respaldo local** de imágenes en `server/uploads` (promociones en `server/uploads/promotions`)
-- 🎯 **Sistema de ofertas calientes** con geolocalización
-- 🔐 **Autenticación y autorización** con JWT
+- 🎯 **Marketplace y categorías** — catálogo de 31 categorías con slugs SEO (`/categories`, `/category/:slug`)
+- 🛒 **Tienda propia** — `/tienda`, ficha de producto, checkout Stripe y pedidos (`Order`)
+- 🤝 **Influencers y marcas** — aplicaciones a promociones, comisiones Amazon, tiendas por subdominio/slug
+- 💰 **Comisiones Amazon** — cálculo neto influencer/plataforma compartido front + back (`amazonCommission`)
+- 🎨 **Shell visual oscuro unificado** — tokens en `src/config/siteShell.ts` (referencia: `/quick-promotion`)
+- 🔐 **Autenticación y autorización** con JWT (matriz de roles en `ROLES_ACCESS.md`)
 - 📊 **API RESTful** completa con rate limiting
 - 🐍 **Servidor Python** para procesamiento OCR avanzado
+
+## 🆕 Cambios recientes (2026)
+
+### UI / tema oscuro
+
+- Shell centralizado (`siteShell.ts`): fondo `gray-950`, cards con borde `white/10`, resaltadores ámbar en landing.
+- Páginas migradas: landing, categorías, mapa de ofertas, noticias, directorio de influencers, modal de aplicación a promoción, descarga de app, embed Spotify.
+- Navbar: invitados ven **Descargar app** + carrito; login/registro en **SiteFooter**.
+- Nueva ruta `/empezar` (`GetStartedPage`) y botón flotante de descarga en móvil.
+
+### Categorías de producto
+
+- Catálogo compartido: `src/data/productCategories.json` + `server/utils/productCategories.js`.
+- `GET /api/categories` — listado completo para formularios y SEO prerender.
+- `Promotion.category` deja de ser enum rígido; se normaliza contra el catálogo.
+
+### Tienda y pagos
+
+- Rutas: `/tienda`, `/producto/:id`, `/tienda/checkout`, `/pedido/:orderId`.
+- API: `/api/products`, `/api/orders`, `/api/stripe` (checkout y webhooks).
+- Modelo `Order` y script demo `server/scripts/seed-demo-products-promotions.js`.
+
+### Admin / CRM
+
+- `/admin/crm/open-promotions` — promociones abiertas sin aplicaciones cerradas.
+- Aviso de cumplimiento Amazon (`AmazonAffiliateComplianceNotice`) en flujos de promo.
+
+### Despliegue VPS (damecodigo.com)
+
+El VPS **no tiene RAM** para compilar el front. Siempre build local + rsync:
+
+```bash
+pnpm run build:full              # tsc + vite (local)
+pnpm run deploy:vps:dist         # solo dist/
+pnpm run deploy:vps:build        # build + dist + server + pm2 restart
+export DEPLOY_SSH="usuario@damecodigo.com"
+```
+
+Ver `.cursor/rules/deploy.mdc` para nginx y certbot.
 
 ## 🏗️ Arquitectura del Sistema
 
 ```
 Link4Deal/
 ├── src/                    # Frontend React + TypeScript
+│   ├── config/siteShell.ts # Tokens del tema oscuro global
+│   └── data/               # Catálogo de categorías (JSON + TS)
 ├── server/                 # Backend Node.js + Express
 │   ├── config/            # Configuraciones (DB, Cloudinary)
 │   ├── controllers/       # Controladores de la API
@@ -225,6 +270,33 @@ GET    /api/promotions/search    # Buscar promociones
 GET    /api/promotions/stats     # Estadísticas
 ```
 
+### Categorías, productos y pedidos
+
+```
+GET    /api/categories           # Catálogo de categorías (31 departamentos)
+GET    /api/products             # Productos de tienda
+GET    /api/products/:id         # Detalle de producto
+POST   /api/orders               # Crear pedido
+GET    /api/orders/:id           # Estado del pedido
+POST   /api/stripe/checkout      # Sesión Stripe Checkout
+POST   /api/stripe/webhook       # Webhook de pago
+```
+
+### Rutas frontend destacadas
+
+| Ruta | Descripción |
+|------|-------------|
+| `/` | Landing principal (tema oscuro) |
+| `/marketplace` | Promociones activas |
+| `/categories` · `/category/:slug` | Explorar por departamento |
+| `/tienda` · `/producto/:id` | Tienda y ficha de producto |
+| `/quick-promotion` | Alta rápida de promoción |
+| `/influencer/:slug/deals` | Tienda del influencer |
+| `/empezar` | Selector de tipo de usuario |
+| `/admin/crm/open-promotions` | CRM promociones abiertas |
+
+Documentación de roles y accesos: [`ROLES_ACCESS.md`](ROLES_ACCESS.md).
+
 ### OCR
 
 ```
@@ -284,18 +356,12 @@ export OCR_LANGUAGE=spa+eng
 npm run start:all
 ```
 
-### Producción
+### Producción (local o VPS con build previo)
 
 ```bash
-# Construir frontend
-npm run build
-
-# Iniciar servidores
-npm run server:start
-npm run python:start
-
-# Usar PM2 para gestión de procesos
-pm2 start ecosystem.config.cjs
+pnpm run build:full        # tsc + vite → dist/
+pnpm run server:start      # Backend Node (o pm2 restart link4deal-backend en VPS)
+pnpm run deploy:vps:build  # Build local + rsync + pm2 (requiere DEPLOY_SSH)
 ```
 
 ## 🐛 Troubleshooting
@@ -368,4 +434,3 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 **¡Gracias por usar Link4Deal! 🎉**
 
 Sistema desarrollado con ❤️ para revolucionar el mundo de las promociones digitales.
-# link4deal

@@ -41,6 +41,9 @@ router.get('/promotions/verification-queue', (req, res) =>
 router.patch('/promotions/:id/verification', (req, res) =>
     adminCrmController.patchPromotionVerification(req, res),
 );
+router.patch('/promotions/:id/accessibility', (req, res) =>
+    adminCrmController.patchPromotionAccessibility(req, res),
+);
 router.patch('/influencers/:id', (req, res) => adminCrmController.patchInfluencerCrm(req, res));
 router.post('/influencers/:id/avatar', (req, res, next) => {
     memoryUpload.single('avatar')(req, res, (err) => {

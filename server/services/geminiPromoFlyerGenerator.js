@@ -7,7 +7,11 @@ const crypto = require('crypto');
 const GEMINI_API_KEY = process.env['gemini-api-key'] || process.env.GEMINI_API_KEY;
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const FLYER_MODEL =
-    process.env.GEMINI_STORY_CARD_MODEL || process.env.GEMINI_NANO_BANANA_MODEL || 'gemini-2.5-flash-image';
+    process.env.GEMINI_FLYER_MODEL ||
+    process.env.GEMINI_STORY_CARD_MODEL ||
+    process.env.GEMINI_NANO_BANANA_MODEL ||
+    'gemini-2.5-flash-image';
+const PROOFREAD_MODEL = process.env.GEMINI_PROOFREAD_MODEL || 'gemini-2.5-flash-lite';
 
 const FLYER_WIDTH = 1080;
 const FLYER_HEIGHT = 1920;
@@ -152,18 +156,129 @@ VISUAL STYLE
 
 TONE: aggressive commercial, modern, fintech/crypto, viral, easy to understand. "Paga menos. Gana más."
 
-The product name, the discount "${d.discountPercentage || 0}%" and the prices must be clearly legible and be the focal points.`;
+The product name, the discount "${d.discountPercentage || 0}%" and the prices must be clearly legible and be the focal points.
+All Spanish text visible in the design must use correct spelling and grammar (Mexican Spanish).`;
+}
+
+function parseGeminiJsonText(text) {
+    const cleaned = String(text || '')
+        .replace(/^[\s\n]*```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .trim();
+    return JSON.parse(cleaned);
+}
+
+function extractGeminiText(data) {
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    return parts.map((p) => p.text || '').join('').trim();
 }
 
 /**
- * Genera el flyer con Nano Banana (Gemini Image). Acepta una imagen de producto opcional como referencia.
+ * Corrige ortografía y gramática (es-MX) en los textos del flyer antes de generar imagen/copy.
+ */
+async function proofreadSpanishFlyerFields(details) {
+    const fallback = { details, proofread: { applied: false, corrections: [] } };
+    if (!GEMINI_API_KEY) return fallback;
+
+    const payload = {
+        productName: details.productName || '',
+        headline: details.headline || '',
+        extraNotes: details.extraNotes || '',
+        cashbackText: details.cashbackText || '',
+        platform: details.platform || '',
+    };
+
+    const prompt = `Eres corrector profesional de español de México.
+Revisa ortografía, gramática, acentuación y puntuación de los textos de un flyer promocional.
+Mantén el mismo tono comercial, el significado y los datos (precios, porcentajes, marcas).
+No traduzcas al inglés. No inventes ofertas ni cifras.
+Si un campo ya está correcto, devuélvelo igual.
+
+Responde ÚNICAMENTE con JSON válido (sin markdown):
+{
+  "productName": "string",
+  "headline": "string",
+  "extraNotes": "string",
+  "cashbackText": "string",
+  "platform": "string",
+  "corrections": ["lista breve de cambios realizados en español, o [] si no hubo cambios"]
+}
+
+Textos a revisar:
+${JSON.stringify(payload, null, 2)}`;
+
+    const url = `${GEMINI_BASE}/models/${PROOFREAD_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.1, max_output_tokens: 2048 },
+            }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            console.error('Gemini proofread flyer error:', res.status, JSON.stringify(data).slice(0, 300));
+            return fallback;
+        }
+
+        const parsed = parseGeminiJsonText(extractGeminiText(data));
+        const corrections = Array.isArray(parsed.corrections)
+            ? parsed.corrections.map((c) => String(c).trim()).filter(Boolean).slice(0, 12)
+            : [];
+
+        const merged = normalizeFlyerDetails({
+            ...details,
+            productName: parsed.productName ?? details.productName,
+            headline: parsed.headline ?? details.headline,
+            extraNotes: parsed.extraNotes ?? details.extraNotes,
+            cashbackText: parsed.cashbackText ?? details.cashbackText,
+            platform: parsed.platform ?? details.platform,
+        });
+
+        const changed =
+            merged.productName !== details.productName ||
+            merged.headline !== details.headline ||
+            merged.extraNotes !== details.extraNotes ||
+            merged.cashbackText !== details.cashbackText ||
+            merged.platform !== details.platform;
+
+        return {
+            details: merged,
+            proofread: {
+                applied: changed || corrections.length > 0,
+                corrections,
+            },
+        };
+    } catch (err) {
+        console.error('Error proofreading flyer texts:', err);
+        return fallback;
+    }
+}
+
+/**
+ * Genera el flyer vertical 9:16 con Gemini Image. Acepta una imagen de producto opcional como referencia.
  * @param {object} params
  * @param {object} params.details
  * @param {{ buffer: Buffer, mimetype: string }} [params.productImage]
  */
 async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) {
-    const prompt = buildPromoFlyerPrompt(details);
-    const copy = buildPromoFlyerCopy(normalizeFlyerDetails(details));
+    const normalized = normalizeFlyerDetails(details);
+    const { details: reviewed, proofread } = await proofreadSpanishFlyerFields(normalized);
+    const prompt = buildPromoFlyerPrompt(reviewed);
+    const copy = buildPromoFlyerCopy(reviewed);
+
+    const basePayload = {
+        proofread,
+        correctedFields: {
+            productName: reviewed.productName,
+            headline: reviewed.headline,
+            extraNotes: reviewed.extraNotes,
+            cashbackText: reviewed.cashbackText,
+            platform: reviewed.platform,
+        },
+    };
 
     if (!GEMINI_API_KEY) {
         return {
@@ -174,6 +289,7 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
             model: FLYER_MODEL,
             message: 'GEMINI_API_KEY no configurada; usa el prompt en cliente o configura el servidor',
             promptForClient: prompt,
+            ...basePayload,
         };
     }
 
@@ -206,7 +322,7 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
             const errText = JSON.stringify(data).slice(0, 400);
-            console.error('Nano Banana / Gemini flyer error:', res.status, errText);
+            console.error('Gemini flyer image error:', res.status, errText);
             return {
                 ok: true,
                 generated: false,
@@ -215,6 +331,7 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
                 model: FLYER_MODEL,
                 message: `Generación de imagen falló (${res.status}). Usa el prompt en cliente.`,
                 promptForClient: prompt,
+                ...basePayload,
             };
         }
 
@@ -236,6 +353,7 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
                 model: FLYER_MODEL,
                 message: 'Gemini no devolvió imagen; usa el prompt en cliente',
                 promptForClient: prompt,
+                ...basePayload,
             };
         }
 
@@ -260,9 +378,10 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
                 width: FLYER_WIDTH,
                 height: FLYER_HEIGHT,
             },
+            ...basePayload,
         };
     } catch (err) {
-        console.error('Error generando flyer Nano Banana:', err);
+        console.error('Error generando flyer:', err);
         return {
             ok: true,
             generated: false,
@@ -271,6 +390,7 @@ async function generatePromoFlyerWithNanoBanana({ details, productImage } = {}) 
             model: FLYER_MODEL,
             message: err.message || 'Error al generar imagen',
             promptForClient: prompt,
+            ...basePayload,
         };
     }
 }
@@ -282,5 +402,6 @@ module.exports = {
     normalizeFlyerDetails,
     buildPromoFlyerPrompt,
     buildPromoFlyerCopy,
+    proofreadSpanishFlyerFields,
     generatePromoFlyerWithNanoBanana,
 };

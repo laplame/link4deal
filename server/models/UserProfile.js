@@ -81,28 +81,8 @@ const userProfileSchema = new mongoose.Schema({
         // Content Categories
         categories: [{
             type: String,
-            enum: [
-                'lifestyle',
-                'fashion',
-                'beauty',
-                'fitness',
-                'food',
-                'travel',
-                'technology',
-                'gaming',
-                'education',
-                'business',
-                'entertainment',
-                'sports',
-                'parenting',
-                'health',
-                'automotive',
-                'real-estate',
-                'finance',
-                'pets',
-                'art',
-                'music'
-            ]
+            trim: true,
+            lowercase: true,
         }],
         
         // Audience Demographics

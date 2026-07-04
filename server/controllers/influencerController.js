@@ -1155,11 +1155,26 @@ class InfluencerController {
                 return res.status(404).json({ success: false, message: 'Influencer no encontrado' });
             }
             const data = await buildInfluencerAvailableProducts(influencerId);
+            // Promos "abiertas" (sin aplicación): aseguramos su código corto para que el
+            // influencer pueda emitir cupón/QR o link de afiliado igual que en una aprobada.
+            const openPromoIds = [
+                ...new Set(
+                    (data || [])
+                        .filter((r) => r && r.accessVia === 'open' && r.promotionId)
+                        .map((r) => String(r.promotionId)),
+                ),
+            ];
+            if (openPromoIds.length) {
+                queueEnsurePromoShortCodesForInfluencer(String(influencerId), {
+                    extraPromotionIds: openPromoIds,
+                    includeEnvDefaults: false,
+                });
+            }
             return res.status(200).json({
                 success: true,
                 data,
                 message:
-                    'Productos y campañas disponibles tras aprobación de la marca (PromotionApplication approved)',
+                    'Productos y campañas disponibles (solicitud aprobada o promoción abierta a todos / por temas)',
             });
         } catch (error) {
             console.error('❌ Error productos disponibles influencer:', error);

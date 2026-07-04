@@ -4,8 +4,14 @@
  * Variable de entorno: gemini-api-key
  */
 
+const {
+    normalizeProductCategory,
+    getProductCategoryIds,
+} = require('../utils/productCategories');
+
 const GEMINI_API_KEY = process.env['gemini-api-key'] || process.env.GEMINI_API_KEY;
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const CATEGORY_IDS = getProductCategoryIds();
 
 function buildPrompt(hasPromo, hasTerms) {
     let intro = `Eres un asistente que analiza imágenes de promociones u ofertas comerciales.
@@ -28,7 +34,7 @@ Reglas generales:
 - Los precios deben estar en USD. Si en la imagen aparecen en otra moneda (MXN, EUR, etc.), conviértelos a USD de forma aproximada (MXN ~17 por USD, EUR ~1.05 por USD) e indica en description que son aproximados si aplica.
 - Si no hay imágenes de términos, termsAndConditions puede quedar vacío o con lo extraído solo del cartel si allí aparece texto legal.
 - offerType debe ser exactamente uno de: "percentage", "bogo", "cashback_fixed", "cashback_percentage". Si no se puede determinar, usa "percentage".
-- category debe ser uno de: "electronics", "fashion", "home", "beauty", "sports", "books", "food", "other".
+- category debe ser uno de: ${JSON.stringify(CATEGORY_IDS)}. Si no encaja, usa "other".
 
 Responde ÚNICAMENTE con un JSON válido (sin markdown, sin comentarios) con esta estructura:
 {
@@ -36,7 +42,7 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown, sin comentarios) con est
   "description": "string o vacío",
   "productName": "string o vacío",
   "brand": "string o vacío",
-  "category": "electronics|fashion|home|beauty|sports|books|food|other",
+  "category": "id de categoría del catálogo o other",
   "originalPrice": number en USD o 0,
   "currentPrice": number en USD o 0,
   "discountPercentage": number 0-100 o 0,
@@ -135,9 +141,7 @@ async function analyzePromotionImages(promotionalFiles = [], termsFiles = []) {
         if (!['percentage', 'bogo', 'cashback_fixed', 'cashback_percentage'].includes(data.offerType)) {
             data.offerType = 'percentage';
         }
-        if (!['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(data.category)) {
-            data.category = 'other';
-        }
+        data.category = normalizeProductCategory(data.category);
 
         return { success: true, data };
     } catch (err) {

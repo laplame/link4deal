@@ -8,6 +8,10 @@ export interface CartItem {
     currency: string;
     image: string;
     quantity: number;
+    /** Optional enrichment for product items */
+    originalPrice?: number;
+    brand?: string;
+    slug?: string;
 }
 
 interface CartState {

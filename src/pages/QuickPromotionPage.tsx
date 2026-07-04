@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-    ArrowLeft, 
     Upload, 
     DollarSign, 
     Calendar, 
@@ -20,6 +19,17 @@ import {
     Trash2
 } from 'lucide-react';
 import { brands as catalogBrands } from '../data/brands';
+import {
+    AMAZON_COMMISSION_CATEGORIES,
+    DEFAULT_AMAZON_COMMISSION_CATEGORY,
+    amazonCommissionRate,
+    influencerNetCommissionRate,
+    formatCommissionPct,
+} from '../utils/amazonCommission';
+import {
+    PRODUCT_CATEGORY_OPTIONS,
+    resolveCategoryBySlug,
+} from '../data/productCategories';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 import PromotionOptionalAttributionSection, {
     emptyPromotionOptionalAttribution,
@@ -42,6 +52,7 @@ import {
     type FlyerToPromotionInput,
 } from '../utils/flyerToQuickPromotion';
 import { promotionDetailPath } from '../utils/promotionPublicUrl';
+import { SITE_SHELL_SUBHEADER } from '../config/siteShell';
 
 type OfferType = 'percentage' | 'bogo' | 'cashback_fixed' | 'cashback_percentage';
 
@@ -196,17 +207,6 @@ const QUICK_TEMPLATES = [
     }
 ];
 
-const CATEGORIES = [
-    { value: 'electronics', label: 'Electrónica' },
-    { value: 'fashion', label: 'Moda' },
-    { value: 'sports', label: 'Deportes' },
-    { value: 'beauty', label: 'Belleza' },
-    { value: 'home', label: 'Hogar' },
-    { value: 'food', label: 'Comida' },
-    { value: 'books', label: 'Libros' },
-    { value: 'other', label: 'Otros' }
-];
-
 export default function QuickPromotionPage() {
     const navigate = useNavigate();
     const defaultValidFrom = new Date().toISOString().split('T')[0];
@@ -262,6 +262,8 @@ export default function QuickPromotionPage() {
     const [amazonProductUrl, setAmazonProductUrl] = useState('');
     /** URL de redirección cuando redirectDestination === 'custom'. */
     const [customRedirectUrl, setCustomRedirectUrl] = useState('');
+    /** Categoría de comisión Amazon: define el % de comisión (el influencer recibe el neto tras el 20%). */
+    const [amazonCommissionCategory, setAmazonCommissionCategory] = useState<string>(DEFAULT_AMAZON_COMMISSION_CATEGORY);
     const [gpsFromDeviceLoading, setGpsFromDeviceLoading] = useState(false);
     const [gpsFromDeviceError, setGpsFromDeviceError] = useState<string | null>(null);
     const [geocodeMainLoading, setGeocodeMainLoading] = useState(false);
@@ -490,7 +492,9 @@ export default function QuickPromotionPage() {
                 title: d.title ?? prev.title,
                 description: d.description ?? prev.description,
                 brand: d.brand ?? prev.brand,
-                category: (d.category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(d.category)) ? d.category : prev.category,
+                category: d.category
+                    ? resolveCategoryBySlug(String(d.category))?.id || String(d.category).trim().toLowerCase()
+                    : prev.category,
                 originalPrice: typeof d.originalPrice === 'number' ? d.originalPrice : prev.originalPrice,
                 currentPrice: typeof d.currentPrice === 'number' ? d.currentPrice : prev.currentPrice,
                 offerType: (d.offerType && ['percentage', 'bogo', 'cashback_fixed', 'cashback_percentage'].includes(d.offerType)) ? d.offerType : prev.offerType,
@@ -812,6 +816,9 @@ export default function QuickPromotionPage() {
                     formDataToSend.append('redirectToUrl', amazonProductUrl.trim());
                 }
             }
+            if (promotionType === 'quick-promotion' && redirectDestination === 'amazon') {
+                formDataToSend.append('amazonCommissionCategory', amazonCommissionCategory);
+            }
             
             formData.images.forEach((file) => {
                 formDataToSend.append('images', file);
@@ -876,18 +883,13 @@ export default function QuickPromotionPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-gray-100">
-            <div className="border-b border-white/10 bg-gray-900/50 backdrop-blur-sm">
+        <>
+            <div className={SITE_SHELL_SUBHEADER}>
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                            <Link to="/" className="text-gray-400 hover:text-amber-200 transition-colors shrink-0">
-                                <ArrowLeft className="h-6 w-6" />
-                            </Link>
-                            <div className="min-w-0">
-                                <h1 className="text-2xl font-bold text-white truncate">Agregar Promoción Rápida</h1>
-                                <p className="text-sm text-gray-400">Crea una promoción en minutos</p>
-                            </div>
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold text-white truncate">Agregar Promoción Rápida</h1>
+                            <p className="text-sm text-gray-400">Crea una promoción en minutos</p>
                         </div>
                         <Link
                             to="/create-promotion"
@@ -1318,11 +1320,12 @@ export default function QuickPromotionPage() {
                                     className={fieldInput}
                                     required
                                 >
-                                    {CATEGORIES.map((cat) => (
+                                    {PRODUCT_CATEGORY_OPTIONS.map((cat) => (
                                         <option key={cat.value} value={cat.value}>
                                             {cat.label}
                                         </option>
                                     ))}
+                                    <option value="other">Otros</option>
                                 </select>
                             </div>
                         </div>
@@ -1557,6 +1560,28 @@ export default function QuickPromotionPage() {
                                                 className={fieldInput}
                                             />
                                             <p className="mt-1 text-xs text-gray-500">Pega el enlace del producto para redirigir directo a la compra. Se aplicará tu tag de afiliado. Si lo dejas vacío, se usará el link genérico por defecto.</p>
+                                        </div>
+                                    )}
+                                    {redirectDestination === 'amazon' && (
+                                        <div className="mt-3">
+                                            <label className="block text-sm font-medium text-gray-300 mb-1">Categoría de comisión Amazon</label>
+                                            <select
+                                                value={amazonCommissionCategory}
+                                                onChange={(e) => setAmazonCommissionCategory(e.target.value)}
+                                                className={fieldInput}
+                                            >
+                                                {AMAZON_COMMISSION_CATEGORIES.map((c) => (
+                                                    <option key={c.id} value={c.id}>
+                                                        {formatCommissionPct(c.rate)} — {c.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                                                Comisión Amazon: <strong>{formatCommissionPct(amazonCommissionRate(amazonCommissionCategory))}</strong>
+                                                {' · '}La plataforma retiene 20%
+                                                {' · '}El influencer recibe{' '}
+                                                <strong>{formatCommissionPct(influencerNetCommissionRate(amazonCommissionCategory))}</strong>
+                                            </div>
                                         </div>
                                     )}
                                     {redirectDestination === 'custom' && (
@@ -2024,6 +2049,6 @@ export default function QuickPromotionPage() {
                 </>
                 )}
             </div>
-        </div>
+        </>
     );
 }

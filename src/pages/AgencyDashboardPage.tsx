@@ -44,7 +44,7 @@ export default function AgencyDashboardPage() {
   }
 
   if (!canAccessRolePanel(user, 'agency')) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/marketplace" replace />;
   }
 
   if (agencyCheck === 'missing') {

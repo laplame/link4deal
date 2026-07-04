@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -19,8 +19,11 @@ import {
   TrendingUp as TrendingUpIcon,
   AlertCircle,
   Building2,
-  Store
+  Store,
+  ShoppingCart,
 } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { apiUrl } from '../utils/apiUrl';
 import PromotionApplicationModal from '../components/PromotionApplicationModal';
 import type { ApplicationData } from '../components/PromotionApplicationModal';
 import { submitPromotionApplication } from '../services/promotionApplications';
@@ -34,6 +37,7 @@ import {
 import PageSeo from '../components/seo/PageSeo';
 import { marketplaceSeo } from '../utils/promotionSeo';
 import { promotionDetailPath } from '../utils/promotionPublicUrl';
+import { AMAZON_MX_STORE_LABEL, isAmazonPromotion } from '../utils/amazonPromotion';
 
 const IMAGE_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%239ca3af" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18"%3EOferta%3C/text%3E%3C/svg%3E';
 
@@ -82,6 +86,12 @@ interface Promotion {
   localizedStrings?: PromotionLocalized;
   communityVerificationBadgeLabel?: string;
   promotionKind?: 'verification_only' | 'with_deal';
+  /** Categoría de comisión Amazon: define el % que se reparte con el influencer. */
+  amazonCommissionCategory?: string;
+  /** Quick-promotion con redirección (ej. Amazon) en lugar de cupón QR. */
+  redirectInsteadOfQr?: boolean;
+  /** URL de redirección; vacío = Amazon por defecto. */
+  redirectToUrl?: string;
 }
 
 interface FilterState {
@@ -103,6 +113,8 @@ type ChainPresetMeta = {
 };
 
 export default function PromotionsMarketplace() {
+  const navigate = useNavigate();
+  const { addItem } = useCart();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -123,6 +135,7 @@ export default function PromotionsMarketplace() {
   const [apiMessage, setApiMessage] = useState<string | null>(null);
   const [chainPresetList, setChainPresetList] = useState<ChainPresetMeta[]>([]);
   const [applicationFeedback, setApplicationFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [addingToCart, setAddingToCart] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +250,9 @@ export default function PromotionsMarketplace() {
                 ? String(promo.communityVerificationBadgeLabel)
                 : undefined,
               promotionKind: promo.promotionKind,
+              amazonCommissionCategory: promo.amazonCommissionCategory,
+              redirectInsteadOfQr: promo.redirectInsteadOfQr,
+              redirectToUrl: promo.redirectToUrl,
             };
           });
 
@@ -349,6 +365,50 @@ export default function PromotionsMarketplace() {
   const handleApply = (promotion: Promotion) => {
     setSelectedPromotion(promotion);
     setIsModalOpen(true);
+  };
+
+  const handleAddToCart = async (promotion: Promotion) => {
+    setAddingToCart(promotion.id);
+    try {
+      const res = await fetch(apiUrl(`/api/products/by-promotion/${promotion.id}`));
+      const data = await res.json();
+      if (data.success && data.data?.length > 0) {
+        const p = data.data[0];
+        addItem({
+          id: p._id,
+          name: p.name,
+          price: p.price,
+          currency: p.currency,
+          image: p.images?.find((i: { isPrimary?: boolean }) => i.isPrimary)?.path || p.images?.[0]?.path || promotion.image,
+          originalPrice: p.originalPrice,
+          brand: p.brand?.name,
+        });
+      } else {
+        addItem({
+          id: promotion.id,
+          name: promotion.title,
+          price: promotion.currentPrice,
+          currency: promotion.currency,
+          image: promotion.image,
+          originalPrice: promotion.originalPrice,
+          brand: promotion.brand !== 'Sin marca' ? promotion.brand : undefined,
+        });
+      }
+      navigate('/tienda/checkout');
+    } catch {
+      addItem({
+        id: promotion.id,
+        name: promotion.title,
+        price: promotion.currentPrice,
+        currency: promotion.currency,
+        image: promotion.image,
+        originalPrice: promotion.originalPrice,
+        brand: promotion.brand !== 'Sin marca' ? promotion.brand : undefined,
+      });
+      navigate('/tienda/checkout');
+    } finally {
+      setAddingToCart(null);
+    }
   };
 
   const handleApplicationSubmit = async (applicationData: ApplicationData) => {
@@ -783,6 +843,11 @@ export default function PromotionsMarketplace() {
                       {promotion.communityVerificationBadgeLabel || 'Tercero verificado'}
                     </div>
                   )}
+                  {isAmazonPromotion(promotion) && (
+                    <div className="bg-[#FF9900] text-black px-2.5 py-1 rounded-full text-xs font-bold shadow-sm">
+                      {AMAZON_MX_STORE_LABEL}
+                    </div>
+                  )}
                 </div>
                 <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
                   {promotion.maxApplications > 0 && promotion.totalApplications >= promotion.maxApplications ? (
@@ -910,6 +975,22 @@ export default function PromotionsMarketplace() {
                   >
                     <Target className="w-5 h-5" />
                     Aplicar Ahora
+                  </button>
+                )}
+
+                {/* Comprar directamente en nuestra tienda */}
+                {!promotion.redirectInsteadOfQr && promotion.status !== 'closed' && (
+                  <button
+                    onClick={() => handleAddToCart(promotion)}
+                    disabled={addingToCart === promotion.id}
+                    className="w-full mt-2 bg-emerald-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+                  >
+                    {addingToCart === promotion.id ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <ShoppingCart className="w-4 h-4" />
+                    )}
+                    Agregar al carrito
                   </button>
                 )}
 

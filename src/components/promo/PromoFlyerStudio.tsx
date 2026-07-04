@@ -31,6 +31,11 @@ interface FlyerResult {
     promptForClient?: string;
     model?: string;
     message?: string;
+    proofread?: {
+        applied: boolean;
+        corrections?: string[];
+    };
+    correctedFields?: Partial<FlyerForm>;
 }
 
 const emptyForm = (): FlyerForm => ({
@@ -127,6 +132,16 @@ export default function PromoFlyerStudio({ onContinueToPromotion }: PromoFlyerSt
             if (!res.ok || json.success === false) {
                 throw new Error(json.message || `Error ${res.status}`);
             }
+            if (json.correctedFields) {
+                setForm((prev) => ({
+                    ...prev,
+                    productName: json.correctedFields?.productName ?? prev.productName,
+                    headline: json.correctedFields?.headline ?? prev.headline,
+                    extraNotes: json.correctedFields?.extraNotes ?? prev.extraNotes,
+                    cashbackText: json.correctedFields?.cashbackText ?? prev.cashbackText,
+                    platform: json.correctedFields?.platform ?? prev.platform,
+                }));
+            }
             setResult(json);
             if (!json.generated && json.message) setError(json.message);
         } catch (err) {
@@ -173,10 +188,11 @@ export default function PromoFlyerStudio({ onContinueToPromotion }: PromoFlyerSt
             <div className="rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm p-6 shadow-lg shadow-black/20">
                 <div className="flex items-center gap-2 mb-1">
                     <Wand2 className="h-5 w-5 text-fuchsia-400 shrink-0" />
-                    <h2 className="text-lg font-semibold text-white">Flyer con IA (Nano Banana)</h2>
+                    <h2 className="text-lg font-semibold text-white">Flyer con IA</h2>
                 </div>
                 <p className="text-sm text-gray-400 mb-5">
-                    Sube el producto y completa los datos. Generamos un cartel vertical 9:16, ideal como{' '}
+                    Sube el producto y completa los datos. Revisamos ortografía y gramática antes de
+                    generar el cartel vertical 9:16, ideal como{' '}
                     <strong>fondo de un video móvil</strong> (reel / TikTok / story).
                 </p>
 
@@ -364,6 +380,23 @@ export default function PromoFlyerStudio({ onContinueToPromotion }: PromoFlyerSt
                     <h2 className="text-lg font-semibold text-white">Resultado (9:16)</h2>
                 </div>
 
+                {result?.proofread?.applied && (
+                    <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+                        <p className="font-medium mb-1">Textos revisados (ortografía y gramática)</p>
+                        {result.proofread.corrections && result.proofread.corrections.length > 0 ? (
+                            <ul className="list-disc list-inside text-xs text-emerald-200/90 space-y-0.5">
+                                {result.proofread.corrections.map((item) => (
+                                    <li key={item}>{item}</li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-xs text-emerald-200/90">
+                                Ajustamos los textos del formulario antes de crear el flyer.
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 {!result && !isGenerating && (
                     <div className="flex flex-col items-center justify-center text-center border border-dashed border-white/10 rounded-xl py-16 text-gray-500">
                         <ImageIcon className="h-12 w-12 mb-3 opacity-40" />
@@ -374,7 +407,7 @@ export default function PromoFlyerStudio({ onContinueToPromotion }: PromoFlyerSt
                 {isGenerating && (
                     <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-fuchsia-400 mb-3" />
-                        <p className="text-sm">Creando tu cartel con Nano Banana…</p>
+                        <p className="text-sm">Generando tu cartel con IA…</p>
                     </div>
                 )}
 

@@ -25,7 +25,7 @@ export default function BrandDashboardPage() {
     (user?.profileTypes && user.profileTypes.includes('brand'));
 
   if (!allowed) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/marketplace" replace />;
   }
 
   return (

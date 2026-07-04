@@ -17,6 +17,7 @@ import {
   mapInfluencerAvailableRowToProductCard,
   type InfluencerAvailableProductApiRow,
 } from '../utils/mapPromotionToProductCard';
+import { AMAZON_MX_STORE_LABEL } from '../utils/amazonPromotion';
 import {
   applyMobileWebAppHtmlFlags,
   getMobileWebAppContext,
@@ -214,6 +215,11 @@ export default function InfluencerPromoPage() {
               <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-sm font-bold text-white shadow">
                 <BadgePercent className="h-4 w-4" aria-hidden />
                 {discountPct}% OFF
+              </div>
+            )}
+            {product.isAmazonMx && (
+              <div className="absolute right-3 top-3 rounded-full bg-[#FF9900] px-3 py-1 text-xs font-bold text-black shadow">
+                {AMAZON_MX_STORE_LABEL}
               </div>
             )}
           </div>

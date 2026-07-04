@@ -1,3 +1,4 @@
+const { normalizeProductCategory } = require('../utils/productCategories');
 const Promotion = require('../models/Promotion');
 const PromotionConversion = require('../models/PromotionConversion');
 const Influencer = require('../models/Influencer');
@@ -28,6 +29,7 @@ const {
 } = require('../utils/promotionKind');
 const { parseChainLocations } = require('../utils/chainStore');
 const { normalizeIncomingCode, getInfluencerPromotionsCatalogByShortCode } = require('../utils/influencerPromoShortCodes');
+const { normalizeAmazonCommissionCategory } = require('../utils/amazonCommission');
 const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
@@ -482,7 +484,7 @@ class PromotionController {
                 })(),
                 productName: (productName && String(productName).trim()) ? String(productName).trim() : title.trim(),
                 brand: brand ? String(brand).trim() : '',
-                category: category && ['electronics', 'fashion', 'home', 'beauty', 'sports', 'books', 'food', 'other'].includes(category) ? category : 'other',
+                category: normalizeProductCategory(category),
                 originalPrice: Number.isFinite(numOriginal) ? numOriginal : 0,
                 currentPrice: Number.isFinite(numCurrent) ? numCurrent : 0,
                 currency: currency || 'USD',
@@ -557,6 +559,7 @@ class PromotionController {
                 status: 'active',
                 redirectInsteadOfQr: req.body.redirectInsteadOfQr === 'true' || req.body.redirectInsteadOfQr === true,
                 redirectToUrl: (req.body.redirectToUrl && String(req.body.redirectToUrl).trim()) ? String(req.body.redirectToUrl).trim() : '',
+                amazonCommissionCategory: normalizeAmazonCommissionCategory(req.body.amazonCommissionCategory),
                 seller: {
                     name: 'Usuario del sistema',
                     email: 'system@link4deal.com',
@@ -1552,7 +1555,7 @@ class PromotionController {
                 'storeName', 'storeLocation', 'isPhysicalStore', 'tags',
                 'features', 'specifications', 'termsAndConditions', 'isHotOffer', 'hotness',
                 'validFrom', 'validUntil', 'totalQuantity', 'offerType', 'cashbackValue', 'promotionalValueUsd', 'status',
-                'redirectInsteadOfQr', 'redirectToUrl',
+                'redirectInsteadOfQr', 'redirectToUrl', 'amazonCommissionCategory',
                 'activateByGps', 'gpsRadiusMeters',
                 'brandId', 'shopId', 'externalProductId', 'gtmTag', 'campaignId', 'source', 'medium',
                 'isChainStore', 'chainBrandName', 'chainLocations'
@@ -1590,6 +1593,10 @@ class PromotionController {
                         filteredData[field] = updateData[field] === true || updateData[field] === 'true';
                     } else if (field === 'chainBrandName' || field === 'redirectToUrl') {
                         filteredData[field] = (updateData[field] && String(updateData[field]).trim()) ? String(updateData[field]).trim() : '';
+                    } else if (field === 'category') {
+                        filteredData[field] = normalizeProductCategory(updateData[field]);
+                    } else if (field === 'amazonCommissionCategory') {
+                        filteredData[field] = normalizeAmazonCommissionCategory(updateData[field]);
                     } else if (field === 'chainLocations') {
                         filteredData[field] = parseChainLocations(updateData[field]);
                     } else if (field === 'gpsRadiusMeters') {
@@ -1811,7 +1818,8 @@ class PromotionController {
                 return res.json(this.getEmptyResponse(req));
             }
 
-            const { category } = req.params;
+            const { category: rawCategory } = req.params;
+            const category = normalizeProductCategory(rawCategory);
             const { page = 1, limit = 10 } = req.query;
 
             const query = { 

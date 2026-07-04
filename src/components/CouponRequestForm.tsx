@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-    MessageCircle, 
-    User, 
-    Phone, 
-    QrCode, 
-    CheckCircle, 
+import {
+    MessageCircle,
+    User,
+    Phone,
+    QrCode,
+    CheckCircle,
     Info,
     Ticket,
     ExternalLink,
-    Percent
+    Percent,
+    ShoppingCart,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { findNearestChainBranch, haversineDistanceMeters } from '../utils/geo';
@@ -50,6 +51,14 @@ interface CouponRequestFormProps {
      * Si no: se intenta `sessionStorage` (último ID copiado), luego `GET /api/influencers/me` con JWT.
      */
     influencerProfileId?: string;
+    /**
+     * Si se pasa, en el paso QR aparece el botón "Agregar al carrito con descuento".
+     * Útil cuando el cupón se genera en nuestra propia tienda.
+     */
+    onAddToCart?: () => void;
+    /** Precio con descuento a mostrar junto al botón de carrito (solo informativo). */
+    promoPrice?: number;
+    promoCurrency?: string;
 }
 
 interface FormData {
@@ -82,6 +91,9 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
     medium: mediumProp,
     couponMetadata,
     influencerProfileId: influencerProfileIdProp,
+    onAddToCart,
+    promoPrice,
+    promoCurrency = 'MXN',
 }) => {
     const [step, setStep] = useState<'form' | 'qr' | 'success'>('form');
     const [formData, setFormData] = useState<FormData>({
@@ -569,6 +581,22 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
 
                             <div className="bg-white p-3 text-center">
                                 <div className="space-y-2">
+                                    {onAddToCart && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { onAddToCart(); onClose(); }}
+                                            className="w-full bg-blue-600 text-white px-4 py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                        >
+                                            <ShoppingCart className="w-4 h-4 shrink-0" />
+                                            Agregar al carrito con descuento
+                                            {promoPrice != null && (
+                                                <span className="ml-1 opacity-80">
+                                                    · {new Intl.NumberFormat('es-MX', { style: 'currency', currency: promoCurrency }).format(promoPrice)}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )}
+
                                     <button
                                         type="button"
                                         onClick={handleWhatsAppRedirect}
@@ -581,15 +609,12 @@ const CouponRequestForm: React.FC<CouponRequestFormProps> = ({
                                     <button
                                         type="button"
                                         onClick={onClose}
-                                        className="w-full bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                                        className="w-full bg-gray-100 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                                     >
                                         <Ticket className="w-4 h-4 shrink-0" />
-                                        Redimir cupón
+                                        Redimir en tienda física
                                     </button>
                                 </div>
-                                <p className="mt-2 text-xs text-gray-600">
-                                    Envíame este cupón a mi app
-                                </p>
                                 <button
                                     type="button"
                                     onClick={onClose}

@@ -1805,6 +1805,62 @@ class AdminCrmController {
             return res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    /**
+     * PATCH /api/admin/crm/promotions/:id/accessibility
+     * Abre/cierra una promoción a todos los influencers o por temas (categorías del influencer).
+     * Body: { openToAllInfluencers?: boolean, openToInfluencerCategories?: string[] }
+     */
+    async patchPromotionAccessibility(req, res) {
+        try {
+            const id = String(req.params.id || '').trim();
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+                return res.status(400).json({ success: false, message: 'ID inválido' });
+            }
+            const body = req.body || {};
+            const update = {};
+            if (body.openToAllInfluencers !== undefined) {
+                update.openToAllInfluencers =
+                    body.openToAllInfluencers === true || body.openToAllInfluencers === 'true';
+            }
+            if (body.openToInfluencerCategories !== undefined) {
+                const arr = Array.isArray(body.openToInfluencerCategories)
+                    ? body.openToInfluencerCategories
+                    : [];
+                update.openToInfluencerCategories = [
+                    ...new Set(arr.map((c) => String(c || '').trim()).filter(Boolean)),
+                ];
+            }
+            if (!Object.keys(update).length) {
+                return res.status(400).json({ success: false, message: 'Nada que actualizar.' });
+            }
+
+            const promo = await Promotion.findByIdAndUpdate(id, { $set: update }, { new: true })
+                .select('_id title brand status openToAllInfluencers openToInfluencerCategories')
+                .lean();
+            if (!promo) {
+                return res.status(404).json({ success: false, message: 'Promoción no encontrada.' });
+            }
+
+            return res.json({
+                success: true,
+                data: {
+                    id: String(promo._id),
+                    title: promo.title || null,
+                    brand: promo.brand || null,
+                    status: promo.status || null,
+                    openToAllInfluencers: !!promo.openToAllInfluencers,
+                    openToInfluencerCategories: Array.isArray(promo.openToInfluencerCategories)
+                        ? promo.openToInfluencerCategories
+                        : [],
+                },
+                message: 'Accesibilidad actualizada.',
+            });
+        } catch (error) {
+            console.error('❌ CRM patch promotion accessibility:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new AdminCrmController();

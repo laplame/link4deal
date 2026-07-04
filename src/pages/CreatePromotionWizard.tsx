@@ -5,7 +5,6 @@ import {
     ArrowRight, 
     CheckCircle, 
     Circle, 
-    Plus, 
     Trash2,
     Upload,
     DollarSign,
@@ -16,8 +15,15 @@ import {
     Smartphone,
     Zap,
     Sparkles,
-    Loader2
+    Loader2,
+    X
 } from 'lucide-react';
+import PromoFlyerStudio from '../components/promo/PromoFlyerStudio';
+import {
+    mapFlyerToQuickPromotion,
+    collectFlyerPromotionImages,
+    type FlyerToPromotionInput,
+} from '../utils/flyerToQuickPromotion';
 import PromotionLegalInfo from '../components/PromotionLegalInfo';
 import PromotionOptionalAttributionSection, {
     emptyPromotionOptionalAttribution,
@@ -33,6 +39,12 @@ import {
 } from '../utils/cryptomarketingAttributionContract';
 import type { BizneShop } from '../components/BizneShopCard';
 import { formatPromotionCreateError } from '../utils/formatPromotionCreateError';
+import { SITE_SHELL_SUBHEADER } from '../config/siteShell';
+import {
+    MARKETPLACE_CATEGORIES,
+    getProductCategoryLabel,
+    resolveCategoryBySlug,
+} from '../data/productCategories';
 
 interface PromotionData {
     basicInfo: {
@@ -115,18 +127,10 @@ type ChainPresetMeta = {
     branchCount: number;
 };
 
-const categories = [
-    { name: "Electrónica", subcategories: ["Smartphones", "Laptops", "Auriculares", "Smartwatches", "Tablets"] },
-    { name: "Moda", subcategories: ["Ropa", "Zapatos", "Accesorios", "Bolsos", "Joyería"] },
-    { name: "Hogar", subcategories: ["Muebles", "Decoración", "Cocina", "Jardín", "Iluminación"] },
-    { name: "Deportes", subcategories: ["Fitness", "Running", "Fútbol", "Natación", "Ciclismo"] },
-    { name: "Fotografía", subcategories: ["Cámaras", "Lentes", "Trípodes", "Iluminación", "Accesorios"] },
-    { name: "Comida y Bebidas", subcategories: ["Restaurantes", "Delivery", "Bebidas", "Snacks", "Postres"] },
-    { name: "Servicios", subcategories: ["Educación", "Salud", "Belleza", "Transporte", "Entretenimiento"] },
-    { name: "Productos Digitales", subcategories: ["Software", "Cursos Online", "E-books", "Música", "Streaming"] },
-    { name: "Viajes y Turismo", subcategories: ["Hoteles", "Vuelos", "Paquetes", "Actividades", "Seguros"] },
-    { name: "Belleza y Cuidado", subcategories: ["Cosméticos", "Skincare", "Perfumes", "Tratamientos", "Accesorios"] }
-];
+const categories = MARKETPLACE_CATEGORIES.filter((c) => c.id !== 'other').map((c) => ({
+    name: c.name,
+    subcategories: c.subcategories,
+}));
 
 const steps = [
     { id: 'media', title: 'Foto de la promoción', icon: <Upload className="h-5 w-5" /> },
@@ -387,6 +391,8 @@ export default function CreatePromotionWizard() {
     const [termsPreviewUrls, setTermsPreviewUrls] = useState<string[]>([]);
     const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
     const [analyzeMediaError, setAnalyzeMediaError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'wizard' | 'flyer'>('wizard');
+    const [flyerTransferNotice, setFlyerTransferNotice] = useState<string | null>(null);
 
     const updatePromotionData = (section: keyof PromotionData, data: Partial<PromotionData[keyof PromotionData]>) => {
         setPromotionData(prev => ({
@@ -1317,19 +1323,61 @@ export default function CreatePromotionWizard() {
         updatePromotionData('media', { images: [...promoUrls, ...termUrls] });
     };
 
-    const categoryNameFromSlug = (slug: string): string => {
-        const map: Record<string, string> = {
-            electronics: 'Electrónica',
-            fashion: 'Moda',
-            home: 'Hogar',
-            beauty: 'Belleza y Cuidado',
-            sports: 'Deportes',
-            books: 'Productos Digitales',
-            food: 'Comida y Bebidas',
-            other: 'Electrónica'
+    const applyFlyerToWizard = async (payload: FlyerToPromotionInput) => {
+        const mapped = mapFlyerToQuickPromotion(payload);
+        const imageFiles = await collectFlyerPromotionImages(mapped, payload.flyerImage ?? null);
+
+        promotionalPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+        const urls = imageFiles.map((file) => URL.createObjectURL(file));
+        setPromotionalImageFiles(imageFiles);
+        setPromotionalPreviewUrls(urls);
+        syncCombinedMediaPreviews(urls, termsPreviewUrls);
+
+        const offerTypeMap: Record<string, 'percentage' | 'fixed' | 'bogo'> = {
+            percentage: 'percentage',
+            bogo: 'bogo',
+            cashback_fixed: 'fixed',
+            cashback_percentage: 'percentage',
         };
-        return map[slug] || slug;
+        const offerType = offerTypeMap[mapped.offerType] || 'percentage';
+        const offerValue =
+            mapped.offerType === 'cashback_percentage' || mapped.offerType === 'cashback_fixed'
+                ? mapped.cashbackValue
+                : mapped.originalPrice > 0 && mapped.currentPrice > 0
+                  ? Math.round(((mapped.originalPrice - mapped.currentPrice) / mapped.originalPrice) * 100)
+                  : 0;
+
+        setPromotionData((prev) => ({
+            ...prev,
+            basicInfo: {
+                ...prev.basicInfo,
+                title: mapped.title,
+                description: mapped.description,
+                brand: mapped.brand || prev.basicInfo.brand,
+            },
+            pricing: {
+                ...prev.pricing,
+                originalPrice: mapped.originalPrice,
+                offerPrice: mapped.currentPrice,
+                currency: mapped.currency,
+                offerType,
+                offerValue,
+            },
+        }));
+        setAnalyzeMediaError(null);
+        setSubmitError(null);
+        setActiveTab('wizard');
+        setCurrentStep(0);
+        setFlyerTransferNotice(
+            imageFiles.length > 0
+                ? 'Datos e imágenes del flyer cargados en el asistente. Revisa cada paso y publica cuando estés listo.'
+                : 'Datos del flyer cargados. Sube al menos una foto en el paso 1 si no se importó el cartel.'
+        );
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+    const categoryNameFromSlug = (slug: string): string =>
+        getProductCategoryLabel(resolveCategoryBySlug(slug)?.id || slug);
 
     /** Analiza con Gemini: cartel(es) en `images`, T&C en `termsImages`. */
     const handleAnalyzeWithGemini = async (promoFiles?: File[], termsFiles?: File[]) => {
@@ -1810,14 +1858,8 @@ export default function CreatePromotionWizard() {
                 formData.append('attributionContract', attributionContractPayload);
             }
 
-            // Category: backend espera slug (electronics, fashion...); el wizard usa nombre (Electrónica, Moda...)
-            const categoryToSlug: Record<string, string> = {
-                'Electrónica': 'electronics', 'Moda': 'fashion', 'Hogar': 'home',
-                'Deportes': 'sports', 'Fotografía': 'other', 'Comida y Bebidas': 'food',
-                'Servicios': 'other', 'Productos Digitales': 'books', 'Viajes y Turismo': 'other',
-                'Belleza y Cuidado': 'beauty'
-            };
-            const categorySlug = categoryToSlug[promotionData.basicInfo.category] || 'other';
+            const categorySlug =
+                MARKETPLACE_CATEGORIES.find((c) => c.name === promotionData.basicInfo.category)?.id || 'other';
             formData.set('category', categorySlug);
 
             // Imágenes: cartel (images) + términos (termsImages) para OCR / Gemini en servidor
@@ -1863,39 +1905,86 @@ export default function CreatePromotionWizard() {
     };
 
     return (
-        <div className="min-h-screen relative">
-            {/* Full Page Background */}
+        <div className="min-h-screen relative text-gray-100">
             <div className="absolute inset-0 z-0">
                 <img
                     src="https://images.unsplash.com/photo-1527264935190-1401c51b5bbc?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                    alt="Page Background"
+                    alt=""
+                    aria-hidden
                     className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black/40"></div>
+                <div className="absolute inset-0 bg-black/40" />
             </div>
 
-            {/* Content */}
             <div className="relative z-10">
-            {/* Header */}
-                <div className="bg-gradient-to-r from-purple-600/90 to-blue-600/90 backdrop-blur-sm text-white">
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                    <div className="flex items-center gap-4 mb-4">
-                        <Link to="/" className="text-purple-200 hover:text-white transition-colors">
-                            <ArrowLeft className="h-6 w-6" />
+            <div className={SITE_SHELL_SUBHEADER}>
+                <div className="max-w-4xl mx-auto px-4 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold text-white truncate">Modo Avanzado</h1>
+                            <p className="text-sm text-gray-400">
+                                Asistente paso a paso con GPS, smart contract y más opciones
+                            </p>
+                        </div>
+                        <Link
+                            to="/quick-promotion"
+                            className="text-sm text-violet-400 hover:text-violet-300 font-medium shrink-0"
+                        >
+                            ← Modo Rápido
                         </Link>
-                        <Plus className="h-8 w-8" />
-                        <h1 className="text-3xl font-bold">Crear Nueva Promoción</h1>
                     </div>
-                    <p className="text-xl text-purple-100 max-w-2xl">
-                        Crea promociones atractivas paso a paso con nuestro asistente inteligente
+                    <p className="text-xs text-gray-500 mt-3 max-w-2xl">
+                        <strong className="text-gray-400">Activación por GPS:</strong> configúrala en el paso{' '}
+                        <strong className="text-gray-300">«Audiencia y GPS»</strong> (radio en metros y coordenadas del
+                        punto de la tienda).
                     </p>
-                    <p className="text-sm text-purple-200/90 max-w-2xl mt-3">
-                        <strong>Activación por GPS:</strong> configúrala en el paso <strong>«Audiencia y GPS»</strong> (radio en metros y coordenadas del punto de la tienda).
-                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('wizard')}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                                activeTab === 'wizard'
+                                    ? 'bg-violet-600 text-white border-violet-400/40 shadow-lg shadow-violet-900/30'
+                                    : 'bg-gray-900/60 text-gray-300 border-white/10 hover:bg-gray-800/60'
+                            }`}
+                        >
+                            Asistente paso a paso
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('flyer')}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border inline-flex items-center gap-1.5 ${
+                                activeTab === 'flyer'
+                                    ? 'bg-fuchsia-600 text-white border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/30'
+                                    : 'bg-gray-900/60 text-gray-300 border-white/10 hover:bg-gray-800/60'
+                            }`}
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            Flyer con IA
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div className="max-w-4xl mx-auto px-4 py-8">
+                {activeTab === 'flyer' ? (
+                    <PromoFlyerStudio onContinueToPromotion={applyFlyerToWizard} />
+                ) : (
+                <>
+                {flyerTransferNotice && (
+                    <div className="mb-6 rounded-xl border border-amber-500/35 bg-amber-950/30 p-4 flex items-start gap-3">
+                        <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-sm text-amber-100 flex-1">{flyerTransferNotice}</p>
+                        <button
+                            type="button"
+                            onClick={() => setFlyerTransferNotice(null)}
+                            className="text-amber-300/80 hover:text-amber-100 shrink-0"
+                            aria-label="Cerrar aviso"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
                 {/* Mensajes de éxito/error */}
                 {submitSuccess && (
                     <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
@@ -2045,7 +2134,9 @@ export default function CreatePromotionWizard() {
                         )}
                         </div>
                     </div>
-                </div>
+                </>
+                )}
+            </div>
             </div>
         </div>
     );

@@ -1,772 +1,398 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-    ArrowLeft, 
-    Globe, 
-    TrendingUp, 
-    DollarSign, 
-    Target, 
-    BarChart3, 
+import {
+    ArrowLeft,
+    Globe,
+    TrendingUp,
     Users,
-    Eye,
-    MessageCircle,
-    Zap,
-    Clock,
+    Target,
+    BarChart3,
     CheckCircle,
+    Clock,
     AlertCircle,
-    Download,
-    Search,
+    Zap,
     Plus,
     Settings,
-    Camera,
-    Edit,
-    Handshake
+    Handshake,
+    Building2,
+    Loader2,
+    MapPin,
+    Mail,
+    Phone,
+    ExternalLink,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { apiUrl } from '../../utils/apiUrl';
 
-interface Agency {
-    id: string;
+interface AgencyData {
+    _id: string;
     name: string;
-    logo: string;
-    industry: string;
+    type?: string;
     status: 'active' | 'pending' | 'verified' | 'suspended';
-    joinDate: string;
-    totalRevenue: number;
-    monthlyRevenue: number;
-    totalClients: number;
-    activeClients: number;
-    totalInfluencers: number;
-    activeInfluencers: number;
-    rating: number;
-    location: string;
-    website: string;
-    services: string[];
-    teamSize: number;
-    socialMedia: {
-        instagram?: string;
-        facebook?: string;
-        twitter?: string;
-        linkedin?: string;
+    isVerified?: boolean;
+    headquarters?: string;
+    description?: string;
+    website?: string;
+    logo?: string;
+    createdAt?: string;
+    contact?: {
+        email?: string;
+        phone?: string;
+        address?: { city?: string; country?: string };
     };
+    metrics?: {
+        views?: number;
+        clients?: number;
+        totalRevenue?: number;
+    };
+    members?: Array<{ user: { firstName?: string; lastName?: string; email?: string }; role: string }>;
 }
 
-interface Client {
-    id: string;
-    name: string;
-    logo: string;
-    industry: string;
-    status: 'active' | 'inactive' | 'pending';
-    joinDate: string;
-    monthlyBudget: number;
-    totalSpent: number;
-    activeCampaigns: number;
-    completedCampaigns: number;
-    rating: number;
-    lastContact: string;
-}
-
-interface Service {
-    id: string;
-    name: string;
-    client: string;
-    status: 'active' | 'completed' | 'pending' | 'cancelled';
-    startDate: string;
-    endDate: string;
-    budget: number;
-    revenue: number;
-    commission: number;
-    progress: number;
-    type: 'influencer_marketing' | 'brand_strategy' | 'content_creation' | 'social_media';
-    description: string;
-}
-
-interface Commission {
-    id: string;
-    service: string;
-    client: string;
-    amount: number;
-    date: string;
-    status: 'paid' | 'pending' | 'processing';
-    type: 'monthly' | 'project' | 'bonus' | 'referral';
+function StatusBadge({ status }: { status: string }) {
+    const map: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+        verified: { label: 'Verificada', cls: 'bg-emerald-100 text-emerald-800', icon: <CheckCircle className="w-3.5 h-3.5" /> },
+        active:   { label: 'Activa',    cls: 'bg-blue-100 text-blue-800',       icon: <Zap className="w-3.5 h-3.5" /> },
+        pending:  { label: 'Pendiente', cls: 'bg-amber-100 text-amber-800',     icon: <Clock className="w-3.5 h-3.5" /> },
+        suspended:{ label: 'Suspendida',cls: 'bg-red-100 text-red-800',         icon: <AlertCircle className="w-3.5 h-3.5" /> },
+    };
+    const s = map[status] ?? map.pending;
+    return (
+        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>
+            {s.icon}
+            {s.label}
+        </span>
+    );
 }
 
 export default function AgencyDashboard() {
-    const [agencies, setAgencies] = useState<Agency[]>([]);
-    const [, setClients] = useState<Client[]>([]);
-    const [services, setServices] = useState<Service[]>([]);
-    const [commissions, setCommissions] = useState<Commission[]>([]);
-    const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState<string>('all');
-    const [filterIndustry, setFilterIndustry] = useState<string>('all');
+    const { user } = useAuth();
+    const [agency, setAgency] = useState<AgencyData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Mock data - en una aplicación real esto vendría de una API
-    useEffect(() => {
-        const mockAgencies: Agency[] = [
-            {
-                id: '1',
-                name: 'Digital Marketing Pro',
-                logo: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=150&h=150&fit=crop',
-                industry: 'Marketing Digital',
-                status: 'verified',
-                joinDate: '2023-01-15',
-                totalRevenue: 850000,
-                monthlyRevenue: 72000,
-                totalClients: 25,
-                activeClients: 18,
-                totalInfluencers: 45,
-                activeInfluencers: 38,
-                rating: 4.9,
-                location: 'Madrid, España',
-                website: 'www.digitalmarketingpro.es',
-                services: ['Influencer Marketing', 'Brand Strategy', 'Content Creation', 'Social Media Management'],
-                teamSize: 12,
-                socialMedia: {
-                    instagram: '@digitalmarketingpro',
-                    facebook: 'Digital Marketing Pro',
-                    linkedin: 'Digital Marketing Pro'
-                }
-            },
-            {
-                id: '2',
-                name: 'Creative Solutions Agency',
-                logo: 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=150&h=150&fit=crop',
-                industry: 'Creatividad',
-                status: 'verified',
-                joinDate: '2023-03-20',
-                totalRevenue: 620000,
-                monthlyRevenue: 55000,
-                totalClients: 18,
-                activeClients: 15,
-                totalInfluencers: 32,
-                activeInfluencers: 28,
-                rating: 4.7,
-                location: 'Barcelona, España',
-                website: 'www.creativesolutions.es',
-                services: ['Content Creation', 'Brand Identity', 'Video Production', 'Social Media'],
-                teamSize: 8,
-                socialMedia: {
-                    instagram: '@creativesolutions',
-                    facebook: 'Creative Solutions',
-                    linkedin: 'Creative Solutions Agency'
-                }
-            },
-            {
-                id: '3',
-                name: 'Influencer Connect',
-                logo: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=150&h=150&fit=crop',
-                industry: 'Influencer Marketing',
-                status: 'active',
-                joinDate: '2023-05-10',
-                totalRevenue: 380000,
-                monthlyRevenue: 32000,
-                totalClients: 12,
-                activeClients: 10,
-                totalInfluencers: 28,
-                activeInfluencers: 25,
-                rating: 4.6,
-                location: 'Valencia, España',
-                website: 'www.influencerconnect.es',
-                services: ['Influencer Discovery', 'Campaign Management', 'Performance Analytics', 'Brand Partnerships'],
-                teamSize: 6,
-                socialMedia: {
-                    instagram: '@influencerconnect',
-                    facebook: 'Influencer Connect'
-                }
+    const load = useCallback(async () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) { setError('Sesión no encontrada'); setLoading(false); return; }
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Get mine (returns basic fields: name, type, status, isVerified, headquarters, createdAt)
+            const mineRes = await fetch(apiUrl('/api/agencies/mine'), {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const mineData = await mineRes.json();
+
+            if (!mineData.agency) {
+                setAgency(null);
+                setLoading(false);
+                return;
             }
-        ];
 
-        const mockClients: Client[] = [
-            {
-                id: '1',
-                name: 'Zara',
-                logo: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&h=150&fit=crop',
-                industry: 'Moda',
-                status: 'active',
-                joinDate: '2023-02-15',
-                monthlyBudget: 15000,
-                totalSpent: 125000,
-                activeCampaigns: 3,
-                completedCampaigns: 12,
-                rating: 4.8,
-                lastContact: '2024-01-20'
-            },
-            {
-                id: '2',
-                name: 'Samsung',
-                logo: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=150&h=150&fit=crop',
-                industry: 'Tecnología',
-                status: 'active',
-                joinDate: '2023-04-10',
-                monthlyBudget: 12000,
-                totalSpent: 98000,
-                activeCampaigns: 2,
-                completedCampaigns: 8,
-                rating: 4.7,
-                lastContact: '2024-01-18'
-            },
-            {
-                id: '3',
-                name: 'MyProtein',
-                logo: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&h=150&fit=crop',
-                industry: 'Fitness',
-                status: 'active',
-                joinDate: '2023-06-05',
-                monthlyBudget: 8000,
-                totalSpent: 45000,
-                activeCampaigns: 1,
-                completedCampaigns: 5,
-                rating: 4.6,
-                lastContact: '2024-01-15'
-            }
-        ];
-
-        const mockServices: Service[] = [
-            {
-                id: '1',
-                name: 'Campaña Influencer Marketing Q1',
-                client: 'Zara',
-                status: 'active',
-                startDate: '2024-01-01',
-                endDate: '2024-03-31',
-                budget: 25000,
-                revenue: 35000,
-                commission: 5250,
-                progress: 75,
-                type: 'influencer_marketing',
-                description: 'Campaña de primavera con 5 influencers de moda'
-            },
-            {
-                id: '2',
-                name: 'Estrategia de Marca Digital',
-                client: 'Samsung',
-                status: 'active',
-                startDate: '2024-01-15',
-                endDate: '2024-04-15',
-                budget: 18000,
-                revenue: 22000,
-                commission: 3300,
-                progress: 60,
-                type: 'brand_strategy',
-                description: 'Desarrollo de estrategia de marca para productos tecnológicos'
-            },
-            {
-                id: '3',
-                name: 'Creación de Contenido Fitness',
-                client: 'MyProtein',
-                status: 'pending',
-                startDate: '2024-02-01',
-                endDate: '2024-05-01',
-                budget: 12000,
-                revenue: 0,
-                commission: 0,
-                progress: 0,
-                type: 'content_creation',
-                description: 'Serie de videos y posts para redes sociales'
-            }
-        ];
-
-        const mockCommissions: Commission[] = [
-            {
-                id: '1',
-                service: 'Campaña Influencer Marketing Q1',
-                client: 'Zara',
-                amount: 5250,
-                date: '2024-01-15',
-                status: 'paid',
-                type: 'project'
-            },
-            {
-                id: '2',
-                service: 'Estrategia de Marca Digital',
-                client: 'Samsung',
-                amount: 3300,
-                date: '2024-01-20',
-                status: 'processing',
-                type: 'project'
-            },
-            {
-                id: '3',
-                service: 'Comisión Mensual',
-                client: 'Zara',
-                amount: 1500,
-                date: '2024-01-01',
-                status: 'paid',
-                type: 'monthly'
-            }
-        ];
-
-        setAgencies(mockAgencies);
-        setClients(mockClients);
-        setServices(mockServices);
-        setCommissions(mockCommissions);
+            // 2. Get full detail including metrics, members, contact
+            const id = mineData.agency._id;
+            const detailRes = await fetch(apiUrl(`/api/agencies/${id}`), {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const detailData = await detailRes.json();
+            setAgency(detailData.agency ?? mineData.agency);
+        } catch {
+            setError('Error al cargar la agencia');
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    const totalAgencies = agencies.length;
-    const totalRevenue = agencies.reduce((sum, a) => sum + a.totalRevenue, 0);
-    const totalMonthlyRevenue = agencies.reduce((sum, a) => sum + a.monthlyRevenue, 0);
-    const totalClients = agencies.reduce((sum, a) => sum + a.totalClients, 0);
-    const totalActiveClients = agencies.reduce((sum, a) => sum + a.activeClients, 0);
-    const totalActiveInfluencers = agencies.reduce((sum, a) => sum + a.activeInfluencers, 0);
-    const activeServices = services.filter(s => s.status === 'active').length;
+    useEffect(() => { load(); }, [load]);
 
-    const filteredAgencies = agencies.filter(agency => {
-        const matchesSearch = agency.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            agency.industry.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = filterStatus === 'all' || agency.status === filterStatus;
-        const matchesIndustry = filterIndustry === 'all' || agency.industry === filterIndustry;
-        return matchesSearch && matchesStatus && matchesIndustry;
-    });
+    if (loading) {
+        return (
+            <div className="min-h-[50vh] flex items-center justify-center">
+                <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+            </div>
+        );
+    }
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'verified': return 'bg-green-100 text-green-800';
-            case 'active': return 'bg-blue-100 text-blue-800';
-            case 'pending': return 'bg-yellow-100 text-yellow-800';
-            case 'suspended': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    };
+    if (!agency) {
+        return (
+            <div className="max-w-lg mx-auto px-4 py-16 text-center">
+                <Building2 className="h-14 w-14 text-amber-500 mx-auto mb-4" />
+                <h1 className="text-xl font-bold text-gray-900 mb-2">Sin agencia registrada</h1>
+                <p className="text-gray-600 mb-6">
+                    Aún no tienes una agencia en Link4Deal. Regístrala para acceder a este panel.
+                </p>
+                <Link
+                    to="/agency/setup"
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 text-white px-5 py-2.5 font-medium hover:bg-blue-700"
+                >
+                    <Plus className="w-4 h-4" />
+                    Registrar mi agencia
+                </Link>
+            </div>
+        );
+    }
 
-    const getStatusIcon = (status: string) => {
-        switch (status) {
-            case 'verified': return <CheckCircle className="w-4 h-4" />;
-            case 'active': return <Zap className="w-4 h-4" />;
-            case 'pending': return <Clock className="w-4 h-4" />;
-            case 'suspended': return <AlertCircle className="w-4 h-4" />;
-            default: return <Clock className="w-4 h-4" />;
-        }
-    };
+    if (error) {
+        return (
+            <div className="max-w-lg mx-auto px-4 py-12 text-center">
+                <p className="text-red-600 mb-4">{error}</p>
+                <button type="button" onClick={load} className="text-blue-700 font-medium underline">
+                    Reintentar
+                </button>
+            </div>
+        );
+    }
 
-    const industries = Array.from(new Set(agencies.map(a => a.industry)));
+    const members = Array.isArray(agency.members) ? agency.members : [];
+    const metrics = agency.metrics ?? {};
 
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-white shadow-sm border-b">
-                <div className="max-w-7xl mx-auto px-4 py-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <Link 
-                                to="/admin" 
-                                className="text-gray-500 hover:text-gray-700 transition-colors"
-                            >
-                                <ArrowLeft className="w-6 h-6" />
-                            </Link>
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900">
-                                    Panel de Agencias
-                                </h1>
-                                <p className="text-gray-600 mt-1">
-                                    Gestión completa de agencias, clientes y servicios
-                                </p>
-                            </div>
+                <div className="max-w-5xl mx-auto px-4 py-6 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <Link to="/marketplace" className="text-gray-500 hover:text-gray-700">
+                            <ArrowLeft className="w-6 h-6" />
+                        </Link>
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold text-gray-900 truncate">{agency.name}</h1>
+                            <p className="text-gray-600 text-sm">
+                                Panel de agencia · {user?.firstName} {user?.lastName}
+                            </p>
                         </div>
-                        <div className="flex items-center space-x-3">
-                            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                                <Plus className="w-4 h-4" />
-                                Nueva Agencia
-                            </button>
-                            <button className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors">
-                                <Settings className="w-5 h-5" />
-                            </button>
-                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <StatusBadge status={agency.isVerified ? 'verified' : agency.status} />
+                        <Link
+                            to="/agency/setup"
+                            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 text-gray-700 px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            <Settings className="w-4 h-4" />
+                            Editar
+                        </Link>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+            <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+                {/* Métricas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total Agencias</p>
-                                <p className="text-2xl font-bold text-gray-900">{totalAgencies}</p>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Clientes</p>
+                                <p className="text-2xl font-bold text-gray-900">{metrics.clients ?? members.length}</p>
                             </div>
-                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Globe className="w-6 h-6 text-blue-600" />
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <Users className="w-5 h-5 text-blue-600" />
                             </div>
                         </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +18% este mes
+                        <div className="mt-3 flex items-center text-xs text-emerald-600">
+                            <TrendingUp className="w-3.5 h-3.5 mr-1" />
+                            Activos en plataforma
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
-                                <p className="text-2xl font-bold text-gray-900">${(totalRevenue / 1000).toFixed(0)}k</p>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Miembros</p>
+                                <p className="text-2xl font-bold text-gray-900">{members.length}</p>
                             </div>
-                            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                                <DollarSign className="w-6 h-6 text-green-600" />
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <Handshake className="w-5 h-5 text-purple-600" />
                             </div>
                         </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +22% este mes
+                        <div className="mt-3 flex items-center text-xs text-gray-500">
+                            <Target className="w-3.5 h-3.5 mr-1" />
+                            Equipo registrado
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total Clientes</p>
-                                <p className="text-2xl font-bold text-gray-900">{totalClients}</p>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vistas</p>
+                                <p className="text-2xl font-bold text-gray-900">{metrics.views ?? 0}</p>
                             </div>
-                            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <Users className="w-6 h-6 text-purple-600" />
+                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <Globe className="w-5 h-5 text-green-600" />
                             </div>
                         </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +15% este mes
+                        <div className="mt-3 flex items-center text-xs text-gray-500">
+                            <BarChart3 className="w-3.5 h-3.5 mr-1" />
+                            Perfil público
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Servicios Activos</p>
-                                <p className="text-2xl font-bold text-gray-900">{activeServices}</p>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Ingresos</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    ${((metrics.totalRevenue ?? 0) / 1000).toFixed(1)}k
+                                </p>
                             </div>
-                            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                                <Target className="w-6 h-6 text-orange-600" />
+                            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <TrendingUp className="w-5 h-5 text-orange-600" />
                             </div>
                         </div>
-                        <div className="mt-4 flex items-center text-sm text-green-600">
-                            <TrendingUp className="w-4 h-4 mr-1" />
-                            +8% este mes
+                        <div className="mt-3 flex items-center text-xs text-gray-500">
+                            <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                            Estimado total
                         </div>
                     </div>
                 </div>
 
-                {/* Additional Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="text-center">
-                            <p className="text-sm font-medium text-gray-600">Clientes Activos</p>
-                            <p className="text-2xl font-bold text-gray-900">{totalActiveClients}</p>
-                            <div className="mt-2 flex items-center justify-center text-sm text-blue-600">
-                                <TrendingUp className="w-4 h-4 mr-1" />
-                                +12% este mes
-                            </div>
-                        </div>
-                    </div>
+                {/* Información de la agencia */}
+                <div className="grid sm:grid-cols-2 gap-6">
+                    <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                        <h2 className="text-base font-semibold text-gray-900 mb-4">Datos de la agencia</h2>
+                        <dl className="space-y-3 text-sm">
+                            {agency.type && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">Tipo:</dt>
+                                    <dd className="text-gray-900 capitalize">{agency.type.replace(/-/g, ' ')}</dd>
+                                </div>
+                            )}
+                            {agency.headquarters && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">
+                                        <MapPin className="inline h-3.5 w-3.5" /> Sede:
+                                    </dt>
+                                    <dd className="text-gray-900">{agency.headquarters}</dd>
+                                </div>
+                            )}
+                            {agency.contact?.address?.city && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">Ciudad:</dt>
+                                    <dd className="text-gray-900">
+                                        {agency.contact.address.city}
+                                        {agency.contact.address.country ? `, ${agency.contact.address.country}` : ''}
+                                    </dd>
+                                </div>
+                            )}
+                            {agency.contact?.email && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">
+                                        <Mail className="inline h-3.5 w-3.5" /> Email:
+                                    </dt>
+                                    <dd className="text-gray-900">{agency.contact.email}</dd>
+                                </div>
+                            )}
+                            {agency.contact?.phone && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">
+                                        <Phone className="inline h-3.5 w-3.5" /> Tel:
+                                    </dt>
+                                    <dd className="text-gray-900">{agency.contact.phone}</dd>
+                                </div>
+                            )}
+                            {agency.website && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">
+                                        <Globe className="inline h-3.5 w-3.5" /> Web:
+                                    </dt>
+                                    <dd>
+                                        <a
+                                            href={agency.website}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                                        >
+                                            {agency.website.replace(/^https?:\/\//, '')}
+                                            <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    </dd>
+                                </div>
+                            )}
+                            {agency.createdAt && (
+                                <div className="flex gap-2">
+                                    <dt className="text-gray-500 min-w-[90px]">Creada:</dt>
+                                    <dd className="text-gray-900">
+                                        {new Date(agency.createdAt).toLocaleDateString('es', {
+                                            year: 'numeric', month: 'long', day: 'numeric'
+                                        })}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                        {agency.description && (
+                            <p className="mt-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
+                                {agency.description}
+                            </p>
+                        )}
+                    </section>
 
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="text-center">
-                            <p className="text-sm font-medium text-gray-600">Influencers Gestionados</p>
-                            <p className="text-2xl font-bold text-gray-900">{totalActiveInfluencers}</p>
-                            <div className="mt-2 flex items-center justify-center text-sm text-green-600">
-                                <TrendingUp className="w-4 h-4 mr-1" />
-                                +20% este mes
-                            </div>
+                    {/* Equipo */}
+                    <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base font-semibold text-gray-900">Equipo</h2>
+                            <span className="text-xs text-gray-500">{members.length} miembro(s)</span>
                         </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                        <div className="text-center">
-                            <p className="text-sm font-medium text-gray-600">Ingresos Mensuales</p>
-                            <p className="text-2xl font-bold text-gray-900">${(totalMonthlyRevenue / 1000).toFixed(0)}k</p>
-                            <div className="mt-2 flex items-center justify-center text-sm text-green-600">
-                                <TrendingUp className="w-4 h-4 mr-1" />
-                                +25% este mes
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Filters and Search */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 mb-8">
-                    <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                        <div className="flex-1 max-w-md">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar agencias..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-                        </div>
-                        
-                        <div className="flex gap-3">
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="all">Todos los estados</option>
-                                <option value="verified">Verificadas</option>
-                                <option value="active">Activas</option>
-                                <option value="pending">Pendientes</option>
-                                <option value="suspended">Suspendidas</option>
-                            </select>
-                            
-                            <select
-                                value={filterIndustry}
-                                onChange={(e) => setFilterIndustry(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="all">Todas las industrias</option>
-                                {industries.map(industry => (
-                                    <option key={industry} value={industry}>{industry}</option>
-                                ))}
-                            </select>
-                            
-                            <select
-                                value={selectedPeriod}
-                                onChange={(e) => setSelectedPeriod(e.target.value as any)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="7d">Últimos 7 días</option>
-                                <option value="30d">Últimos 30 días</option>
-                                <option value="90d">Últimos 90 días</option>
-                                <option value="1y">Último año</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Agencies List */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-                    <div className="p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-900">Lista de Agencias</h2>
-                        <p className="text-gray-600 mt-1">Gestiona todas las agencias registradas en la plataforma</p>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Agencia
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Industria
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Clientes
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Influencers
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Ingresos
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Estado
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Acciones
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredAgencies.map((agency) => (
-                                    <tr key={agency.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <img
-                                                    className="w-10 h-10 rounded-lg object-cover"
-                                                    src={agency.logo}
-                                                    alt={agency.name}
-                                                />
-                                                <div className="ml-4">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {agency.name}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500">
-                                                        {agency.website}
-                                                    </div>
-                                                    <div className="text-xs text-gray-400">
-                                                        {agency.location} • {agency.teamSize} personas
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {agency.industry}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                {agency.activeClients} activos
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {agency.totalClients} total
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                {agency.activeInfluencers} activos
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {agency.totalInfluencers} total
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">
-                                                ${(agency.totalRevenue / 1000).toFixed(0)}k
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                total
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(agency.status)}`}>
-                                                {getStatusIcon(agency.status)}
-                                                <span className="ml-1 capitalize">{agency.status}</span>
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex space-x-2">
-                                                <button className="text-blue-600 hover:text-blue-900">
-                                                    <Eye className="w-4 h-4" />
-                                                </button>
-                                                <button className="text-green-600 hover:text-green-900">
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button className="text-purple-600 hover:text-purple-900">
-                                                    <MessageCircle className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Services and Commissions Overview */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    {/* Active Services */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Servicios Activos</h3>
-                            <p className="text-gray-600 text-sm">Servicios en curso con métricas de rendimiento</p>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                {services.filter(s => s.status === 'active').map((service) => (
-                                    <div key={service.id} className="border border-gray-200 rounded-lg p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-medium text-gray-900">{service.name}</h4>
-                                            <span className="text-sm text-green-600 font-medium">
-                                                ${service.commission.toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mb-3">{service.client} • {service.description}</p>
-                                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-500 mb-3">
+                        {members.length === 0 ? (
+                            <p className="text-sm text-gray-500">Sin miembros registrados aún.</p>
+                        ) : (
+                            <ul className="space-y-3">
+                                {members.map((m, i) => {
+                                    const u = typeof m.user === 'object' ? m.user : null;
+                                    return (
+                                        <li key={i} className="flex items-center justify-between text-sm">
                                             <div>
-                                                <span className="font-medium">Presupuesto:</span> ${service.budget.toLocaleString()}
+                                                <p className="font-medium text-gray-900">
+                                                    {u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.email : '—'}
+                                                </p>
+                                                {u?.email && <p className="text-xs text-gray-500">{u.email}</p>}
                                             </div>
-                                            <div>
-                                                <span className="font-medium">Ingresos:</span> ${service.revenue.toLocaleString()}
-                                            </div>
-                                            <div>
-                                                <span className="font-medium">Comisión:</span> ${service.commission.toLocaleString()}
-                                            </div>
-                                            <div>
-                                                <span className="font-medium">Tipo:</span> {service.type.replace('_', ' ')}
-                                            </div>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div 
-                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                                style={{ width: `${service.progress}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Recent Commissions */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Comisiones Recientes</h3>
-                            <p className="text-gray-600 text-sm">Últimas comisiones por tipo de servicio</p>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                {commissions.slice(0, 5).map((commission) => (
-                                    <div key={commission.id} className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-gray-900">{commission.service}</p>
-                                            <p className="text-sm text-gray-600">{commission.client}</p>
-                                            <p className="text-xs text-gray-500">{commission.date}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-medium text-green-600">
-                                                ${commission.amount.toLocaleString()}
-                                            </p>
-                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                commission.status === 'paid' ? 'bg-green-100 text-green-800' :
-                                                commission.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800'
-                                            }`}>
-                                                {commission.status === 'paid' ? 'Pagado' : 
-                                                 commission.status === 'processing' ? 'Procesando' : 'Pendiente'}
+                                            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700 capitalize">
+                                                {m.role}
                                             </span>
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                {commission.type === 'monthly' ? 'Mensual' : 
-                                                 commission.type === 'project' ? 'Proyecto' : 
-                                                 commission.type === 'bonus' ? 'Bono' : 'Referido'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </section>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="p-6 border-b border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900">Acciones Rápidas</h3>
-                        <p className="text-gray-600 text-sm">Acceso directo a funciones principales</p>
+                {/* Acciones rápidas */}
+                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">Acciones rápidas</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <Link
+                            to="/brands"
+                            className="flex flex-col items-center p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all"
+                        >
+                            <Building2 className="w-7 h-7 text-blue-600 mb-2" />
+                            <span className="text-sm font-medium text-gray-900">Marcas</span>
+                            <span className="text-xs text-gray-500">Directorio</span>
+                        </Link>
+                        <Link
+                            to="/influencer"
+                            className="flex flex-col items-center p-4 border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all"
+                        >
+                            <Users className="w-7 h-7 text-purple-600 mb-2" />
+                            <span className="text-sm font-medium text-gray-900">Influencers</span>
+                            <span className="text-xs text-gray-500">Directorio</span>
+                        </Link>
+                        <Link
+                            to="/marketplace"
+                            className="flex flex-col items-center p-4 border border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all"
+                        >
+                            <Target className="w-7 h-7 text-green-600 mb-2" />
+                            <span className="text-sm font-medium text-gray-900">Marketplace</span>
+                            <span className="text-xs text-gray-500">Ofertas</span>
+                        </Link>
+                        <Link
+                            to="/agency/setup"
+                            className="flex flex-col items-center p-4 border border-gray-200 rounded-xl hover:border-orange-300 hover:bg-orange-50 transition-all"
+                        >
+                            <Settings className="w-7 h-7 text-orange-600 mb-2" />
+                            <span className="text-sm font-medium text-gray-900">Configurar</span>
+                            <span className="text-xs text-gray-500">Perfil agencia</span>
+                        </Link>
                     </div>
-                    <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all duration-200">
-                                <Plus className="w-8 h-8 text-blue-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Nueva Agencia</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                                <Handshake className="w-8 h-8 text-green-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Nuevo Cliente</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all duration-200">
-                                <BarChart3 className="w-8 h-8 text-purple-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Ver Reportes</span>
-                            </button>
-                            
-                            <button className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-all duration-200">
-                                <Download className="w-8 h-8 text-orange-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">Exportar Datos</span>
-                            </button>
-
-                            <Link 
-                                to="/admin/ocr-profile" 
-                                className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all duration-200"
-                            >
-                                <Camera className="w-8 h-8 text-red-600 mb-2" />
-                                <span className="text-sm font-medium text-gray-900">OCR Perfiles</span>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
+                </section>
             </div>
         </div>
     );

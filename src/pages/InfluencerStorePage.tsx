@@ -11,6 +11,7 @@ import {
 } from '../utils/mapPromotionToProductCard';
 import { masonryTierFromId } from '../utils/masonryVariant';
 import { applyMobileWebAppHtmlFlags, getMobileWebAppContext } from '../utils/mobileWebApp';
+import { apkDownloadAnchorProps } from '../utils/appDownload';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 function cn(...parts: Array<string | false | null | undefined>): string {
@@ -601,12 +602,12 @@ export default function InfluencerStorePage() {
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2 shrink-0 pb-[env(safe-area-inset-bottom,0px)]">
-              <Link
-                to="/"
+              <a
+                {...apkDownloadAnchorProps()}
                 className="inline-flex flex-1 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
               >
                 Abrir / Descargar app
-              </Link>
+              </a>
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"

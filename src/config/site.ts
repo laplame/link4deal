@@ -28,11 +28,12 @@ export const SITE_CONFIG = {
   playStoreTestingUrl:
     (import.meta.env.VITE_PLAY_STORE_TESTING_URL as string | undefined)?.trim() ||
     'https://play.google.com/apps/testing/com.damecodigo.app',
-  /** Descarga directa del APK (Android). Pasa por redirect para contabilizar descargas. */
-  apkDownloadUrl: '/api/app-downloads/redirect',
-  /** Ruta del APK estático (usado por el redirect en backend) */
-  /** Misma ruta que sirve Express: `app.use('/public', static('../public'))` */
-  apkStaticPath: '/public/assets/build-1777745115129.apk',
+  /** Descarga directa del APK (Android). Expo EAS o override con VITE_APK_DOWNLOAD_URL. */
+  apkDownloadUrl:
+    (import.meta.env.VITE_APK_DOWNLOAD_URL as string | undefined)?.trim() ||
+    'https://expo.dev/artifacts/eas/HSz5Iwp7A9LPpP7Fwo1AogCxHN2CmdM-nrPoogGVgQk.apk',
+  /** Redirect legacy en backend (si se vuelve a hospedar el APK en el VPS). */
+  apkRedirectPath: '/api/app-downloads/redirect',
   linkedinUrl: 'https://www.linkedin.com/company/damecodigo',
   githubUrl: 'https://github.com/damecodigo',
   get copyright() {

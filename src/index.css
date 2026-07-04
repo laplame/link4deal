@@ -21,6 +21,20 @@ html[data-mobile='true'][data-in-app-browser='true'] .influencer-store-page {
   padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
 }
 
+@layer components {
+  .site-shell-page {
+    @apply min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-gray-100;
+  }
+
+  .site-shell-nav {
+    @apply border-b border-white/10 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50;
+  }
+
+  .site-shell-card {
+    @apply rounded-2xl border border-white/10 bg-gray-900/60 backdrop-blur-sm shadow-lg shadow-black/20;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

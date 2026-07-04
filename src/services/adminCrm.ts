@@ -726,3 +726,76 @@ export async function patchCrmInfluencer(
   if (!res.ok) throw new Error(data.message || 'Error al guardar');
   return data.data;
 }
+
+/** Promoción con su configuración de accesibilidad para influencers. */
+export interface CrmAccessiblePromotion {
+  id: string;
+  title: string;
+  brand: string;
+  category: string;
+  status: string;
+  redirectInsteadOfQr: boolean;
+  openToAllInfluencers: boolean;
+  openToInfluencerCategories: string[];
+}
+
+export interface CrmAccessiblePromotionsPage {
+  rows: CrmAccessiblePromotion[];
+  pagination: { page: number; limit: number; totalDocs: number; totalPages: number };
+}
+
+/** Lista promociones (todas) con sus flags de accesibilidad. Reusa GET /api/promotions. */
+export async function fetchCrmAccessiblePromotions(params?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<CrmAccessiblePromotionsPage> {
+  const q = new URLSearchParams({ status: 'all' });
+  q.set('page', String(params?.page || 1));
+  q.set('limit', String(params?.limit || 25));
+  if (params?.search?.trim()) q.set('search', params.search.trim());
+  const res = await fetch(apiUrl(`/api/promotions?${q}`), { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || 'Error al cargar promociones');
+  const docs = (body.data?.docs || []) as Array<Record<string, unknown>>;
+  const rows: CrmAccessiblePromotion[] = docs.map((d) => ({
+    id: String(d._id || d.id || ''),
+    title: String(d.title || 'Promoción'),
+    brand: d.brand ? String(d.brand) : '',
+    category: d.category ? String(d.category) : '',
+    status: d.status ? String(d.status) : '',
+    redirectInsteadOfQr: Boolean(d.redirectInsteadOfQr),
+    openToAllInfluencers: Boolean(d.openToAllInfluencers),
+    openToInfluencerCategories: Array.isArray(d.openToInfluencerCategories)
+      ? (d.openToInfluencerCategories as unknown[]).map((c) => String(c))
+      : [],
+  }));
+  return {
+    rows,
+    pagination: {
+      page: Number(body.data?.page) || 1,
+      limit: Number(body.data?.limit) || 25,
+      totalDocs: Number(body.data?.totalDocs) || rows.length,
+      totalPages: Number(body.data?.totalPages) || 1,
+    },
+  };
+}
+
+/** Actualiza la accesibilidad de una promoción (a todos / por temas). */
+export async function patchPromotionAccessibility(
+  promotionId: string,
+  body: { openToAllInfluencers?: boolean; openToInfluencerCategories?: string[] },
+): Promise<{
+  id: string;
+  openToAllInfluencers: boolean;
+  openToInfluencerCategories: string[];
+}> {
+  const res = await fetch(apiUrl(`/api/admin/crm/promotions/${promotionId}/accessibility`), {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || 'No se pudo actualizar la accesibilidad');
+  return data.data;
+}
